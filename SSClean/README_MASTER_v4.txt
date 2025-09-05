@@ -1,0 +1,1 @@
+Unzip, then cd into StrainSpotter_PERMA_v4/StrainSpotter_Starter_Integrated_v5 and run: npm install && npm run dev
