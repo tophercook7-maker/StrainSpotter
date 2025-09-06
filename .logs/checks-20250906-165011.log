@@ -1,0 +1,305 @@
+== SETUP ==
+v24.7.0
+10.15.1
+11.5.1
+== INSTALL ==
+Lockfile is up to date, resolution step is skipped
+Already up to date
+
+Done in 312ms using pnpm v10.15.1
+== LINT ==
+eslint not found
+== TYPECHECK ==
+no tsconfig.json
+== WEB BUILD ==
+
+> strainspotter@1.0.0 build /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5
+> node scripts/csv2json.mjs && vite build
+
+Wrote 5 strains to src/data/strains.json
+vite v7.1.4 building for production...
+transforming...
+✓ 45 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                       0.40 kB │ gzip:  0.27 kB
+dist/assets/icon-hero-CTIqCrJl.png    9.56 kB
+dist/assets/index-DeVx2fFA.css        3.59 kB │ gzip:  1.17 kB
+dist/assets/index-D72_hgHY.js       179.29 kB │ gzip: 58.80 kB
+✓ built in 488ms
+== CAPACITOR DOCTOR ==
+💊   Capacitor Doctor  💊 
+
+Latest Dependencies:
+
+  @capacitor/cli: 7.4.3
+  @capacitor/core: 7.4.3
+  @capacitor/android: 7.4.3
+  @capacitor/ios: 7.4.3
+
+Installed Dependencies:
+
+  @capacitor/android: not installed
+  @capacitor/cli: 7.4.3
+  @capacitor/core: 7.4.3
+  @capacitor/ios: 7.4.3
+
+[success] iOS looking great! 👌
+== CAPACITOR SYNC iOS ==
+✔ Copying web assets from dist to ios/App/App/public in 24.63ms
+✔ Creating capacitor.config.json in ios/App/App in 3.34ms
+✔ copy ios in 56.73ms
+✔ Copying web assets from dist to ios/App/App/public in 23.58ms
+✔ Creating capacitor.config.json in ios/App/App in 462.13μs
+✔ copy ios in 38.22ms
+✔ Updating iOS plugins in 1.52ms
+✔ Updating iOS native dependencies with pod install in 1.92s
+[info] Found 6 Capacitor plugins for ios:
+       @capacitor/browser@7.0.2
+       @capacitor/camera@7.0.2
+       @capacitor/filesystem@7.1.4
+       @capacitor/preferences@7.0.2
+       @capacitor/share@7.0.2
+       @capacitor/status-bar@7.0.3
+✔ update ios in 1.94s
+[info] Sync finished in 2.178s
+== XCODEBUILD (Release, Simulator) ==
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release -sdk iphonesimulator -destination id=C6184858-59CC-4F7A-97F0-85197CB53771 build
+
+Build settings from command line:
+    SDKROOT = iphonesimulator18.5
+
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS Simulator, arch:arm64, id:C6184858-59CC-4F7A-97F0-85197CB53771, OS:18.6, name:StrainSpotter-Clean }
+{ platform:iOS Simulator, arch:x86_64, id:C6184858-59CC-4F7A-97F0-85197CB53771, OS:18.6, name:StrainSpotter-Clean }
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (11 targets)
+    Target 'App' in project 'App'
+        ➜ Implicit dependency on target 'Pods-App' in project 'Pods' via file 'Pods_App.framework' in build phase 'Link Binary'
+        ➜ Implicit dependency on target 'Capacitor' in project 'Pods' via options '-framework Capacitor' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'CapacitorBrowser' in project 'Pods' via options '-framework CapacitorBrowser' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'CapacitorCamera' in project 'Pods' via options '-framework CapacitorCamera' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'CapacitorFilesystem' in project 'Pods' via options '-framework CapacitorFilesystem' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'CapacitorPreferences' in project 'Pods' via options '-framework CapacitorPreferences' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'CapacitorShare' in project 'Pods' via options '-framework CapacitorShare' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'CapacitorStatusBar' in project 'Pods' via options '-framework CapacitorStatusBar' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'CapacitorCordova' in project 'Pods' via options '-framework Cordova' in build setting 'OTHER_LDFLAGS'
+    Target 'Pods-App' in project 'Pods'
+        ➜ Explicit dependency on target 'Capacitor' in project 'Pods'
+        ➜ Explicit dependency on target 'CapacitorBrowser' in project 'Pods'
+        ➜ Explicit dependency on target 'CapacitorCamera' in project 'Pods'
+        ➜ Explicit dependency on target 'CapacitorCordova' in project 'Pods'
+        ➜ Explicit dependency on target 'CapacitorFilesystem' in project 'Pods'
+        ➜ Explicit dependency on target 'CapacitorPreferences' in project 'Pods'
+        ➜ Explicit dependency on target 'CapacitorShare' in project 'Pods'
+        ➜ Explicit dependency on target 'CapacitorStatusBar' in project 'Pods'
+        ➜ Explicit dependency on target 'IONFilesystemLib' in project 'Pods'
+    Target 'CapacitorStatusBar' in project 'Pods'
+        ➜ Explicit dependency on target 'Capacitor' in project 'Pods'
+    Target 'CapacitorShare' in project 'Pods'
+        ➜ Explicit dependency on target 'Capacitor' in project 'Pods'
+    Target 'CapacitorPreferences' in project 'Pods'
+        ➜ Explicit dependency on target 'Capacitor' in project 'Pods'
+    Target 'CapacitorFilesystem' in project 'Pods'
+        ➜ Explicit dependency on target 'Capacitor' in project 'Pods'
+        ➜ Explicit dependency on target 'IONFilesystemLib' in project 'Pods'
+    Target 'IONFilesystemLib' in project 'Pods' (no dependencies)
+    Target 'CapacitorCamera' in project 'Pods'
+        ➜ Explicit dependency on target 'Capacitor' in project 'Pods'
+    Target 'CapacitorBrowser' in project 'Pods'
+        ➜ Explicit dependency on target 'Capacitor' in project 'Pods'
+    Target 'Capacitor' in project 'Pods'
+        ➜ Explicit dependency on target 'CapacitorCordova' in project 'Pods'
+    Target 'CapacitorCordova' in project 'Pods' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.5.sdk /Users/christophercook/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator18.5-22F76-d5fc8ad4295d2ef488fb7d0f804ce0c4.sdkstatcache
+    cd /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.5.sdk -o /Users/christophercook/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator18.5-22F76-d5fc8ad4295d2ef488fb7d0f804ce0c4.sdkstatcache
+
+note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'IONFilesystemLib' from project 'Pods')
+warning: Run script build phase '[CP] Copy XCFrameworks' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'IONFilesystemLib' from project 'Pods')
+PhaseScriptExecution [CP]\ Copy\ XCFrameworks /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Intermediates.noindex/Pods.build/Release-iphonesimulator/IONFilesystemLib.build/Script-C92BFF52F3397B6240338B5BFF18ED59.sh (in target 'IONFilesystemLib' from project 'Pods')
+    cd /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App/Pods
+    /bin/sh -c /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Intermediates.noindex/Pods.build/Release-iphonesimulator/IONFilesystemLib.build/Script-C92BFF52F3397B6240338B5BFF18ED59.sh
+Selected xcframework slice ios-arm64_x86_64-simulator
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" "/Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App/Pods/IONFilesystemLib/IONFilesystemLib.xcframework/ios-arm64_x86_64-simulator/*" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/XCFrameworkIntermediates/IONFilesystemLib"
+Transfer starting: 30 files
+
+sent 2895 bytes  received 20 bytes  1388095 bytes/sec
+total size is 2464388  speedup is 845.42
+Copied /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App/Pods/IONFilesystemLib/IONFilesystemLib.xcframework/ios-arm64_x86_64-simulator to /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/XCFrameworkIntermediates/IONFilesystemLib
+
+note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'App' from project 'App')
+warning: Run script build phase '[CP] Embed Pods Frameworks' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'App' from project 'App')
+CpResource /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/config.xml /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App/App/config.xml (in target 'App' from project 'App')
+    cd /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App/App/config.xml /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app
+
+CpResource /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/capacitor.config.json /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App/App/capacitor.config.json (in target 'App' from project 'App')
+    cd /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App/App/capacitor.config.json /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app
+
+CpResource /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/public /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App/App/public (in target 'App' from project 'App')
+    cd /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App/App/public /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app
+
+PhaseScriptExecution [CP]\ Embed\ Pods\ Frameworks /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Intermediates.noindex/App.build/Release-iphonesimulator/App.build/Script-4D3650F830743A5CFA67C730.sh (in target 'App' from project 'App')
+    cd /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App
+    /bin/sh -c /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Intermediates.noindex/App.build/Release-iphonesimulator/App.build/Script-4D3650F830743A5CFA67C730.sh
+mkdir -p /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/Capacitor/Capacitor.framework" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks"
+Transfer starting: 7 files
+Capacitor.framework/
+Capacitor.framework/Capacitor
+Capacitor.framework/_CodeSignature/CodeResources
+
+sent 1489572 bytes  received 70 bytes  163696923 bytes/sec
+total size is 1542669  speedup is 1.04
+Code Signing /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/Capacitor.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/Capacitor.framework'
+/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/Capacitor.framework: replacing existing signature
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/CapacitorBrowser/CapacitorBrowser.framework" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks"
+Transfer starting: 5 files
+CapacitorBrowser.framework/
+CapacitorBrowser.framework/CapacitorBrowser
+CapacitorBrowser.framework/_CodeSignature/CodeResources
+
+sent 136645 bytes  received 70 bytes  44101612 bytes/sec
+total size is 136819  speedup is 1.00
+Code Signing /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorBrowser.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorBrowser.framework'
+/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorBrowser.framework: replacing existing signature
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/CapacitorCamera/CapacitorCamera.framework" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks"
+Transfer starting: 5 files
+CapacitorCamera.framework/
+CapacitorCamera.framework/CapacitorCamera
+CapacitorCamera.framework/_CodeSignature/CodeResources
+
+sent 287475 bytes  received 70 bytes  92756451 bytes/sec
+total size is 287637  speedup is 1.00
+Code Signing /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorCamera.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorCamera.framework'
+/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorCamera.framework: replacing existing signature
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/CapacitorCordova/Cordova.framework" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks"
+Transfer starting: 6 files
+Cordova.framework/
+Cordova.framework/Cordova
+Cordova.framework/_CodeSignature/CodeResources
+
+sent 139557 bytes  received 70 bytes  66489047 bytes/sec
+total size is 140074  speedup is 1.00
+Code Signing /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/Cordova.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/Cordova.framework'
+/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/Cordova.framework: replacing existing signature
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/CapacitorFilesystem/CapacitorFilesystem.framework" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks"
+Transfer starting: 5 files
+CapacitorFilesystem.framework/
+CapacitorFilesystem.framework/CapacitorFilesystem
+CapacitorFilesystem.framework/_CodeSignature/CodeResources
+
+sent 243959 bytes  received 70 bytes  78719032 bytes/sec
+total size is 244109  speedup is 1.00
+Code Signing /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorFilesystem.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorFilesystem.framework'
+/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorFilesystem.framework: replacing existing signature
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/CapacitorPreferences/CapacitorPreferences.framework" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks"
+Transfer starting: 5 files
+CapacitorPreferences.framework/
+CapacitorPreferences.framework/CapacitorPreferences
+CapacitorPreferences.framework/_CodeSignature/CodeResources
+
+sent 126985 bytes  received 70 bytes  60502380 bytes/sec
+total size is 127147  speedup is 1.00
+Code Signing /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorPreferences.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorPreferences.framework'
+/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorPreferences.framework: replacing existing signature
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/CapacitorShare/CapacitorShare.framework" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks"
+Transfer starting: 5 files
+CapacitorShare.framework/
+CapacitorShare.framework/CapacitorShare
+CapacitorShare.framework/_CodeSignature/CodeResources
+
+sent 119373 bytes  received 70 bytes  56877619 bytes/sec
+total size is 119557  speedup is 1.00
+Code Signing /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorShare.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorShare.framework'
+/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorShare.framework: replacing existing signature
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/CapacitorStatusBar/CapacitorStatusBar.framework" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks"
+Transfer starting: 5 files
+CapacitorStatusBar.framework/
+CapacitorStatusBar.framework/CapacitorStatusBar
+CapacitorStatusBar.framework/_CodeSignature/CodeResources
+
+sent 172877 bytes  received 70 bytes  82355714 bytes/sec
+total size is 173039  speedup is 1.00
+Code Signing /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorStatusBar.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorStatusBar.framework'
+/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/CapacitorStatusBar.framework: replacing existing signature
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/XCFrameworkIntermediates/IONFilesystemLib/IONFilesystemLib.framework" "/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks"
+Transfer starting: 5 files
+IONFilesystemLib.framework/
+IONFilesystemLib.framework/IONFilesystemLib
+IONFilesystemLib.framework/_CodeSignature/CodeResources
+
+sent 336159 bytes  received 70 bytes  108460967 bytes/sec
+total size is 336290  speedup is 1.00
+Stripped /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/IONFilesystemLib.framework/IONFilesystemLib of architectures: x86_64
+Code Signing /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/IONFilesystemLib.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/IONFilesystemLib.framework'
+/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks/IONFilesystemLib.framework: replacing existing signature
+
+CopySwiftLibs /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app (in target 'App' from project 'App')
+    cd /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/App --scan-folder /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks --scan-folder /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/PlugIns --scan-folder /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/SystemExtensions --scan-folder /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Extensions --scan-folder /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/Pods_App.framework --platform iphonesimulator --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Intermediates.noindex/App.build/Release-iphonesimulator/App.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+CodeSign /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app (in target 'App' from project 'App')
+    cd /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app
+/Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app: replacing existing signature
+
+Validate /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app (in target 'App' from project 'App')
+    cd /Users/christophercook/Documents/StrainSpotter/StrainSpotter_Starter_Integrated_v5/ios/App
+    builtin-validationUtility /Users/christophercook/Library/Developer/Xcode/DerivedData/App-flhwuildrlihdyebrxucbcstainu/Build/Products/Release-iphonesimulator/App.app -validate-for-store -infoplist-subpath Info.plist
+
+note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'CapacitorPreferences' from project 'Pods')
+note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'CapacitorCamera' from project 'Pods')
+note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'CapacitorStatusBar' from project 'Pods')
+note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'CapacitorCordova' from project 'Pods')
+note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'CapacitorShare' from project 'Pods')
+note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'Capacitor' from project 'Pods')
+note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'Pods-App' from project 'Pods')
+note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'CapacitorFilesystem' from project 'Pods')
+note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'CapacitorBrowser' from project 'Pods')
+** BUILD SUCCEEDED **
+
+== ICONSET WARNINGS (optional) ==
+Contents.json
+icon-1024.png
+icon-20@2x.png
+icon-20@3x.png
+icon-29@2x.png
+icon-29@3x.png
+icon-40@2x.png
+icon-40@3x.png
+icon-60@2x.png
+icon-60@3x.png
+== DONE CHECKS ==
