@@ -1,0 +1,181 @@
+:root { font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+body,html,#root{margin:0;height:100%}
+.page{padding:16px 16px 32px}
+h1,h2{margin:8px 0 12px}
+.hero-img{width:100%;border-radius:14px;display:block;object-fit:cover;max-height:360px}
+.card{background:#0b0b0b; border:1px solid #222; border-radius:12px; padding:12px; margin:8px 0}
+.card.center{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.row{display:flex;align-items:center}
+button{background:#1f6f3f;color:#eaf7ee;border:1px solid #2c7a4b;border-radius:10px;padding:10px 14px;cursor:pointer}
+button:disabled{opacity:.6}
+input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #333;background:#0d0d0d;color:#f1f5f9}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.thumb img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:10px;border:1px solid #222}
+.thumb-row{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+.tab-grid{display:grid;grid-template-columns:1fr 1fr; gap:12px; padding:12px 0}
+.tab-card{display:flex;gap:10px;align-items:center;background:#0b0b0b;border:1px solid #222;border-radius:12px;padding:12px}
+.tab-icon{width:32px;height:32px;display:grid;place-items:center;border-radius:8px;border:1px solid #264f36}
+.tab-title{font-weight:600}
+.tab-sub{opacity:.75;font-size:.9em}
+.clear-bg{background:transparent}
+
+.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:#0b0b0b;border-bottom:1px solid #1e1e1e}
+.navbtn{background:#1f6f3f;color:#eaf7ee;border:1px solid #2c7a4b;border-radius:10px;padding:8px 12px}
+.title{font-weight:700}
+.spacer{width:56px;height:1px;opacity:0}
+.content{padding:12px}
+
+/* Top bar: fixed, safe-area aware, high z-index */
+.topbar{
+  position: fixed;
+  left: 0; right: 0; top: 0;
+  z-index: 999;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: calc(8px + env(safe-area-inset-top)) 12px 8px 12px;
+  background: #0b0b0b; border-bottom: 1px solid #1e1e1e;
+  pointer-events: auto;
+}
+
+.ios-safe{ padding-top: calc(8px + env(safe-area-inset-top)); }
+
+.navbtn{
+  background:#1f6f3f; color:#eaf7ee; border:1px solid #2c7a4b;
+  border-radius: 12px; padding: 10px 14px; font-weight:600;
+}
+
+/* Bigger hit box for the button */
+.largehit{ position: relative; }
+.largehit::before{
+  content:""; position:absolute; inset:-8px; /* expand tap target */
+}
+
+/* ensure content is below the fixed bar */
+.content{ padding: 72px 12px 12px; }
+
+/* Make sure nothing overlays the bar accidentally */
+*{ -webkit-tap-highlight-color: transparent; }
+
+.content.with-bar{ padding: 72px 12px 12px; }
+.content.no-bar{ padding: 12px; }
+
+/* --- force dark theme everywhere --- */
+html, body, #root { background:#0b0b0b; color:#eaf7ee; }
+.page, .content { background:transparent; color:#eaf7ee; }
+h1,h2,p,small,div,button,input { color:inherit; }
+
+/* buttons/cards remain dark */
+.card{ background:#0f1512; border:1px solid #1e2a23; }
+
+/* hero area padding on Home */
+.content.no-bar{ padding: 16px 12px 24px; }
+.hero-img{ background:#0f1512; }
+
+/* make the four home tiles breathe a bit more */
+.tab-grid{ gap:14px; padding-top:12px; }
+.tab-card{ background:#0f1512; border:1px solid #1e2a23; }
+
+/* iOS text/buttons look crisper */
+button{ -webkit-font-smoothing:antialiased }
+
+.hero-card{ margin: 6px 0 10px; }
+.hero-panel{
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(2px);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:14px;
+  padding:16px;
+  display:flex; flex-direction:column; align-items:center; text-align:center;
+}
+.hero-icon{
+  width:96px; height:96px; object-fit:contain;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+}
+
+.app-wrap{
+  min-height:100vh;
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+  background-attachment:fixed;
+}
+
+/* keep a subtle glass panel so text stays readable */
+.hero-panel{
+  background: rgba(0,0,0,0.42);
+  backdrop-filter: blur(2px);
+}
+/* Subtle dim behind hero text + crisper tiles on busy photos */
+.hero-panel{ background: rgba(0,0,0,.55); }
+.hero-title{ text-shadow:0 1px 2px rgba(0,0,0,.6); }
+.hero-sub{ text-shadow:0 1px 2px rgba(0,0,0,.5); }
+.tab-card{ background: rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.08); }
+:root{ --barH: 52px; }
+
+.topbar{
+  position: fixed; left:0; right:0;
+  top: env(safe-area-inset-top);
+  height: var(--barH);
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding: 0 12px;
+  z-index: 999;
+  background: rgba(11,11,11,.96);
+  border-bottom: 1px solid #1e1e1e;
+  -webkit-backdrop-filter: saturate(1) blur(6px);
+  backdrop-filter: saturate(1) blur(6px);
+}
+.navbtn{ background:#1f6f3f; color:#eaf7ee; border:1px solid #2c7a4b; border-radius:12px; padding:10px 14px; font-weight:600 }
+.title{ font-weight:700 }
+.spacer{ width:56px; height:1px; opacity:0 }
+
+.content.with-bar{
+  padding-top: calc(env(safe-area-inset-top) + var(--barH) + 12px);
+}
+
+.hero-panel{ background: transparent; border:0; padding:0; margin: 6px auto 10px; }
+.hero-title{ margin:0; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+.hero-sub{ margin:4px 0 0; text-shadow:0 1px 2px rgba(0,0,0,.5); }
+.hero-icon{ width:92px; height:92px; object-fit:contain; margin:4px 0 6px; }
+/* Home page vertical offset */
+.content.no-bar{
+  padding-top: clamp(28px, 22vh, 220px);
+}
+.hero-card{ margin-top: 0; }
+.tab-grid{ margin-top: 10px; }
+.bottombar{
+  position: fixed;
+  left: 0; right: 0;
+  bottom: calc(env(safe-area-inset-bottom));
+  z-index: 999;
+  display: flex; gap: 10px; justify-content: center; align-items: center;
+  padding: 10px 12px;
+  background: rgba(11,11,11,.96);
+  border-top: 1px solid #1e1e1e;
+  -webkit-backdrop-filter: saturate(1) blur(6px);
+  backdrop-filter: saturate(1) blur(6px);
+}
+.bb-btn{
+  background:#1f6f3f; color:#eaf7ee; border:1px solid #2c7a4b;
+  border-radius: 14px; padding: 10px 16px; font-weight:600
+}
+.content{ padding-bottom: 76px; }
+@media (max-width:420px){
+  .grid{ grid-template-columns:1fr !important }
+}
+.bottombar{
+  position: fixed; left:0; right:0; bottom: env(safe-area-inset-bottom);
+  z-index: 1000;
+  display:flex; gap:10px; justify-content:center; align-items:center;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  background: rgba(11,11,11,.96);
+  border-top: 1px solid #1e1e1e;
+  -webkit-backdrop-filter: saturate(1) blur(6px);
+  backdrop-filter: saturate(1) blur(6px);
+}
+.bb-btn{
+  background:#1f6f3f; color:#eaf7ee; border:1px solid #2c7a4b;
+  border-radius:14px; padding:10px 16px; font-weight:600;
+}
+.content{ padding-bottom: 86px; } /* leave room for the bottom bar */
+html,body,#root{ background:#0b0b0b; }
+.app-wrap{ min-height:100vh; background-size:cover; background-position:center; background-repeat:no-repeat; }
+.app-wrap::before{ content:""; position:fixed; inset:0; pointer-events:none; background: rgba(0,0,0,.14); }

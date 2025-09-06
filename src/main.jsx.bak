@@ -1,0 +1,55 @@
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { HashRouter, Routes, Route, useLocation } from 'react-router-dom'
+import Gate from './utils/Gate'
+import TopBar from './components/TopBar'
+import BottomBar from './components/BottomBar'
+import ErrorBoundary from './components/ErrorBoundary'
+import Home from './pages/Home'
+import AgeGate from './pages/AgeGate'
+import Identify from './pages/Identify'
+import Capture from './pages/Capture'
+import Online from './pages/Online'
+import Library from './pages/Library'
+import StrainDetail from './pages/StrainDetail'
+import './styles.css'
+
+function NotFound(){ return <div className="page"><h2>Not found</h2><p>Go Home.</p></div> }
+
+function Shell(){
+  const loc = useLocation()
+  const hasBar = loc.pathname !== '/'
+  return (
+    <ErrorBoundary>
+      <Gate>
+        <div className="app-wrap">
+          <div className="bg-dim" />
+          <TopBar/>
+          <div className={`content ${hasBar ? 'with-bar' : 'no-bar'}`}>
+            <Routes>
+              <Route index element={<Home/>}/>
+              <Route path="identify" element={<Identify/>}/>
+              <Route path="capture" element={<Capture/>}/>
+              <Route path="online" element={<Online/>}/>
+              <Route path="library" element={<Library/>}/>
+              <Route path="detail" element={<StrainDetail/>}/>
+              <Route path="*" element={<NotFound/>}/>
+            </Routes>
+          </div>
+          <BottomBar/>
+        </div>
+      </Gate>
+    </ErrorBoundary>
+  )
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <HashRouter>
+      <Routes>
+        <Route path="/age" element={<AgeGate/>} />
+        <Route path="/*" element={<Shell/>} />
+      </Routes>
+    </HashRouter>
+  </React.StrictMode>
+)

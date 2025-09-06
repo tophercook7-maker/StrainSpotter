@@ -1,0 +1,118 @@
+:root{
+  --bg:#0b0b0b; --card:#0d0d0d; --text:#eaf7ee; --muted:#b7cabc;
+  --line:#1e1e1e;
+}
+*{ box-sizing:border-box; }
+html,body,#root{ height:100%; margin:0; background:var(--bg); color:var(--text);
+  font-family:-apple-system, system-ui, "Segoe UI", Roboto, Arial, sans-serif; }
+
+.app-wrap{ position:relative; min-height:100%; background:var(--bg); overflow:auto; }
+.bg-img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; transform:translateZ(0); }
+.bg-dim{ position:absolute; inset:0; background:rgba(0,0,0,.22); z-index:1; pointer-events:none; }
+
+/* shift everything down ~1/4 screen (safe for notch) */
+.content{
+  position:relative; z-index:2;
+  padding: calc(18vh + env(safe-area-inset-top, 0px)) 16px calc(110px + env(safe-area-inset-bottom, 0px));
+}
+
+.home{ display:flex; flex-direction:column; align-items:center; text-align:center; max-width:640px; margin:0 auto; }
+.hero-title{ margin:6px 0 6px; font-size:36px; letter-spacing:.3px; }
+.hero-icon{ width:96px; height:96px; object-fit:contain; margin:6px 0 10px; }
+.hero-sub{ margin:0 0 18px; color:var(--muted) }
+
+.tab-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; }
+.tab-card{
+  background:rgba(0,0,0,.88); border:1px solid var(--line);
+  border-radius:14px; padding:14px 12px; text-align:left; cursor:pointer;
+}
+.tab-card:active{ transform:translateY(1px) }
+.tab-title{ font-weight:700; margin-bottom:6px }
+.tab-sub{ color:var(--muted); font-size:13px }
+
+/* bottom tabs */
+.bottombar{
+  position:static; /* not fixed (prevents sim flicker) */
+  display:flex; gap:10px; justify-content:space-between; align-items:center;
+  max-width:640px; margin:12px auto 20px; padding:10px 12px; border-radius:14px;
+  background:rgba(0,0,0,.92); border:1px solid var(--line);
+}
+.tab{ flex:1; text-align:center; padding:10px 6px; border-radius:10px;
+  background:#121212; border:1px solid var(--line); color:var(--text); }
+.tab:active{ transform:translateY(1px) }
+
+@supports (-webkit-touch-callout: none) {
+  .bg-img{ transform:translateZ(0); }
+}
+
+/* ===== Top header with Back ===== */
+.topbar{
+  position:sticky; top:0; z-index:5;
+  display:flex; align-items:center; gap:10px;
+  padding:12px 14px; margin:0 auto; max-width:640px;
+  background:rgba(0,0,0,.82); border-bottom:1px solid #1e1e1e;
+  backdrop-filter:none;
+}
+.backbtn{
+  background:#141414; border:1px solid #1e1e1e; color:#eaf7ee;
+  padding:8px 12px; border-radius:10px;
+}
+.backbtn:active{ transform:translateY(1px) }
+.topbar-title{ margin-left:auto; margin-right:auto; font-weight:700; opacity:.9 }
+
+/* Identify screen */
+.screen-pad{ padding:10px 4px; color:#eaf7ee; }
+.picker-row{ display:flex; gap:10px; margin:10px 0 8px }
+.btn{ background:#1a5a34; border:1px solid #144a2a; color:#eaf7ee; padding:10px 14px; border-radius:10px }
+.btn:active{ transform:translateY(1px) }
+.preview{ margin-top:12px; background:rgba(0,0,0,.75); border:1px solid #1e1e1e; border-radius:12px; padding:10px }
+.preview img{ width:100%; max-height:360px; object-fit:contain; border-radius:8px; display:block; }
+.hint{ color:#b7cabc; font-size:13px; margin-top:6px }
+
+/* ensure content sits below header */
+.content{ margin-top: 8px; }
+
+/* raise header above everything */
+.topbar{ z-index: 10; }
+
+/* --- Back/header visibility hardening --- */
+.topbar{
+  position: relative;
+  margin-top: calc(env(safe-area-inset-top, 0px) + 8px);
+  z-index: 9999;
+  display:flex; align-items:center; gap:10px;
+  padding:12px 14px; max-width:640px; margin-left:auto; margin-right:auto;
+  background: rgba(0,0,0,.88);
+  border: 1px solid #1e1e1e; border-radius: 12px;
+}
+.backbtn{
+  background:#1a5a34; border:1px solid #144a2a; color:#eaf7ee;
+  padding:8px 12px; border-radius:10px; font-weight:700;
+}
+.backbtn:active{ transform:translateY(1px) }
+.topbar-title{ margin-left:auto; margin-right:auto; font-weight:800; letter-spacing:.3px }
+
+/* give content a little breathing room (header is now visible) */
+.content{ margin-top: 10px; }
+
+/* --- Fix header placement below the notch and ensure visibility --- */
+.app-wrap{ padding-top: calc(env(safe-area-inset-top, 0px) + 12px); }
+.topbar{
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  margin-top: 0;
+  z-index: 10000;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; max-width: 640px; margin-left: auto; margin-right: auto;
+  background: rgba(0,0,0,.92);
+  border: 1px solid #1e1e1e; border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.35);
+}
+.backbtn{
+  background:#1a5a34; border:1px solid #144a2a; color:#eaf7ee;
+  padding:8px 12px; border-radius:10px; font-weight:700;
+}
+.topbar-title{ margin-left:auto; margin-right:auto; font-weight:800; letter-spacing:.3px }
+
+/* Move content a bit lower so it never tucks under header */
+.content{ margin-top: 12px; }

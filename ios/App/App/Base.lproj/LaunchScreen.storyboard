@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="20037" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" colorMatched="YES" initialViewController="VC">
+  <scenes>
+    <scene sceneID="SC">
+      <objects>
+        <viewController id="VC" sceneMemberID="viewController">
+          <view key="view" contentMode="scaleToFill" id="VIEW">
+            <rect key="frame" x="0.0" y="0.0" width="390" height="844"/>
+            <subviews>
+              <imageView userInteractionEnabled="NO" contentMode="scaleAspectFill" image="LaunchImage" translatesAutoresizingMaskIntoConstraints="NO" id="IMG"/>
+            </subviews>
+            <color key="backgroundColor" red="0.02" green="0.16" blue="0.12" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+            <constraints>
+              <constraint firstItem="IMG" firstAttribute="top" secondItem="VIEW" secondAttribute="top" id="c1"/>
+              <constraint firstItem="IMG" firstAttribute="bottom" secondItem="VIEW" secondAttribute="bottom" id="c2"/>
+              <constraint firstItem="IMG" firstAttribute="leading" secondItem="VIEW" secondAttribute="leading" id="c3"/>
+              <constraint firstItem="IMG" firstAttribute="trailing" secondItem="VIEW" secondAttribute="trailing" id="c4"/>
+            </constraints>
+          </view>
+        </viewController>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="FR" userLabel="First Responder" sceneMemberID="firstResponder"/>
+      </objects>
+    </scene>
+  </scenes>
+  <resources>
+    <image name="LaunchImage" width="2732" height="2732"/>
+  </resources>
+</document>

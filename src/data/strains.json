@@ -1,0 +1,101 @@
+[
+  {
+    "name": "Blue Dream",
+    "type": "Hybrid",
+    "aliases": [
+      "BD",
+      "Blue Dream Haze"
+    ],
+    "parents": [
+      "Blueberry",
+      "Haze"
+    ],
+    "terpenes": [
+      "Myrcene",
+      "Pinene",
+      "Caryophyllene"
+    ],
+    "thc": "17–24%",
+    "cbd": "<1%",
+    "notes": "Sweet berry aroma; balanced head & body."
+  },
+  {
+    "name": "OG Kush",
+    "type": "Hybrid",
+    "aliases": [
+      "OGK",
+      "OG"
+    ],
+    "parents": [
+      "Chemdawg",
+      "Lemon Thai",
+      "Hindu Kush"
+    ],
+    "terpenes": [
+      "Limonene",
+      "Caryophyllene",
+      "Myrcene"
+    ],
+    "thc": "19–26%",
+    "cbd": "<1%",
+    "notes": "Citrus-pine; classic West Coast profile."
+  },
+  {
+    "name": "Sour Diesel",
+    "type": "Sativa",
+    "aliases": [
+      "Sour D",
+      "SD"
+    ],
+    "parents": [
+      "Chemdawg 91",
+      "Super Skunk"
+    ],
+    "terpenes": [
+      "Limonene",
+      "Caryophyllene",
+      "Myrcene"
+    ],
+    "thc": "18–26%",
+    "cbd": "<1%",
+    "notes": "Diesel funk; energetic daytime cultivar."
+  },
+  {
+    "name": "Girl Scout Cookies",
+    "type": "Hybrid",
+    "aliases": [
+      "GSC"
+    ],
+    "parents": [
+      "OG Kush",
+      "Durban Poison"
+    ],
+    "terpenes": [
+      "Caryophyllene",
+      "Limonene",
+      "Humulene"
+    ],
+    "thc": "18–28%",
+    "cbd": "<1%",
+    "notes": "Dessert-sweet; euphoric with body relaxation."
+  },
+  {
+    "name": "Granddaddy Purple",
+    "type": "Indica",
+    "aliases": [
+      "GDP"
+    ],
+    "parents": [
+      "Purple Urkle",
+      "Big Bud"
+    ],
+    "terpenes": [
+      "Myrcene",
+      "Caryophyllene",
+      "Pinene"
+    ],
+    "thc": "17–23%",
+    "cbd": "<1%",
+    "notes": "Grape-berry; classic nighttime indica."
+  }
+]
