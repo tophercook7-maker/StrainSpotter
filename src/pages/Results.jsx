@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
+import { Preferences } from '@capacitor/preferences'
 
 export default function Results(){
   const nav = useNavigate()
@@ -11,6 +12,15 @@ export default function Results(){
   async function onBack(){
     try{ await Haptics.impact({ style: ImpactStyle.Medium }) }catch{}
     nav(-1)
+  }
+
+  async function saveFirst(){
+    if(!data.length) return
+    const { value } = await Preferences.get({ key:'library' })
+    const arr = value ? JSON.parse(value) : []
+    arr.unshift(data[0])
+    await Preferences.set({ key:'library', value: JSON.stringify(arr.slice(0,200)) })
+    try{ await Haptics.impact({ style: ImpactStyle.Light }) }catch{}
   }
 
   return (
@@ -38,21 +48,20 @@ export default function Results(){
               <div className="sub">Ratio: {s.indicaPct??'—'}% Indica / {s.sativaPct??(s.indicaPct!=null? 100-s.indicaPct : '—')}% Sativa</div>
             )}
             {s.terpenes?.length>0 && <div className="sub">Terpenes: {s.terpenes.join(', ')}</div>}
-
             <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:8}}>
               {s.leaflyUrl && <a className="btn small" href={s.leaflyUrl} target="_blank" rel="noreferrer">Open on Leafly</a>}
               {s.vendors?.map((v,vi)=>(
                 <a key={vi} className="btn small" href={v.url} target="_blank" rel="noreferrer">Buy seeds: {v.name}</a>
               ))}
             </div>
-
             <div className="src">Source: {s.source}</div>
           </div>
         ))}
       </div>
 
-      <div style={{display:'flex', gap:10, marginTop:12}}>
+      <div style={{display:'flex', gap:10, marginTop:12, flexWrap:'wrap'}}>
         <button className="btn" onClick={onBack}>Back</button>
+        <button className="btn" onClick={saveFirst} disabled={!data.length}>Save first to Library</button>
       </div>
     </div>
   )
