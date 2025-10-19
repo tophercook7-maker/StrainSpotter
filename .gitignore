@@ -13,6 +13,7 @@ build
 .env.*
 env/.env.local
 .env.local
+env/google-vision-key.json
 
 # Mac
 .DS_Store
