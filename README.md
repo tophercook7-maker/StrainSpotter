@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # StrainSpotter Starter Workspace
 
 This is a clean, Mac-friendly starter for StrainSpotter with:
@@ -29,3 +30,6 @@ Point it to the backend at `http://localhost:5181`.
 
 - Avoid heredocs and fragile copy/paste. Use this workspace + VS Code tasks.
 - All secrets live in `env/.env.local` (ignored by git).
+=======
+StrainSpotter
+>>>>>>> 5e2d399b586b433cc540593cd589b87053b27348
