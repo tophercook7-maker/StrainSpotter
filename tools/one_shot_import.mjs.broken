@@ -1,0 +1,237 @@
+import fs from 'fs';
+import path from 'path';
+import { parse } from 'csv-parse';
+import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
+
+dotenv.config({ path: path.resolve('env/.env.local') });
+
+/* ---------- CONFIG ---------- */
+const DOWNLOADS_DIR = path.join(process.env.HOME || process.env.USERPROFILE, 'Downloads', 'strain_datasets');
+const ATTR_TXT = path.join(DOWNLOADS_DIR, 'strain_attributes.txt');
+const ATTR_JSON = path.join(DOWNLOADS_DIR, 'strain_attributes.json');
+const CSV_FILE = process.env.CSV_FILE || path.join(DOWNLOADS_DIR, 'Testing-THC-THCA-202104-202403_FINAL.csv');
+
+const OUT_DIR = path.join(process.cwd(), 'backend', 'data');
+const OUT_JSON = path.join(OUT_DIR, 'strain_library.json');
+const REPORT = path.join(OUT_DIR, 'import_report.json');
+
+const NAME_KEYS = [
+  'name','strain','strain_name','strainname','strain name','product','productname',
+  'sample name','sample','item','variety','label','flower name','strain/variety'
+];
+
+/* ---------- UTIL ---------- */
+const ensureDir = p => fs.existsSync(p) || fs.mkdirSync(p,{recursive:true});
+const safeJSON = s => { try { return JSON.parse(s); } catch { return null; } };
+const slugify = s => String(s).toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s-]/g,'').trim().replace(/\s+/g,'-').replace(/-+/g,'-');
+const normName = s => String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
+
+/* ---------- LOAD ATTRIBUTES ---------- */
+  const attributes = loadAttributes();
+  console.log(`[attrs] count: ${attributes.length}`);
+
+  // Load mapping file for strain codes to real names
+  const mappingPath = path.join(process.cwd(), 'backend', 'data', 'test_mapping.json');
+  let codeToName = {};
+  if (fs.existsSync(mappingPath)) {
+    codeToName = safeJSON(fs.readFileSync(mappingPath, 'utf8')) || {};
+    console.log('[mapping] Loaded strain code mapping:', Object.keys(codeToName).length);
+  } else {
+    console.warn('[mapping] No mapping file found:', mappingPath);
+  }
+
+  const csvRows = await loadCSVRows(CSV_FILE);
+  const csvIdx = csvRows.length ? buildCsvIndex(csvRows) : new Map();
+
+  let matched=0, unmatched=0; const sampleUnmatched=[];
+  const out = attributes.map(strain=>{
+    const nm = String(strain.name||'').trim();
+    const key = normName(nm);
+    let tests = [];
+    // Try direct match, then mapping
+    if (csvRows.length && key) {
+      tests = csvIdx.get(key) || csvIdx.get(key.replace(/-/g,'')) || [];
+      if (!tests.length && codeToName) {
+        // Try mapping: if this strain name matches a value in codeToName, get the code
+        const code = Object.entries(codeToName).find(([code, name]) => normName(name) === key)?.[0];
+        if (code) tests = csvIdx.get(code) || [];
+      }
+    }
+    if (tests.length) matched++; else { unmatched++; if (sampleUnmatched.length<10) sampleUnmatched.push(nm); }
+
+    const labTestResults = tests.map(r=>({
+      date: r['testperformeddate'] || r['date'] || null,
+      lab: r['testinglab(itl)'] || r['lab'] || null,
+      testType: r['test type name'] || r['test'] || null,
+      thc: (()=>{ const v = r['testresult'] ?? r['thc']; const n = parseFloat(String(v).replace(/[^0-9.\-]/g,'')); return Number.isFinite(n)?n:null; })(),
+      id: r['id'] || null,
+      category: r['productcategorytype'] || r['category'] || null,
+      comment: r['testcomment'] || r['comment'] || null
+    }));
+
+    const effects = Object.entries(strain.effects||{})
+      .filter(([,e])=> e && typeof e.score==='number' && e.score>0)
+      .map(([n])=>n);
+    const flavors = Object.entries(strain.terps||{})
+      .filter(([,t])=> t && typeof t.score==='number' && t.score>0)
+      .map(([n])=>n);
+
+    const thc = typeof strain?.cannabinoids?.thc === 'object'
+      ? (strain.cannabinoids.thc.percentile50 ?? null)
+      : (strain?.cannabinoids?.thc ?? null);
+    const cbd = typeof strain?.cannabinoids?.cbd === 'object'
+      ? (strain.cannabinoids.cbd.percentile50 ?? null)
+      : (strain?.cannabinoids?.cbd ?? null);
+
+    return {
+      slug: strain.slug || slugify(nm),
+      name: nm,
+      type: strain.category || strain.type || null,
+      description: strain.descriptionPlain || strain.description || null,
+      effects, flavors, lineage: [],
+      thc: (typeof thc==='number'? thc:null),
+      cbd: (typeof cbd==='number'? cbd:null),
+      labTestResults
+    };
+  });
+  const idx = new Map();
+  const pickNames = r => {
+    const out = new Set();
+    for (const k of CANDS) {
+      const v = r[k]; if (!v) continue;
+      const raw = String(v).trim(); if (!raw) continue;
+      const parts = raw.split(/\s[-–:|]\s/); // split "Brand – Strain"
+      const candidates = parts.length>1 ? [raw, parts.at(-1)] : [raw];
+      for (const c of candidates) { const n = normName(c); if (n) out.add(n); }
+    }
+    return [...out];
+  };
+  for (const r of rows) for (const key of pickNames(r)) {
+    if (!idx.has(key)) idx.set(key,[]);
+    idx.get(key).push(r);
+  }
+  console.log(`[csv] indexed keys: ${CANDS.join(', ')}`);
+  return idx;
+}
+
+/* ---------- NORMALIZE + WRITE JSON ---------- */
+async function normalizeAndWrite() {
+  console.log('[paths] downloads =', DOWNLOADS_DIR);
+  console.log('[paths] csv       =', CSV_FILE);
+  console.log('[paths] out       =', OUT_JSON);
+
+
+  const attributes = loadAttributes();
+  console.log(`[attrs] count: ${attributes.length}`);
+
+  const csvRows = await loadCSVRows(CSV_FILE);
+  const csvIdx = csvRows.length ? buildCsvIndex(csvRows) : new Map();
+
+  // Print sample normalized names for diagnostics
+  console.log('[debug] Sample normalized attribute names:', attributes.slice(0,10).map(a => normName(a.name || '')).join(', '));
+  if (csvRows.length) {
+    const nameKey = csvRows.__nameKey;
+    console.log('[debug] Sample normalized CSV names:', csvRows.slice(0,10).map(r => normName(r[nameKey] || '')).join(', '));
+  }
+
+  let matched=0, unmatched=0; const sampleUnmatched=[];
+  const out = attributes.map(strain=>{
+    const nm = String(strain.name||'').trim();
+    const key = normName(nm);
+    let tests = [];
+    if (csvRows.length && key) {
+      tests = csvIdx.get(key) || csvIdx.get(key.replace(/-/g,'')) || [];
+    }
+    if (tests.length) matched++; else { unmatched++; if (sampleUnmatched.length<10) sampleUnmatched.push(nm); }
+
+    const labTestResults = tests.map(r=>({
+      date: r['testperformeddate'] || r['date'] || null,
+      lab: r['testinglab(itl)'] || r['lab'] || null,
+      testType: r['test type name'] || r['test'] || null,
+      thc: (()=>{ const v = r['testresult'] ?? r['thc']; const n = parseFloat(String(v).replace(/[^0-9.\-]/g,'')); return Number.isFinite(n)?n:null; })(),
+      id: r['id'] || null,
+      category: r['productcategorytype'] || r['category'] || null,
+      comment: r['testcomment'] || r['comment'] || null
+    }));
+
+    const effects = Object.entries(strain.effects||{})
+      .filter(([,e])=> e && typeof e.score==='number' && e.score>0)
+      .map(([n])=>n);
+    const flavors = Object.entries(strain.terps||{})
+      .filter(([,t])=> t && typeof t.score==='number' && t.score>0)
+      .map(([n])=>n);
+
+    const thc = typeof strain?.cannabinoids?.thc === 'object'
+      ? (strain.cannabinoids.thc.percentile50 ?? null)
+      : (strain?.cannabinoids?.thc ?? null);
+    const cbd = typeof strain?.cannabinoids?.cbd === 'object'
+      ? (strain.cannabinoids.cbd.percentile50 ?? null)
+      : (strain?.cannabinoids?.cbd ?? null);
+
+    return {
+      slug: strain.slug || slugify(nm),
+      name: nm,
+      type: strain.category || strain.type || null,
+      description: strain.descriptionPlain || strain.description || null,
+      effects, flavors, lineage: [],
+      thc: (typeof thc==='number'? thc:null),
+      cbd: (typeof cbd==='number'? cbd:null),
+      labTestResults
+    };
+  });
+
+  console.log(`[match] matched: ${matched}, unmatched: ${unmatched}`);
+  if (sampleUnmatched.length) console.log('[match] sample unmatched (first 10):', sampleUnmatched.join('; '));
+
+  ensureDir(OUT_DIR);
+  const ts = new Date().toISOString().replace(/[:.]/g,'-');
+  if (fs.existsSync(OUT_JSON)) {
+    const bak = OUT_JSON.replace(/\.json$/, `.${ts}.bak.json`);
+    fs.copyFileSync(OUT_JSON, bak);
+    console.log(`[backup] previous -> ${bak}`);
+  }
+  fs.writeFileSync(OUT_JSON+'.tmp', JSON.stringify(out,null,2));
+  fs.renameSync(OUT_JSON+'.tmp', OUT_JSON);
+
+  const report = {
+    when: new Date().toISOString(),
+    inputs: { attributesFile: fs.existsSync(ATTR_TXT)?ATTR_TXT:(fs.existsSync(ATTR_JSON)?ATTR_JSON:null), csvFile: fs.existsSync(CSV_FILE)?CSV_FILE:null },
+    counts: { attributes: attributes.length, csvRows: csvRows.length, matched, unmatched }
+  };
+  fs.writeFileSync(REPORT, JSON.stringify(report,null,2));
+  console.log(`[done] wrote ${out.length} strains -> ${OUT_JSON}`);
+  console.log(`[report] ${REPORT}`);
+
+  return out;
+}
+
+/* ---------- IMPORT INTO SUPABASE (upsert by slug) ---------- */
+async function importToSupabase(rows){
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    console.warn('[supabase] missing SUPABASE_URL or key in env/.env.local; skipping DB import');
+    return { ok:0, fail:0, skipped:true };
+  }
+  const sb = createClient(url, key);
+  const chunk = (a,n)=> a.reduce((acc,_,i)=> (i%n? acc : [...acc, a.slice(i,i+n)]), []);
+  let ok=0, fail=0;
+
+  for (const batch of chunk(rows, 200)) {
+    const payload = batch.map(x=>({
+      slug: x.slug, name: x.name, type: x.type, description: x.description,
+      effects: x.effects, flavors: x.flavors, lineage: x.lineage,
+      thc: x.thc, cbd: x.cbd, lab_test_results: x.labTestResults
+    }));
+    const { error } = await sb.from('strains').upsert(payload, { onConflict: 'slug' });
+    if (error) { console.error('[upsert error]', error.message); fail += payload.length; }
+    else { ok += payload.length; console.log('[upsert]', payload.length); }
+  }
+  console.log(`[import done] ok=${ok} fail=${fail}`);
+  return { ok, fail, skipped:false };
+}
+
+/* ---------- MAIN ---------- */
+const rows = await normalizeAndWrite();
+await importToSupabase(rows);

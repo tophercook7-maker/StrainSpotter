@@ -1,0 +1,40 @@
+[
+  {
+    "name": "Blue Dream",
+    "type": "hybrid",
+    "thc": 18,
+    "cbd": 2,
+    "effects": ["relaxed", "happy", "euphoric"],
+    "flavors": ["berry", "sweet", "earthy"],
+    "description": "Blue Dream is a sativa-dominant hybrid marijuana strain made by crossing Blueberry with Haze.",
+    "lineage": ["Blueberry", "Haze"],
+    "grow_difficulty": "moderate",
+    "flowering_time": "9-10 weeks",
+    "region": "California",
+    "seed_vendors": [
+      {"name": "ILGM", "url": "https://ilgm.com/products/blue-dream-feminized-seeds"}
+    ],
+    "guides": [
+      {"region": "California", "url": "https://www.growweedeasy.com/blue-dream"}
+    ]
+  },
+  {
+    "name": "Sour Diesel",
+    "type": "sativa",
+    "thc": 20,
+    "cbd": 0.2,
+    "effects": ["energetic", "uplifted", "creative"],
+    "flavors": ["diesel", "pungent", "earthy"],
+    "description": "Sour Diesel, also known as 'Sour D' and 'Sour Deez', is a popular sativa marijuana strain.",
+    "lineage": ["Chemdawg", "Super Skunk"],
+    "grow_difficulty": "moderate",
+    "flowering_time": "10-11 weeks",
+    "region": "New York",
+    "seed_vendors": [
+      {"name": "Seedsman", "url": "https://www.seedsman.com/en/sour-diesel-seeds"}
+    ],
+    "guides": [
+      {"region": "New York", "url": "https://www.growweedeasy.com/sour-diesel"}
+    ]
+  }
+]

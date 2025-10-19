@@ -1,0 +1,34 @@
+# Node
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dist
+build
+.cache
+
+# Env
+.env
+.env.*
+env/.env.local
+.env.local
+
+# Mac
+.DS_Store
+
+# Logs
+logs
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# PM2
+pm2/pm2.log
+pm2/*.pid
+
+# IDE
+.vscode/*.log
+.idea
+*.iml

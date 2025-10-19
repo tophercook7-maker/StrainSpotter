@@ -1,0 +1,29 @@
+{
+  //  A) Don't do work every time the big JSON changes
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.git/**": true,
+    "backend/data/strain_library.json": true,
+    "backend/data/*.bak.json": true
+  },
+  "search.exclude": {
+    "**/node_modules/**": true,
+    "**/.git/**": true,
+    "backend/data/strain_library.json": true,
+    "backend/data/*.bak.json": true
+  },
+
+  //  B) Be gentler on huge files
+  "files.maxMemoryForLargeFilesMB": 8192,
+  "json.maxItemsComputed": 2000,
+  "editor.formatOnSave": false,
+
+  //  C) Calm down common heavy extensions
+  "git.autofetch": false,
+  "gitlens.codeLens.recentChange.enabled": false,
+  "gitlens.codeLens.authors.enabled": false,
+  "gitlens.hovers.enabled": false,
+
+  //  D) Reduce background AI churn while editing giant JSON
+  "github.copilot.editor.enableAutoCompletions": false
+}
