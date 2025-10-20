@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Box, Drawer, IconButton, Typography, TextField, Button, Slider } from '@mui/material';
 import { TerminalIcon } from '@heroicons/react/outline';
 
@@ -8,7 +8,7 @@ const DIAGONAL_THRESHOLD = 45;
 
 const DevConsole = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [startPoint, setStartPoint] = useState(null);
+  // Long-press opens the console; no gesture start point needed currently
   const [settings, setSettings] = useState({
     effectsWeight: 0.3,
     thcWeight: 0.2,
@@ -36,12 +36,7 @@ const DevConsole = () => {
     }
   };
 
-  const handleTouchMove = () => {
-    if (pressTimer) {
-      clearTimeout(pressTimer);
-      setPressTimer(null);
-    }
-  };
+  // No touch-move handling needed; long-press only
 
   const handleSettingChange = (setting) => (event, value) => {
     setSettings(prev => ({

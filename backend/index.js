@@ -2,7 +2,27 @@ import { ImageAnnotatorClient } from '@google-cloud/vision';
 import express from 'express';
 import dotenv from 'dotenv';
 import { supabase } from './supabaseClient.js';
+import { ensureBucketExists } from './supabaseAdmin.js';
 import fs from 'fs';
+
+// Import all route modules at the top (ES module requirement)
+import strainRoutes from './routes/strains.js';
+import healthRoutes from './routes/health.js';
+import compareRoutes from './routes/compare.js';
+import notesRoutes from './routes/notes.js';
+import reviewsRoutes from './routes/reviews.js';
+import availabilityRoutes from './routes/availability.js';
+import growlogsRoutes from './routes/growlogs.js';
+import legalRoutes from './routes/legal.js';
+import trendsRoutes from './routes/trends.js';
+import analyticsRoutes from './routes/analytics.js';
+import adminRoutes from './routes/admin.js';
+import devRoutes from './routes/dev.js';
+import growersRoutes from './routes/growers.js';
+import groupsRoutes from './routes/groups.js';
+import journalsRoutes from './routes/journals.js';
+import eventsRoutes from './routes/events.js';
+import feedbackRoutes from './routes/feedback.js';
 
 // Load env from ../env/.env.local (works when launched from backend/)
 dotenv.config({ path: new URL('../env/.env.local', import.meta.url).pathname });
@@ -49,6 +69,18 @@ app.get('/', (req, res) => {
 
 // --- Uploads & Scans ---
 
+// Ensure storage bucket exists on startup (best-effort)
+(async () => {
+  const result = await ensureBucketExists('scans', { public: true });
+  if (result?.ok) {
+    console.log(`[boot] Storage bucket 'scans' ${result.created ? 'created' : 'present'}.`);
+  } else if (result?.skipped) {
+    console.log(`[boot] Skipped bucket ensure (no service role key).`);
+  } else if (result?.error) {
+    console.warn(`[boot] Could not ensure bucket: ${result.error}`);
+  }
+})();
+
 // POST /api/uploads  { filename, contentType, base64 }
 app.post('/api/uploads', async (req, res) => {
   try {
@@ -60,7 +92,20 @@ app.post('/api/uploads', async (req, res) => {
     const bucket = 'scans';
 
     const { error: upErr } = await supabase.storage.from(bucket).upload(key, buffer, { contentType });
-    if (upErr) return res.status(500).json({ error: upErr.message });
+    if (upErr) {
+      if (upErr.message?.toLowerCase().includes('bucket not found')) {
+        // Try to create bucket once (best-effort)
+        const ensured = await ensureBucketExists(bucket, { public: true });
+        if (ensured?.ok) {
+          const retry = await supabase.storage.from(bucket).upload(key, buffer, { contentType });
+          if (retry.error) return res.status(500).json({ error: retry.error.message });
+        } else {
+          return res.status(500).json({ error: `Storage bucket '${bucket}' not found and could not be created. ${ensured?.error || ensured?.reason || ''}`.trim() });
+        }
+      } else {
+        return res.status(500).json({ error: upErr.message });
+      }
+    }
 
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(key);
     const publicUrl = urlData?.publicUrl || null;
@@ -139,18 +184,8 @@ app.post('/api/scans/:id/process', async (req, res) => {
   }
 });
 
-// --- Strain Routes ---
-import strainRoutes from './routes/strains.js';
-import compareRoutes from './routes/compare.js';
-import notesRoutes from './routes/notes.js';
-import reviewsRoutes from './routes/reviews.js';
-import availabilityRoutes from './routes/availability.js';
-import growlogsRoutes from './routes/growlogs.js';
-import legalRoutes from './routes/legal.js';
-import trendsRoutes from './routes/trends.js';
-import analyticsRoutes from './routes/analytics.js';
-import adminRoutes from './routes/admin.js';
-
+// --- Mount Route Modules ---
+app.use('/api/health', healthRoutes);
 app.use('/api', strainRoutes);
 app.use('/api/compare', compareRoutes);
 app.use('/api/notes', notesRoutes);
@@ -161,6 +196,12 @@ app.use('/api/legal', legalRoutes);
 app.use('/api/trends', trendsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/dev', devRoutes);
+app.use('/api/growers', growersRoutes);
+app.use('/api/groups', groupsRoutes);
+app.use('/api/journals', journalsRoutes);
+app.use('/api/events', eventsRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // POST /api/strains/suggest - user suggests a new strain
 app.post('/api/strains/suggest', express.json(), (req, res) => {

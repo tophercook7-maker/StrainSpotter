@@ -6,12 +6,12 @@ import {
   Typography,
   Chip,
   CircularProgress,
-  useTheme
+  
 } from '@mui/material';
 import { Radar } from 'react-chartjs-2';
 
 const StrainVisualizer = ({ strain }) => {
-  const theme = useTheme();
+  // Theme not used currently
   const [loading, setLoading] = useState(true);
   const [similar, setSimilar] = useState([]);
   const [analytics, setAnalytics] = useState(null);

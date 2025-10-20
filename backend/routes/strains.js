@@ -1,9 +1,12 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const router = express.Router();
-const DATA_DIR = path.join(process.cwd(), 'data');
+// Resolve data directory relative to this file, not process.cwd(), to avoid PM2/cwd issues
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = path.join(__dirname, '..', 'data');
 
 // Load strain data
 let strains = [];
@@ -11,8 +14,46 @@ let testMapping = {};
 
 function loadData() {
   try {
-    strains = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'strain_library.json')));
-    testMapping = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'test_mapping.json')));
+    const strainPath = path.join(DATA_DIR, 'strain_library.json');
+    const mappingPath = path.join(DATA_DIR, 'test_mapping.json');
+
+    const rawStrains = fs.readFileSync(strainPath, 'utf8');
+    const rawMapping = fs.readFileSync(mappingPath, 'utf8');
+
+    strains = JSON.parse(rawStrains);
+    testMapping = JSON.parse(rawMapping);
+
+    // Normalize mapping shape: allow either { strains: {id: {mappedTo: slug}} } or { strains: {id: "Name or Slug"} }
+    if (!testMapping || typeof testMapping !== 'object') testMapping = {};
+    if (!testMapping.strains || typeof testMapping.strains !== 'object') {
+      testMapping.strains = {};
+    }
+
+    // Build a quick lookup of name->slug and slug->slug from strains for normalization
+    const nameToSlug = new Map();
+    const slugToSlug = new Map();
+    for (const s of Array.isArray(strains) ? strains : []) {
+      if (s?.name) nameToSlug.set(s.name.toLowerCase(), s.slug || s.name.toLowerCase().replace(/\s+/g, '-'));
+      if (s?.slug) slugToSlug.set(s.slug.toLowerCase(), s.slug);
+    }
+
+    for (const [id, val] of Object.entries(testMapping.strains)) {
+      if (val && typeof val === 'object' && typeof val.mappedTo === 'string') {
+        // already normalized
+        continue;
+      }
+      if (typeof val === 'string') {
+        const key = val.toLowerCase();
+        const bySlug = slugToSlug.get(key);
+        const byName = nameToSlug.get(key);
+        const mappedTo = bySlug || byName || key.replace(/\s+/g, '-');
+        testMapping.strains[id] = { mappedTo };
+      } else {
+        // Unknown shape; drop or keep as-is
+        testMapping.strains[id] = { mappedTo: String(val || '').toLowerCase().replace(/\s+/g, '-') };
+      }
+    }
+
     console.log(`[data] Loaded ${strains.length} strains and ${Object.keys(testMapping.strains).length} test mappings`);
   } catch (e) {
     console.error('[data] Error loading strain data:', e);
@@ -90,11 +131,12 @@ router.get('/strains/:slug/tests', (req, res) => {
   // Get mapped anonymous test results
   const mappedTests = [];
   Object.entries(testMapping.strains || {}).forEach(([id, data]) => {
-    if (data.mappedTo === strain.slug) {
-      mappedTests.push({
-        ...data,
-        anonymous: true
-      });
+    const targetSlug = (data && typeof data === 'object') ? data.mappedTo : (typeof data === 'string' ? data : null);
+    if (!targetSlug) return;
+    // Normalize value possibly being a name
+    const slugNorm = String(targetSlug).toLowerCase().replace(/\s+/g, '-');
+    if (slugNorm === strain.slug) {
+      mappedTests.push({ id, mappedTo: strain.slug, anonymous: true });
     }
   });
 
@@ -104,7 +146,7 @@ router.get('/strains/:slug/tests', (req, res) => {
     mappedTests,
     stats: {
       totalTests: directTests.length + mappedTests.length,
-      avgThc: [...directTests, ...mappedTests].reduce((sum, t) => sum + (t.thc || 0), 0) / (directTests.length + mappedTests.length)
+      avgThc: (directTests.length + mappedTests.length) ? ([...directTests, ...mappedTests].reduce((sum, t) => sum + (t.thc || 0), 0) / (directTests.length + mappedTests.length)) : 0
     }
   });
 });

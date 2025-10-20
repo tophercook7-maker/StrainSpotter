@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -17,11 +17,11 @@ import {
   CircularProgress
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
-
-const API_BASE = 'http://localhost:5181/api';
+import { API_BASE } from '../config';
+const API = `${API_BASE}/api`;
 
 // Styled components
-const StrainCard = styled(Card)(({ theme }) => ({
+const StyledStrainCard = styled(Card)(({ theme }) => ({
   height: '100%',
   display: 'flex',
   flexDirection: 'column',
@@ -54,8 +54,8 @@ function StrainFilters({ onFilterChange }) {
   useEffect(() => {
     // Load filter options
     Promise.all([
-      fetch(`${API_BASE}/types`).then(r => r.json()),
-      fetch(`${API_BASE}/effects`).then(r => r.json())
+      fetch(`${API}/types`).then(r => r.json()),
+      fetch(`${API}/effects`).then(r => r.json())
     ]).then(([typeData, effectData]) => {
       setTypes(typeData);
       setEffects(effectData);
@@ -130,7 +130,7 @@ function StrainFilters({ onFilterChange }) {
 // Strain card component
 function StrainCard({ strain }) {
   return (
-    <StrainCard>
+    <StyledStrainCard>
       <CardContent>
         <Typography variant="h6" gutterBottom>{strain.name}</Typography>
         <Typography color="textSecondary" gutterBottom>
@@ -159,7 +159,7 @@ function StrainCard({ strain }) {
           </Box>
         )}
       </CardContent>
-    </StrainCard>
+    </StyledStrainCard>
   );
 }
 
@@ -170,11 +170,7 @@ export default function StrainBrowser() {
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({});
   
-  useEffect(() => {
-    loadStrains();
-  }, [page, filters]);
-
-  const loadStrains = async () => {
+  const loadStrains = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -182,7 +178,7 @@ export default function StrainBrowser() {
         limit: 20,
         ...filters
       });
-      const response = await fetch(`${API_BASE}/strains?${params}`);
+      const response = await fetch(`${API}/strains?${params}`);
       const data = await response.json();
       setStrains(data.strains);
     } catch (e) {
@@ -190,7 +186,11 @@ export default function StrainBrowser() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, filters]);
+
+  useEffect(() => {
+    loadStrains();
+  }, [loadStrains]);
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
