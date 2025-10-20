@@ -9,65 +9,21 @@ import FeedbackChat from './components/FeedbackChat';
 import Home from './components/Home';
 import GrowerDirectory from './components/GrowerDirectory';
 import Groups from './components/Groups';
+import { muiThemeOverrides } from './theme/cannabisTheme';
+import Seeds from './components/Seeds';
+import Dispensaries from './components/Dispensaries';
+import GrowerRegistration from './components/GrowerRegistration';
+import Help from './components/Help';
+import Friends from './components/Friends';
+import StrainBrowser from './components/StrainBrowser';
 
-// Full cannabis-themed design (refined "Apple-quality" aesthetic)
-const theme = createTheme({
-  palette: {
-    mode: 'dark',
-    primary: {
-      main: '#4caf50', // Cannabis green
-      light: '#81c784',
-      dark: '#2e7d32',
-    },
-    secondary: {
-      main: '#8bc34a', // Lighter green
-      light: '#aed581',
-      dark: '#558b2f',
-    },
-    background: {
-      default: '#0b120b',
-      paper: '#162116',
-    },
-    success: {
-      main: '#66bb6a',
-    },
-  },
-  typography: {
-    fontFamily: 'SF Pro Text, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-    h3: {
-      fontWeight: 700,
-    },
-    h5: {
-      fontWeight: 600,
-    },
-  },
-  components: {
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          backgroundImage: 'linear-gradient(135deg, rgba(22,33,22,0.9) 0%, rgba(12,27,12,1) 100%)',
-          borderRadius: 16,
-          border: '1px solid rgba(76,175,80,0.18)'
-        },
-      },
-    },
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: 14,
-          textTransform: 'none',
-          paddingLeft: 18,
-          paddingRight: 18,
-          boxShadow: '0 10px 20px rgba(76,175,80,0.15)',
-        },
-      },
-    },
-  },
-});
+// Apply full marijuana-themed design with cannabis leaf icon and hero.png
+const theme = createTheme(muiThemeOverrides);
 
 function App() {
   const [ageVerified, setAgeVerified] = useState(false);
   const [currentView, setCurrentView] = useState('home');
+  const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
   useEffect(() => {
     const verified = localStorage.getItem('strainspotter_age_verified');
@@ -104,7 +60,7 @@ function App() {
         <ScanHistory onBack={() => setCurrentView('scanner')} />
       )}
       {currentView === 'dev' && (
-        <DevDashboard />
+        isDev ? <DevDashboard /> : <Help onNavigate={setCurrentView} />
       )}
       {currentView === 'feedback' && (
         <FeedbackChat />
@@ -112,8 +68,26 @@ function App() {
       {currentView === 'growers' && (
         <GrowerDirectory />
       )}
+      {currentView === 'seeds' && (
+        <Seeds />
+      )}
+      {currentView === 'dispensaries' && (
+        <Dispensaries />
+      )}
+      {currentView === 'register' && (
+        <GrowerRegistration />
+      )}
       {currentView === 'groups' && (
         <Groups />
+      )}
+      {currentView === 'help' && (
+        <Help onNavigate={setCurrentView} />
+      )}
+      {currentView === 'friends' && (
+        <Friends />
+      )}
+      {currentView === 'strains' && (
+        <StrainBrowser onNavigate={setCurrentView} />
       )}
     </ThemeProvider>
   );

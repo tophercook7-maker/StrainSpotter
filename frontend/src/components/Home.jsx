@@ -1,7 +1,21 @@
-import { Box, Button, Container, Stack, Typography, Chip } from '@mui/material';
-import LeafIcon from '@mui/icons-material/Spa';
+
+import { useEffect, useState } from 'react';
+import { Box, Button, Stack, Typography, Chip, Dialog, IconButton } from '@mui/material';
+import CannabisLeafIcon from './CannabisLeafIcon';
+import DevDashboard from './DevDashboard';
 
 export default function Home({ onNavigate }) {
+  const [strainCount, setStrainCount] = useState(null);
+  const [showDev, setShowDev] = useState(false);
+  const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+  useEffect(() => {
+    fetch('/api/strains/count')
+      .then(r => r.json())
+      .then(data => setStrainCount(data.count))
+      .catch(() => setStrainCount(null));
+  }, []);
+
   return (
     <Box sx={{ position: 'relative', minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* Hero background */}
@@ -9,7 +23,7 @@ export default function Home({ onNavigate }) {
         sx={{
           position: 'absolute',
           inset: 0,
-          backgroundImage: 'url(/hero.png)',
+          backgroundImage: 'url(/strainspotter-bg.jpg)',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           filter: 'saturate(1.05) contrast(1.02)',
@@ -25,9 +39,35 @@ export default function Home({ onNavigate }) {
         }}
       />
 
-      <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1, py: { xs: 10, md: 16 } }}>
+      <Box maxWidth="md" sx={{ position: 'relative', zIndex: 1, py: { xs: 10, md: 16 }, mx: 'auto' }}>
         <Stack spacing={3} alignItems="center" textAlign="center">
-          <Chip icon={<LeafIcon />} label="Cannabis AI" color="success" variant="outlined" sx={{ bgcolor: 'rgba(76,175,80,0.12)', borderColor: 'rgba(76,175,80,0.35)', color: 'success.light' }} />
+          {/* Hero icon with long-press-to-enter-dev */}
+          <Box
+            sx={{ cursor: 'pointer', mb: 1 }}
+            onClick={() => (isDev ? setShowDev(true) : onNavigate('help'))}
+            onPointerDown={e => {
+              if (e.pointerType === 'touch' || e.pointerType === 'mouse') {
+                e.target._pressTimer = setTimeout(() => {
+                  setShowDev(true);
+                }, 1200);
+              }
+            }}
+            onPointerUp={e => {
+              clearTimeout(e.target._pressTimer);
+            }}
+            onPointerLeave={e => {
+              clearTimeout(e.target._pressTimer);
+            }}
+            aria-label="StrainSpotter Hero Icon"
+          >
+            <img
+              src="/hero.png"
+              alt="StrainSpotter Hero"
+              style={{ width: 72, height: 72, filter: 'drop-shadow(0 0 12px #4caf50aa)' }}
+              draggable={false}
+            />
+          </Box>
+          <Chip icon={<CannabisLeafIcon size={20} />} label="Cannabis AI" color="success" variant="outlined" sx={{ bgcolor: 'rgba(76,175,80,0.12)', borderColor: 'rgba(76,175,80,0.35)', color: 'success.light' }} />
           <Typography variant="h2" sx={{ fontWeight: 800, letterSpacing: -0.5 }}>
             StrainSpotter
           </Typography>
@@ -35,15 +75,21 @@ export default function Home({ onNavigate }) {
             Identify strains from labels and plants, explore a living database, and grow with the community.
           </Typography>
 
+          {strainCount !== null && (
+            <Typography variant="h5" color="primary" sx={{ fontWeight: 700, mt: 2 }}>
+              {strainCount.toLocaleString()} strains in our database
+            </Typography>
+          )}
+
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 1 }}>
-            <Button size="large" variant="contained" color="primary" onClick={() => onNavigate('scanner')}>
-              Scan Now
+            <Button size="large" variant="contained" color="primary" sx={{ background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(2px)', border: '1.5px solid #fff', color: '#fff', fontWeight: 700, boxShadow: 3 }} onClick={() => onNavigate('guest-scan')}>
+              Try It Now
+            </Button>
+            <Button size="large" variant="outlined" color="secondary" sx={{ background: 'rgba(255,255,255,0.10)', border: '1.5px solid #fff', color: '#fff', fontWeight: 700 }} onClick={() => onNavigate('scanner')}>
+              Sign In & Scan
             </Button>
             <Button size="large" variant="outlined" color="secondary" onClick={() => onNavigate('history')}>
               View History
-            </Button>
-            <Button size="large" variant="outlined" color="success" onClick={() => onNavigate('dev')}>
-              Dev Dashboard
             </Button>
           </Stack>
 
@@ -52,8 +98,26 @@ export default function Home({ onNavigate }) {
               Leave Feedback
             </Button>
           </Stack>
+
+          <Box sx={{ mt: 4, p: 2, borderRadius: 2, bgcolor: 'background.paper', boxShadow: 2, maxWidth: 420, mx: 'auto', opacity: 0.98 }}>
+            <Typography variant="body1" color="text.secondary">
+              <b>Unlock full access:</b> Subscribe to view all strains, details, and advanced features. Only paid members can browse the full database.
+            </Typography>
+          </Box>
         </Stack>
-      </Container>
+      </Box>
+
+      {/* Hidden Dev Dashboard Dialog */}
+      {isDev && (
+      <Dialog open={showDev} onClose={() => setShowDev(false)} maxWidth="md" fullWidth>
+        <Box sx={{ p: 2, position: 'relative' }}>
+          <IconButton onClick={() => setShowDev(false)} sx={{ position: 'absolute', top: 8, right: 8 }}>
+            ×
+          </IconButton>
+          <DevDashboard />
+        </Box>
+      </Dialog>
+      )}
     </Box>
   );
 }

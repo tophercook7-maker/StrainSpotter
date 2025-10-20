@@ -10,7 +10,7 @@ import {
 } from '@mui/material';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
-const API_BASE = 'http://localhost:5181';
+import { API_BASE } from '../config';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 

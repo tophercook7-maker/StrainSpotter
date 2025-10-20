@@ -8,7 +8,7 @@ export default function FeedbackChat() {
   const [posting, setPosting] = useState(false);
 
   const load = async () => {
-    const res = await fetch(`${API_BASE}/api/feedback/messages`);
+  const res = await fetch(`${API_BASE}/api/feedback/messages`);
     if (res.ok) {
       setMessages(await res.json());
     }
@@ -23,7 +23,7 @@ export default function FeedbackChat() {
     if (!content) return;
     setPosting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/feedback/messages`, {
+  const res = await fetch(`${API_BASE}/api/feedback/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content })

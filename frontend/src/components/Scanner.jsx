@@ -21,73 +21,67 @@ import {
 } from '@mui/material';
 import { CameraAlt, History, Close } from '@mui/icons-material';
 import { API_BASE } from '../config';
+import CannabisLeafIcon from './CannabisLeafIcon';
 
-// Simple cannabis leaf SVG icon
-function LeafIcon(props) {
-  return (
-    <Box component="svg" width={28} height={28} viewBox="0 0 64 64" fill="none" sx={{ color: '#4caf50' }} {...props}>
-      <path
-        d="M32 6c2.8 8.2 9.6 14 18 16-8.4 2-15.2 7.8-18 16-2.8-8.2-9.6-14-18-16 8.4-2 15.2-7.8 18-16ZM32 44c-3.5-6.5-9.9-10.7-18-12 4 5.3 7.1 11.1 8.5 17.3 3.1 1.5 6.2 2.7 9.5 3.7v-9ZM32 44c3.5-6.5 9.9-10.7 18-12-4 5.3-7.1 11.1-8.5 17.3-3.1 1.5-6.2 2.7-9.5 3.7v-9Z"
-        fill="currentColor"
-      />
-    </Box>
-  );
-}
-
-// API base now comes from config
-
-function Scanner({ onViewHistory }) {
-  const [image, setImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
+function Scanner() {
+  const [showGuide, setShowGuide] = useState(true);
+  const [images, setImages] = useState([]); // Array<File>
+  const [imagePreviews, setImagePreviews] = useState([]); // Array<objectURL>
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [matchedStrain, setMatchedStrain] = useState(null);
+  const [suggestedStrains, setSuggestedStrains] = useState([]);
+  const [detectedTextPreview, setDetectedTextPreview] = useState('');
   const [showResult, setShowResult] = useState(false);
+  const [showTips, setShowTips] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleImageCapture = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
 
-    setImage(file);
-    setImagePreview(URL.createObjectURL(file));
+    const nextImages = [...images, ...files].slice(0, 3);
+    const nextPreviews = [
+      ...imagePreviews,
+      ...files.map((f) => URL.createObjectURL(f))
+    ].slice(0, 3);
+
+    setImages(nextImages);
+    setImagePreviews(nextPreviews);
     setError(null);
   };
 
-  // Function to match detected text with strain names
-  const findMatchingStrain = async (detectedText) => {
-    if (!detectedText) return null;
+  // Function to match detected text with strain names using visual features
+  const findMatchingStrain = async (visionResult) => {
+    if (!visionResult) return null;
 
     try {
-      // Try exact match first using search
-      const searchResponse = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(detectedText)}&limit=5`);
-      const searchResults = await searchResponse.json();
-      
-      if (searchResults && searchResults.length > 0) {
-        // Get full details of first match
-        const strainResponse = await fetch(`${API_BASE}/api/strains/${searchResults[0].slug}`);
-        if (strainResponse.ok) {
-          return await strainResponse.json();
-        }
+      const matchResponse = await fetch(`${API_BASE}/api/visual-match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visionResult })
+      });
+
+      if (!matchResponse.ok) {
+        return null;
       }
 
-      // If no exact match, try word by word
-      const words = detectedText.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-      for (const word of words) {
-        const wordResponse = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(word)}&limit=1`);
-        const wordResults = await wordResponse.json();
-        if (wordResults && wordResults.length > 0) {
-          const strainResponse = await fetch(`${API_BASE}/api/strains/${wordResults[0].slug}`);
-          if (strainResponse.ok) {
-            return await strainResponse.json();
-          }
-        }
+      const matchData = await matchResponse.json();
+      if (matchData.matches && matchData.matches.length > 0) {
+        const topMatch = matchData.matches[0];
+        return {
+          ...topMatch.strain,
+          matchScore: topMatch.score,
+          matchConfidence: topMatch.confidence,
+          matchReasoning: topMatch.reasoning,
+          allMatches: matchData.matches.slice(0, 5)
+        };
       }
+      return null;
     } catch (err) {
-      console.error('Error matching strain:', err);
+      console.error('[Scanner] Error in visual matching:', err);
+      return null;
     }
-    
-    return null;
   };
 
   // Helper: compress and convert image file to base64
@@ -138,8 +132,10 @@ function Scanner({ onViewHistory }) {
   const parseErrorResponse = async (res) => {
     try {
       const data = await res.json();
-      return data?.error || `HTTP ${res.status}`;
-  } catch {
+      const base = data?.error || `HTTP ${res.status}`;
+      const hint = data?.hint ? ` Hint: ${data.hint}` : '';
+      return `${base}${hint}`;
+    } catch {
       try {
         const text = await res.text();
         return text || `HTTP ${res.status}`;
@@ -150,7 +146,7 @@ function Scanner({ onViewHistory }) {
   };
 
   const handleScan = async () => {
-    if (!image) {
+    if (images.length === 0) {
       setError('Please select an image first');
       return;
     }
@@ -159,48 +155,77 @@ function Scanner({ onViewHistory }) {
     setError(null);
 
     try {
-      // Convert image to compressed base64 (reduces upload failures)
-      const base64 = await fileToBase64Resized(image, 1600, 0.85);
+      // Helper to process a single image (upload + Vision)
+      const processOne = async (file) => {
+        const base64 = await fileToBase64Resized(file, 1600, 0.85);
+        const uploadResponse = await fetch(`${API_BASE}/api/uploads`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, contentType: file.type, base64 })
+        });
+        if (!uploadResponse.ok) {
+          const msg = await parseErrorResponse(uploadResponse);
+          throw new Error(`Upload failed: ${msg}`);
+        }
+        const uploadData = await uploadResponse.json();
+        const scanId = uploadData.id;
+        const processResponse = await fetch(`${API_BASE}/api/scans/${scanId}/process`, { method: 'POST' });
+        if (!processResponse.ok) {
+          const msg = await parseErrorResponse(processResponse);
+          throw new Error(`Processing failed: ${msg}`);
+        }
+        const processData = await processResponse.json();
+        return processData.result;
+      };
 
-      // Step 1: Upload image
-      const uploadResponse = await fetch(`${API_BASE}/api/uploads`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename: image.name,
-          contentType: image.type,
-          base64: base64
-        })
-      });
-
-      if (!uploadResponse.ok) {
-        const msg = await parseErrorResponse(uploadResponse);
-        throw new Error(`Upload failed: ${msg}`);
+      // Sequentially process up to 3 images to avoid rate spikes
+      const results = [];
+      for (const f of images) {
+        const r = await processOne(f);
+        results.push(r);
       }
 
-      const uploadData = await uploadResponse.json();
-      const scanId = uploadData.id;
+      // Text preview from first result (UX)
+      const firstText = results[0]?.textAnnotations?.[0]?.description || '';
+      setDetectedTextPreview(firstText.substring(0, 200));
 
-      // Step 2: Process with Google Vision
-      const processResponse = await fetch(`${API_BASE}/api/scans/${scanId}/process`, {
-        method: 'POST'
-      });
+      // Merge Vision results across photos
+      const merged = mergeVisionResults(results);
 
-      if (!processResponse.ok) {
-        const msg = await parseErrorResponse(processResponse);
-        throw new Error(`Processing failed: ${msg}`);
-      }
+      // Step 3: Visual matching with merged Vision results
+      const matchResult = await findMatchingStrain(merged);
 
-      const processData = await processResponse.json();
-      const detectedText = processData.result?.textAnnotations?.[0]?.description || '';
-
-      // Step 3: Match with strain database
-      const strain = await findMatchingStrain(detectedText);
-
-      if (strain) {
-        setMatchedStrain(strain);
+      if (matchResult) {
+        setMatchedStrain(matchResult);
+        // Set suggestions from alternative matches
+        if (matchResult.allMatches && matchResult.allMatches.length > 1) {
+          setSuggestedStrains(matchResult.allMatches.slice(1).map(m => m.strain));
+        } else {
+          setSuggestedStrains([]);
+        }
       } else {
-        setError('No matching strain found. Try a clearer image of the label or packaging.');
+        // Fallback: get top search results as suggestions
+        const detectedText = merged?.textAnnotations?.[0]?.description || firstText || '';
+        const cleanText = detectedText.replace(/\n/g, ' ').replace(/[^\w\s'-]/g, ' ').trim();
+        const words = cleanText.split(/\s+/).filter(w => w.length > 3);
+        const topWord = words[0] || '';
+        
+        if (topWord) {
+          try {
+            const suggestResponse = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(topWord)}&limit=5`);
+            const suggestions = await suggestResponse.json();
+            setSuggestedStrains(Array.isArray(suggestions) ? suggestions : []);
+          } catch (e) {
+            console.error('Failed to fetch suggestions:', e);
+          }
+        }
+        
+        // Show what text was detected to help user understand
+        const preview = detectedText ? detectedText.substring(0, 100) : '(no text detected)';
+        setError(
+          `No exact match found. Detected text: "${preview}${detectedText.length > 100 ? '...' : ''}". ` +
+          `${suggestedStrains.length > 0 ? 'Check suggested strains below or ' : ''}Try a clearer image with the strain name visible.`
+        );
       }
 
       setShowResult(true);
@@ -214,13 +239,94 @@ function Scanner({ onViewHistory }) {
   };
 
   const handleReset = () => {
-    setImage(null);
-    setImagePreview(null);
+    imagePreviews.forEach((u) => URL.revokeObjectURL(u));
+    setImages([]);
+    setImagePreviews([]);
     setMatchedStrain(null);
+    setSuggestedStrains([]);
+    setDetectedTextPreview('');
     setShowResult(false);
     setError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  // Merge multiple Vision results into a single composite result
+  function mergeVisionResults(results) {
+    if (!Array.isArray(results) || results.length === 0) return {};
+    const out = { labelAnnotations: [], webDetection: { webEntities: [] }, textAnnotations: [] };
+
+    // Labels: average score and lightly boost repeated labels
+    const labelMap = new Map();
+    for (const r of results) {
+      for (const l of (r?.labelAnnotations || [])) {
+        const key = (l.description || '').toLowerCase();
+        if (!key) continue;
+        const prev = labelMap.get(key) || { description: l.description, scoreSum: 0, count: 0 };
+        prev.scoreSum += l.score || 0;
+        prev.count += 1;
+        labelMap.set(key, prev);
+      }
+    }
+    out.labelAnnotations = Array.from(labelMap.values())
+      .map((v) => ({ description: v.description, score: Math.min(1, (v.scoreSum / v.count) * (1 + 0.15 * (v.count - 1))) }))
+      .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    // Web entities
+    const webMap = new Map();
+    for (const r of results) {
+      for (const w of (r?.webDetection?.webEntities || [])) {
+        const key = (w.description || '').toLowerCase();
+        if (!key) continue;
+        const prev = webMap.get(key) || { description: w.description, scoreSum: 0, count: 0 };
+        prev.scoreSum += w.score || 0;
+        prev.count += 1;
+        webMap.set(key, prev);
+      }
+    }
+    out.webDetection.webEntities = Array.from(webMap.values())
+      .map((v) => ({ description: v.description, score: Math.min(1, (v.scoreSum / v.count) * (1 + 0.15 * (v.count - 1))) }))
+      .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    // Text: combine distinct blocks (first-level annotation only)
+    const textSet = new Set();
+    for (const r of results) {
+      const t = r?.textAnnotations?.[0]?.description;
+      if (t) textSet.add(t);
+    }
+    if (textSet.size > 0) {
+      const combined = Array.from(textSet).join('\n');
+      out.textAnnotations = [{ description: combined }];
+    }
+
+    // retain other fields from first result for compatibility
+    return { ...results[0], ...out };
+  }
+
+  const TipsContent = () => (
+    <Stack spacing={1.2} sx={{ mt: 1 }}>
+      <Typography variant="subtitle2" color="primary.light">Pro tips for best results</Typography>
+      <Typography variant="body2" color="text.secondary">• Frame the whole bud (cola), not extreme macro of sugar leaves.</Typography>
+      <Typography variant="body2" color="text.secondary">• Use even, diffused lighting. Avoid harsh glare or deep shadows.</Typography>
+      <Typography variant="body2" color="text.secondary">• Neutral, uncluttered background. Hold steady to avoid blur.</Typography>
+      <Typography variant="body2" color="text.secondary">• Take 2–3 angles of the same bud (top and side) for richer features.</Typography>
+      <Typography variant="body2" color="text.secondary">• If you have packaging, include the label or strain name when possible.</Typography>
+      <Typography variant="body2" color="text.secondary">• Avoid filters/heavy compression; high-res, natural color is best.</Typography>
+    </Stack>
+  );
+
+  const handleSelectSuggestion = async (slug) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/strains/${slug}`);
+      if (response.ok) {
+        const strain = await response.json();
+        setMatchedStrain(strain);
+        setSuggestedStrains([]);
+        setError(null);
+      }
+    } catch (e) {
+      console.error('Failed to load suggested strain:', e);
     }
   };
 
@@ -260,14 +366,27 @@ function Scanner({ onViewHistory }) {
           </Box>
           <CardContent sx={{ background: 'linear-gradient(135deg, #2d5a2d 0%, #1f3a1f 100%)' }}>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-              <LeafIcon />
+              <CannabisLeafIcon />
               <Typography variant="h4" fontWeight="bold" color="primary.light">
                 Identify Your Strain
               </Typography>
             </Stack>
-            <Typography variant="body1" color="text.secondary">
-              Snap a photo of your cannabis product, bud, or packaging label and let AI identify the exact strain with complete info.
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
+              Snap a photo of your cannabis bud, product, or packaging and let AI identify the strain.
             </Typography>
+            <Alert severity="info" icon={false} sx={{ mt: 2, bgcolor: 'rgba(76, 175, 80, 0.1)' }}>
+              <Typography variant="caption" fontWeight="bold" color="primary.light">
+                How It Works:
+              </Typography>
+              <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
+                Our AI analyzes visual characteristics (colors, structure, labels, text) and matches 
+                them against 35,000+ strains. For best results, photograph buds in good lighting 
+                or include product labels with strain names.
+              </Typography>
+              <Button size="small" variant="outlined" sx={{ mt: 1 }} onClick={() => setShowTips(true)}>
+                Photo Tips
+              </Button>
+            </Alert>
           </CardContent>
         </Card>
 
@@ -277,20 +396,77 @@ function Scanner({ onViewHistory }) {
           </Alert>
         )}
 
-        {/* Image Preview */}
-        {imagePreview && (
-          <Card sx={{ mb: 3 }}>
-            <Box
-              component="img"
-              src={imagePreview}
-              alt="Preview"
-              sx={{
-                width: '100%',
-                maxHeight: 500,
-                objectFit: 'contain',
-                bgcolor: 'black'
-              }}
-            />
+        {/* Image Preview(s) with framing guide overlay */}
+        {imagePreviews.length > 0 && (
+          <Card sx={{ mb: 3, p: 1, position: 'relative' }}>
+            <Grid container spacing={1}>
+              {imagePreviews.map((src, idx) => (
+                <Grid item xs={12} sm={imagePreviews.length > 1 ? 6 : 12} key={idx} sx={{ position: 'relative' }}>
+                  <Box sx={{ position: 'relative' }}>
+                    <Box
+                      component="img"
+                      src={src}
+                      alt={`Preview ${idx + 1}`}
+                      sx={{ width: '100%', maxHeight: 320, objectFit: 'cover', bgcolor: 'black', borderRadius: 1 }}
+                    />
+                    {showGuide && (
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          pointerEvents: 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            border: '3px dashed #ffeb3b',
+                            borderRadius: '50%',
+                            width: '70%',
+                            height: '70%',
+                            opacity: 0.5,
+                            boxShadow: '0 0 0 2px #4caf50',
+                            background: 'rgba(255,255,0,0.07)',
+                            zIndex: 2,
+                          }}
+                        />
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            position: 'absolute',
+                            bottom: 8,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            color: '#ffeb3b',
+                            bgcolor: 'rgba(44,44,44,0.7)',
+                            px: 1.5,
+                            py: 0.5,
+                            borderRadius: 1,
+                            fontWeight: 'bold',
+                            zIndex: 3,
+                          }}
+                        >
+                          Frame the whole bud inside the circle
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+            <Button
+              variant="text"
+              size="small"
+              sx={{ mt: 1, color: showGuide ? 'warning.main' : 'primary.light' }}
+              onClick={() => setShowGuide((v) => !v)}
+            >
+              {showGuide ? 'Hide Framing Guide' : 'Show Framing Guide'}
+            </Button>
           </Card>
         )}
 
@@ -300,12 +476,12 @@ function Scanner({ onViewHistory }) {
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            capture="environment"
+            multiple
             style={{ display: 'none' }}
             onChange={handleImageCapture}
           />
           
-          {!imagePreview ? (
+          {imagePreviews.length === 0 ? (
             <Button
               variant="contained"
               size="large"
@@ -343,6 +519,16 @@ function Scanner({ onViewHistory }) {
                   '🔬 Scan & Identify Strain'
                 )}
               </Button>
+              <Button
+                variant="text"
+                size="large"
+                fullWidth
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading}
+                sx={{ color: 'primary.light' }}
+              >
+                Add Another Photo (up to 3)
+              </Button>
               
               <Button
                 variant="outlined"
@@ -352,45 +538,54 @@ function Scanner({ onViewHistory }) {
                 disabled={loading}
                 sx={{ borderColor: '#4caf50', color: '#4caf50' }}
               >
-                Take Another Photo
+                Start Over
               </Button>
             </>
           )}
         </Stack>
 
         {/* How it Works */}
-        {!imagePreview && (
+        {imagePreviews.length === 0 && (
           <Card sx={{ mt: 4, bgcolor: 'background.paper' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom color="primary.light">
-                📋 How It Works
+                📋 How Visual Matching Works
               </Typography>
               <Stack spacing={2}>
                 <Box>
                   <Typography variant="body1" fontWeight="bold" color="text.primary">
-                    1. Capture Clear Image
+                    1. Capture Image
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Take a photo of the bud, packaging, or label with good lighting
+                    Photo of bud (good lighting, neutral background) or product packaging with visible text
                   </Typography>
                 </Box>
                 <Box>
                   <Typography variant="body1" fontWeight="bold" color="text.primary">
-                    2. AI Analysis
+                    2. AI Visual Analysis
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Google Vision AI reads text and analyzes visual characteristics
+                    Analyzes colors, structure, text, labels, and compares to similar images online
                   </Typography>
                 </Box>
                 <Box>
                   <Typography variant="body1" fontWeight="bold" color="text.primary">
-                    3. Strain Match
+                    3. Intelligent Matching
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Get exact strain info: THC/CBD%, effects, flavors, and more
+                    Scores 35,000+ strains based on visual characteristics and returns top matches with confidence ratings
                   </Typography>
                 </Box>
               </Stack>
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                <Typography variant="caption">
+                  <strong>Note:</strong> Visual matching is based on AI analysis of characteristics. 
+                  Images with visible strain names/labels will produce the most accurate results.
+                </Typography>
+              </Alert>
+              <Box sx={{ mt: 2 }}>
+                <TipsContent />
+              </Box>
             </CardContent>
           </Card>
         )}
@@ -412,7 +607,7 @@ function Scanner({ onViewHistory }) {
         <DialogTitle sx={{ borderBottom: '1px solid #4caf50' }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between">
             <Stack direction="row" spacing={1} alignItems="center">
-              <LeafIcon />
+              <CannabisLeafIcon />
               <Typography variant="h5" fontWeight="bold" color="primary.light">
                 Strain Identified
               </Typography>
@@ -423,12 +618,50 @@ function Scanner({ onViewHistory }) {
           </Stack>
         </DialogTitle>
         <DialogContent sx={{ pt: 3 }}>
+          {/* Show detected text preview */}
+          {detectedTextPreview && !matchedStrain && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={{ fontWeight: 'bold' }}>Detected Text:</Typography>
+              <Typography variant="body2" sx={{ fontStyle: 'italic', mt: 0.5 }}>
+                "{detectedTextPreview}{detectedTextPreview.length >= 200 ? '...' : ''}"
+              </Typography>
+            </Alert>
+          )}
+
           {matchedStrain ? (
             <>
               {/* Strain Name */}
               <Typography variant="h4" gutterBottom fontWeight="bold" color="primary.main">
                 {matchedStrain.name}
               </Typography>
+
+              {/* Confidence Score */}
+              {matchedStrain.matchConfidence && (
+                <Alert 
+                  severity={matchedStrain.matchConfidence >= 70 ? 'success' : matchedStrain.matchConfidence >= 50 ? 'info' : 'warning'}
+                  sx={{ mb: 2 }}
+                >
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Typography variant="body1" fontWeight="bold">
+                      {matchedStrain.matchConfidence}% Confidence Match
+                    </Typography>
+                  </Stack>
+                  {matchedStrain.matchReasoning && (
+                    <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+                      {matchedStrain.matchReasoning}
+                    </Typography>
+                  )}
+                  {matchedStrain.matchConfidence < 40 && (
+                    <Stack spacing={1} sx={{ mt: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Confidence is low. Try retaking the photo with these tips:
+                      </Typography>
+                      <TipsContent />
+                      <Button size="small" variant="outlined" onClick={() => setShowTips(true)}>Open Photo Tips</Button>
+                    </Stack>
+                  )}
+                </Alert>
+              )}
 
               {/* Type Badge */}
               {matchedStrain.type && (
@@ -550,10 +783,102 @@ function Scanner({ onViewHistory }) {
               </Button>
             </>
           ) : (
-            <Alert severity="info">
-              No strain match found. The image may not contain readable strain information.
-            </Alert>
+            <>
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                No exact match found. The image may not contain a clear strain name.
+              </Alert>
+
+              {/* Tips when no match */}
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Retake with better framing and lighting for stronger matches.
+                </Typography>
+                <TipsContent />
+                <Button size="small" variant="outlined" sx={{ mt: 1 }} onClick={() => setShowTips(true)}>
+                  Open Photo Tips
+                </Button>
+              </Alert>
+
+              {/* Show suggested strains if available */}
+              {suggestedStrains.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="h6" gutterBottom color="primary.light">
+                    💡 Possible Matches
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Tap a strain below if it matches what you're looking for:
+                  </Typography>
+                  <Stack spacing={1}>
+                    {suggestedStrains.map((strain) => (
+                      <Card
+                        key={strain.slug}
+                        sx={{
+                          cursor: 'pointer',
+                          bgcolor: 'rgba(76, 175, 80, 0.05)',
+                          border: '1px solid rgba(76, 175, 80, 0.3)',
+                          transition: 'all 0.2s',
+                          '&:hover': {
+                            bgcolor: 'rgba(76, 175, 80, 0.15)',
+                            border: '1px solid #4caf50',
+                          }
+                        }}
+                        onClick={() => handleSelectSuggestion(strain.slug)}
+                      >
+                        <CardContent sx={{ py: 1.5 }}>
+                          <Typography variant="body1" fontWeight="bold" color="primary.main">
+                            {strain.name}
+                          </Typography>
+                          {strain.type && (
+                            <Chip
+                              label={strain.type}
+                              size="small"
+                              sx={{
+                                mt: 0.5,
+                                height: 20,
+                                fontSize: '0.7rem',
+                                bgcolor: strain.type === 'Indica' ? '#7b1fa2' :
+                                         strain.type === 'Sativa' ? '#f57c00' : '#00897b',
+                                color: 'white'
+                              }}
+                            />
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={handleReset}
+                sx={{ 
+                  mt: 3,
+                  borderColor: '#4caf50',
+                  color: '#4caf50'
+                }}
+              >
+                Try Another Image
+              </Button>
+            </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Tips Dialog */}
+      <Dialog open={showTips} onClose={() => setShowTips(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Typography variant="h6">Photo Tips for Best Results</Typography>
+            <IconButton onClick={() => setShowTips(false)}><Close /></IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <TipsContent />
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Try 2–3 shots from different angles. Include a label if available.
+          </Alert>
         </DialogContent>
       </Dialog>
     </Box>

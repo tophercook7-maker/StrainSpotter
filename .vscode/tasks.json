@@ -37,6 +37,28 @@
 			"command": "npm run dev",
 			"isBackground": true,
 			"problemMatcher": []
+		},
+		{
+			"label": "Start Backend",
+			"type": "shell",
+			"command": "npm run dev",
+			"isBackground": false
+		},
+		{
+			"label": "Install Backend Deps",
+			"type": "shell",
+			"command": "npm install"
+		},
+		{
+			"label": "Start Backend",
+			"type": "shell",
+			"command": "npm run dev",
+			"isBackground": false
+		},
+		{
+			"label": "Install Backend Deps",
+			"type": "shell",
+			"command": "npm install"
 		}
 	]
 }

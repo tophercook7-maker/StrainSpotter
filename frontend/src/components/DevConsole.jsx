@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Drawer, IconButton, Typography, TextField, Button, Slider } from '@mui/material';
 import { TerminalIcon } from '@heroicons/react/outline';
+import { API_BASE } from '../config';
 
 // Gesture detection constants
 const GESTURE_THRESHOLD = 100;
@@ -47,7 +48,7 @@ const DevConsole = () => {
 
   const applySettings = async () => {
     try {
-      await fetch('/api/admin/settings', {
+          await fetch(`${API_BASE}/api/admin/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
@@ -59,7 +60,7 @@ const DevConsole = () => {
 
   const toggleMaintenance = async () => {
     setSettings(prev => ({ ...prev, maintenanceMode: !prev.maintenanceMode }));
-    await fetch('/api/admin/maintenance', {
+        await fetch(`${API_BASE}/api/admin/maintenance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ maintenance: !settings.maintenanceMode })
@@ -67,17 +68,17 @@ const DevConsole = () => {
   };
 
   const fetchHealth = async () => {
-    const res = await fetch('/api/admin/health');
+        const res = await fetch(`${API_BASE}/api/admin/health`);
     setHealth(await res.json());
   };
 
   const fetchLogs = async () => {
-    const res = await fetch('/api/admin/logs');
+        const res = await fetch(`${API_BASE}/api/admin/logs`);
     setLogs(await res.text());
   };
 
   const refreshData = async () => {
-    await fetch('/api/admin/refresh', { method: 'POST' });
+        await fetch(`${API_BASE}/api/admin/refresh`, { method: 'POST' });
   };
 
   return (

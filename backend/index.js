@@ -1,11 +1,15 @@
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import express from 'express';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { supabase } from './supabaseClient.js';
-import { ensureBucketExists } from './supabaseAdmin.js';
+import { ensureBucketExists, supabaseAdmin } from './supabaseAdmin.js';
 import fs from 'fs';
+import path from 'path';
 
 // Import all route modules at the top (ES module requirement)
+import stripeWebhook from './routes/stripeWebhook.js';
 import strainRoutes from './routes/strains.js';
 import healthRoutes from './routes/health.js';
 import compareRoutes from './routes/compare.js';
@@ -19,15 +23,22 @@ import analyticsRoutes from './routes/analytics.js';
 import adminRoutes from './routes/admin.js';
 import devRoutes from './routes/dev.js';
 import growersRoutes from './routes/growers.js';
+import seedsRoutes from './routes/seeds.js';
+import dispensariesRoutes from './routes/dispensaries.js';
 import groupsRoutes from './routes/groups.js';
 import journalsRoutes from './routes/journals.js';
 import eventsRoutes from './routes/events.js';
 import feedbackRoutes from './routes/feedback.js';
+import diagnosticRoutes from './routes/diagnostic.js';
+import friendsRoutes from './routes/friends.js';
+import { matchStrainByVisuals } from './services/visualMatcher.js';
 
 // Load env from ../env/.env.local (works when launched from backend/)
 dotenv.config({ path: new URL('../env/.env.local', import.meta.url).pathname });
-console.log('[boot] SUPABASE_URL =', process.env.SUPABASE_URL);
-console.log('[boot] GOOGLE_APPLICATION_CREDENTIALS =', process.env.GOOGLE_APPLICATION_CREDENTIALS || '(not set)');
+if (process.env.NODE_ENV !== 'production') {
+  console.log('[boot] SUPABASE_URL present =', !!process.env.SUPABASE_URL);
+  console.log('[boot] GOOGLE_APPLICATION_CREDENTIALS set =', !!process.env.GOOGLE_APPLICATION_CREDENTIALS || !!process.env.GOOGLE_VISION_JSON);
+}
 
 // Optional Google Vision client (only if creds are present)
 let visionClient;
@@ -40,17 +51,30 @@ try {
 const app = express();
 const PORT = process.env.PORT || 5181;
 
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false // keep simple for API-only
+}));
+
 // JSON body (for base64 uploads from frontend)
 app.use(express.json({ limit: '10mb' }));
 
-// Lightweight CORS for local development
+// CORS allowlist
+const ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173').split(',');
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (origin && ALLOW_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
+
+// Rate limiter for write-heavy endpoints
+const writeLimiter = rateLimit({ windowMs: 60 * 1000, max: 30 }); // 30 req/min per IP
 
 // --- Health ---
 app.get('/health', async (req, res) => {
@@ -82,22 +106,30 @@ app.get('/', (req, res) => {
 })();
 
 // POST /api/uploads  { filename, contentType, base64 }
-app.post('/api/uploads', async (req, res) => {
+app.post('/api/uploads', writeLimiter, async (req, res) => {
   try {
     const { filename, contentType, base64 } = req.body || {};
     if (!filename || !base64) return res.status(400).json({ error: 'filename and base64 are required' });
+    if (contentType && !/^image\/(png|jpe?g|webp)$/i.test(contentType)) {
+      return res.status(400).json({ error: 'unsupported contentType' });
+    }
+    if (base64.length > 10 * 1024 * 1024) { // 10MB encoded (approx)
+      return res.status(413).json({ error: 'image too large' });
+    }
 
     const buffer = Buffer.from(base64, 'base64');
     const key = `${Date.now()}-${filename}`;
     const bucket = 'scans';
 
-    const { error: upErr } = await supabase.storage.from(bucket).upload(key, buffer, { contentType });
+  // Prefer service role for storage writes to bypass RLS
+  const storageClient = supabaseAdmin ?? supabase;
+  const { error: upErr } = await storageClient.storage.from(bucket).upload(key, buffer, { contentType });
     if (upErr) {
       if (upErr.message?.toLowerCase().includes('bucket not found')) {
         // Try to create bucket once (best-effort)
         const ensured = await ensureBucketExists(bucket, { public: true });
         if (ensured?.ok) {
-          const retry = await supabase.storage.from(bucket).upload(key, buffer, { contentType });
+          const retry = await storageClient.storage.from(bucket).upload(key, buffer, { contentType });
           if (retry.error) return res.status(500).json({ error: retry.error.message });
         } else {
           return res.status(500).json({ error: `Storage bucket '${bucket}' not found and could not be created. ${ensured?.error || ensured?.reason || ''}`.trim() });
@@ -107,11 +139,19 @@ app.post('/api/uploads', async (req, res) => {
       }
     }
 
-    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(key);
+  const { data: urlData } = storageClient.storage.from(bucket).getPublicUrl(key);
     const publicUrl = urlData?.publicUrl || null;
 
-    const insert = await supabase.from('scans').insert({ image_url: publicUrl, status: 'pending' }).select();
-    if (insert.error) return res.status(500).json({ error: insert.error.message });
+  // Use service role for table insert to bypass RLS
+  const dbClient = supabaseAdmin ?? supabase;
+    const insert = await dbClient.from('scans').insert({ image_url: publicUrl, status: 'pending' }).select();
+    if (insert.error) {
+      const msg = insert.error.message || 'insert failed';
+      const rlsHint = (!supabaseAdmin && /row-level security/i.test(msg))
+        ? 'Supabase RLS blocked anon insert. Add SUPABASE_SERVICE_ROLE_KEY to env/.env.local and restart the backend.'
+        : null;
+      return res.status(500).json({ error: msg, hint: rlsHint });
+    }
 
     const scan = Array.isArray(insert.data) ? insert.data[0] : insert.data;
     res.json({ id: scan?.id || null, image_url: publicUrl });
@@ -123,10 +163,58 @@ app.post('/api/uploads', async (req, res) => {
 // GET /api/scans - list recent
 app.get('/api/scans', async (req, res) => {
   try {
-    const q = supabase.from('scans').select('*').order('created_at', { ascending: false }).limit(100);
-    const { data, error } = await q;
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ scans: data || [] });
+    const { user_id } = req.query; // Optional: filter to user's own + friends' scans
+    // Use service role for reads if available to ensure visibility of all scans
+    const readClient = supabaseAdmin ?? supabase;
+    
+    if (user_id) {
+      // Fetch user's scans + friends' scans only
+      // Step 1: Get user's friend IDs
+      const { data: friendships, error: friendErr } = await readClient
+        .from('friendships')
+        .select('user_id, friend_id')
+        .or(`user_id.eq.${user_id},friend_id.eq.${user_id}`)
+        .eq('status', 'accepted');
+      
+      if (friendErr) return res.status(500).json({ error: friendErr.message });
+      
+      const friendIds = new Set([user_id]);
+      (friendships || []).forEach(f => {
+        if (f.user_id === user_id) friendIds.add(f.friend_id);
+        else friendIds.add(f.user_id);
+      });
+      
+      // Step 2: Get scans from user + friends
+      const { data, error } = await readClient
+        .from('scans')
+        .select('*')
+        .in('user_id', Array.from(friendIds))
+        .order('created_at', { ascending: false })
+        .limit(100);
+      
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json({ scans: data || [] });
+    } else {
+      // No user_id: return all scans (permissive for dev; tighten in prod)
+      const q = readClient.from('scans').select('*').order('created_at', { ascending: false }).limit(100);
+      const { data, error } = await q;
+      if (error) return res.status(500).json({ error: error.message });
+      res.json({ scans: data || [] });
+    }
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/scans/from-url { url }
+app.post('/api/scans/from-url', async (req, res) => {
+  const writeClient = supabaseAdmin ?? supabase;
+  try {
+    const { url } = req.body || {};
+    if (!url) return res.status(400).json({ error: 'url required' });
+    const insert = await writeClient.from('scans').insert({ image_url: url, status: 'pending' }).select().single();
+    if (insert.error) return res.status(500).json({ error: insert.error.message });
+    res.json({ id: insert.data.id, image_url: url });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -136,7 +224,9 @@ app.get('/api/scans', async (req, res) => {
 app.get('/api/scans/:id', async (req, res) => {
   try {
     const id = req.params.id;
-    const { data, error } = await supabase.from('scans').select('*').eq('id', id).maybeSingle();
+    // Use service role for reads if available to ensure visibility of all scans
+    const readClient = supabaseAdmin ?? supabase;
+    const { data, error } = await readClient.from('scans').select('*').eq('id', id).maybeSingle();
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'scan not found' });
     res.json({ scan: data });
@@ -146,27 +236,66 @@ app.get('/api/scans/:id', async (req, res) => {
 });
 
 // POST /api/scans/:id/process - Vision annotate and save
-app.post('/api/scans/:id/process', async (req, res) => {
+app.post('/api/scans/:id/process', writeLimiter, async (req, res) => {
+  // Use service role for all scan operations when available
+  const readClient = supabaseAdmin ?? supabase;
+  const writeClient = supabaseAdmin ?? supabase;
   try {
     const id = req.params.id;
-    const { data: scan, error: fetchErr } = await supabase.from('scans').select('*').eq('id', id).maybeSingle();
+    const { data: scan, error: fetchErr } = await readClient.from('scans').select('*').eq('id', id).maybeSingle();
     if (fetchErr) return res.status(500).json({ error: fetchErr.message });
     if (!scan) return res.status(404).json({ error: 'scan not found' });
     if (!scan.image_url) return res.status(400).json({ error: 'scan has no image_url' });
     if (!visionClient) return res.status(500).json({ error: 'Google Vision client not configured' });
 
-    await supabase.from('scans').update({ status: 'processing' }).eq('id', id);
+    await writeClient.from('scans').update({ status: 'processing' }).eq('id', id);
 
+    // Download the image bytes server-side so Vision doesn't need to fetch the URL
+    let contentBuffer = null;
+    try {
+      const resp = await fetch(scan.image_url);
+      if (resp.ok) {
+        const ab = await resp.arrayBuffer();
+        contentBuffer = Buffer.from(ab);
+      }
+    } catch {}
+
+    if (!contentBuffer) {
+      // Fallback: attempt storage download via Supabase (requires key extraction)
+      try {
+        const url = new URL(scan.image_url);
+        const pathParts = url.pathname.split('/');
+        const idx = pathParts.findIndex((p) => p === 'public');
+        if (idx !== -1 && pathParts[idx + 1] === 'scans') {
+          const key = pathParts.slice(idx + 2).join('/');
+          const { data, error } = await (supabaseAdmin ?? supabase).storage.from('scans').download(key);
+          if (!error && data) {
+            if (typeof data.arrayBuffer === 'function') {
+              const ab = await data.arrayBuffer();
+              contentBuffer = Buffer.from(ab);
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (!contentBuffer) {
+      return res.status(500).json({ error: 'Could not download image bytes for Vision processing' });
+    }
+
+    // Enhanced: Extract ALL visual features for better matching
     const [result] = await visionClient.annotateImage({
-      image: { source: { imageUri: scan.image_url } },
+      image: { content: contentBuffer },
       features: [
-        { type: 'LABEL_DETECTION' },
-        { type: 'TEXT_DETECTION' },
-        { type: 'OBJECT_LOCALIZATION' }
+        { type: 'LABEL_DETECTION', maxResults: 30 },      // More labels for better matching
+        { type: 'TEXT_DETECTION' },                       // Text (strain names, labels)
+        { type: 'OBJECT_LOCALIZATION' },                  // Objects in image
+        { type: 'IMAGE_PROPERTIES' },                     // Dominant colors
+        { type: 'WEB_DETECTION' }                         // Find similar images on web
       ]
     });
 
-    const { error: upErr } = await supabase
+    const { error: upErr } = await writeClient
       .from('scans')
       .update({ result, status: 'done', processed_at: new Date().toISOString() })
       .eq('id', id);
@@ -175,7 +304,7 @@ app.post('/api/scans/:id/process', async (req, res) => {
     res.json({ ok: true, result });
   } catch (e) {
     try {
-      await supabase
+      await writeClient
         .from('scans')
         .update({ status: 'failed', result: { error: String(e) } })
         .eq('id', req.params.id);
@@ -184,7 +313,72 @@ app.post('/api/scans/:id/process', async (req, res) => {
   }
 });
 
+// POST /api/visual-match - Match strain by Vision API results
+app.post('/api/visual-match', writeLimiter, async (req, res) => {
+  try {
+    const { visionResult } = req.body;
+    if (!visionResult) {
+      return res.status(400).json({ error: 'visionResult required' });
+    }
+
+    // Load strain library (try primary path, fallback to enhanced or latest backup)
+    let strains = [];
+    try {
+      const primary = path.join(import.meta.dirname, 'data', 'strain_library.json');
+      if (fs.existsSync(primary)) {
+        strains = JSON.parse(fs.readFileSync(primary, 'utf8'));
+      } else {
+        const enhanced = path.join(import.meta.dirname, 'data', 'strain_library_enhanced.json');
+        if (fs.existsSync(enhanced)) {
+          strains = JSON.parse(fs.readFileSync(enhanced, 'utf8'));
+        } else {
+          const dataDir = path.join(import.meta.dirname, 'data');
+          const files = fs.readdirSync(dataDir).filter(f => /^strain_library\..*\.bak\.json$/.test(f)).sort().reverse();
+          if (files.length) {
+            strains = JSON.parse(fs.readFileSync(path.join(dataDir, files[0]), 'utf8'));
+          } else {
+            throw new Error('strain library not found');
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[VisualMatch] Could not load strain library:', e);
+      return res.status(500).json({ error: 'Strain library unavailable' });
+    }
+
+    // Perform visual matching
+    const matches = matchStrainByVisuals(visionResult, strains);
+
+    console.log(`[VisualMatch] Found ${matches.length} matches, top score: ${matches[0]?.score || 0}`);
+
+    res.json({
+      success: true,
+      matchCount: matches.length,
+      matches: matches.map(m => ({
+        strain: {
+          slug: m.strain.slug,
+          name: m.strain.name,
+          type: m.strain.type,
+          description: m.strain.description,
+          effects: m.strain.effects,
+          flavors: m.strain.flavors,
+          thc: m.strain.thc,
+          cbd: m.strain.cbd,
+          lineage: m.strain.lineage
+        },
+        score: Math.round(m.score),
+        confidence: m.confidence,
+        reasoning: m.reasoning
+      }))
+    });
+  } catch (e) {
+    console.error('[VisualMatch] Error:', e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // --- Mount Route Modules ---
+app.use('/api/stripe', stripeWebhook);
 app.use('/api/health', healthRoutes);
 app.use('/api', strainRoutes);
 app.use('/api/compare', compareRoutes);
@@ -198,13 +392,17 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/dev', devRoutes);
 app.use('/api/growers', growersRoutes);
+app.use('/api/seeds', seedsRoutes);
+app.use('/api/dispensaries', dispensariesRoutes);
 app.use('/api/groups', groupsRoutes);
 app.use('/api/journals', journalsRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/diagnostic', diagnosticRoutes);
+app.use('/api/friends', friendsRoutes);
 
 // POST /api/strains/suggest - user suggests a new strain
-app.post('/api/strains/suggest', express.json(), (req, res) => {
+app.post('/api/strains/suggest', writeLimiter, express.json(), (req, res) => {
   const suggestion = req.body;
   // In production, store in DB or send to admin for review
   // For now, just append to a file

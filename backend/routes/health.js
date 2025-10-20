@@ -1,5 +1,6 @@
 import express from 'express';
 import { supabase } from '../supabaseClient.js';
+import { supabaseAdmin } from '../supabaseAdmin.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -34,7 +35,13 @@ router.get('/', async (req, res) => {
   // Check Google Vision credentials
   let googleVisionConfigured = false;
   try {
-    googleVisionConfigured = fs.existsSync(path.join(process.cwd(), 'env/google-vision-key.json'));
+    const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    if (credPath) {
+      const resolved = path.isAbsolute(credPath)
+        ? credPath
+        : path.resolve(process.cwd(), credPath);
+      googleVisionConfigured = fs.existsSync(resolved);
+    }
   } catch {
     googleVisionConfigured = false;
   }
@@ -42,7 +49,8 @@ router.get('/', async (req, res) => {
   // Check bucket existence (scans)
   let bucketExists = false;
   try {
-    const { data } = await supabase.storage.listBuckets();
+    const client = supabaseAdmin ?? supabase;
+    const { data } = await client.storage.listBuckets();
     bucketExists = data?.some(b => b.name === 'scans');
   } catch {
     bucketExists = false;

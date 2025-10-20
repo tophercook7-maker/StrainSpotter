@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Box, Card, CardContent, Typography, Grid, Alert, Button, CircularProgress } from '@mui/material';
+import { Box, Card, CardContent, Typography, Grid, Alert, Button, CircularProgress, Dialog, DialogTitle, DialogContent, IconButton } from '@mui/material';
+import { Close } from '@mui/icons-material';
 import { API_BASE } from '../config';
 import { testScanUpload } from '../utils/testScanUpload';
+import VisionDiagnostic from './VisionDiagnostic';
 
 export default function DevDashboard() {
   const [stats, setStats] = useState(null);
@@ -9,6 +11,8 @@ export default function DevDashboard() {
   const [health, setHealth] = useState(null);
   const [testResult, setTestResult] = useState(null);
   const [testing, setTesting] = useState(false);
+  const [showVisionDiag, setShowVisionDiag] = useState(false);
+  const host = typeof window !== 'undefined' ? window.location.origin : 'n/a';
 
   useEffect(() => {
     (async () => {
@@ -64,8 +68,21 @@ export default function DevDashboard() {
       <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>Dev Dashboard</Typography>
 
       <Grid container spacing={2}>
+        {/* Env / API Info */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" color="text.secondary">Environment</Typography>
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="body2"><strong>Host:</strong> {host}</Typography>
+                <Typography variant="body2" sx={{ wordBreak: 'break-all' }}><strong>API_BASE:</strong> {API_BASE}</Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
         {/* Strain Stats */}
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
               <Typography variant="h6" color="text.secondary">Total Strains</Typography>
@@ -74,7 +91,7 @@ export default function DevDashboard() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
               <Typography variant="h6" color="text.secondary">Daily New (scraped)</Typography>
@@ -96,7 +113,7 @@ export default function DevDashboard() {
         </Grid>
 
         {/* Health Check */}
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
               <Typography variant="h6" color="text.secondary">Health Check</Typography>
@@ -153,7 +170,45 @@ export default function DevDashboard() {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Vision API Diagnostic Tool */}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" sx={{ mb: 2 }}>🔬 Vision API Diagnostic</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Test what Google Vision detects from your images.
+              </Typography>
+              <Button 
+                variant="outlined" 
+                onClick={() => setShowVisionDiag(true)}
+              >
+                Open Vision Diagnostic Tool
+              </Button>
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
+
+      {/* Vision Diagnostic Dialog */}
+      <Dialog 
+        open={showVisionDiag} 
+        onClose={() => setShowVisionDiag(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">Vision API Diagnostic</Typography>
+            <IconButton onClick={() => setShowVisionDiag(false)}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <VisionDiagnostic />
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }

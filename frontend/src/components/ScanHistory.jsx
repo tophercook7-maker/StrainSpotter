@@ -16,9 +16,9 @@ import {
 } from '@mui/material';
 import { ArrowBack, LocalFlorist } from '@mui/icons-material';
 
-const API_BASE = 'http://localhost:5181';
+import { API_BASE } from '../config';
 
-function ScanHistory({ onBack }) {
+function ScanHistory() {
   const [scans, setScans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

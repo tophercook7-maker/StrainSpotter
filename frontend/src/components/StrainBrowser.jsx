@@ -128,46 +128,72 @@ function StrainFilters({ onFilterChange }) {
 }
 
 // Strain card component
-function StrainCard({ strain }) {
+function StrainCard({ strain, onNavigate }) {
+  const [expanded, setExpanded] = useState(false);
+  
   return (
     <StyledStrainCard>
-      <CardContent>
+      <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Typography variant="h6" gutterBottom>{strain.name}</Typography>
         <Typography color="textSecondary" gutterBottom>
-          {strain.type} {strain.thc && `• ${strain.thc}% THC`}
+          {strain.type} {strain.thc && `• ${strain.thc}% THC`} {strain.cbd && `• ${strain.cbd}% CBD`}
         </Typography>
         
         {strain.description && (
           <Typography variant="body2" sx={{ mb: 2 }}>
-            {strain.description.slice(0, 150)}...
+            {expanded ? strain.description : `${strain.description.slice(0, 150)}${strain.description.length > 150 ? '...' : ''}`}
+            {strain.description.length > 150 && (
+              <Button size="small" onClick={() => setExpanded(!expanded)} sx={{ ml: 1 }}>
+                {expanded ? 'Less' : 'More'}
+              </Button>
+            )}
           </Typography>
         )}
 
         {strain.effects?.length > 0 && (
           <Box sx={{ mb: 1 }}>
-            {strain.effects.map(effect => (
-              <EffectChip key={effect} label={effect} size="small" />
-            ))}
+            <Typography variant="caption" color="text.secondary">Effects:</Typography>
+            <Box>
+              {strain.effects.slice(0, 5).map(effect => (
+                <EffectChip key={effect} label={effect} size="small" />
+              ))}
+            </Box>
           </Box>
         )}
 
         {strain.flavors?.length > 0 && (
-          <Box>
-            {strain.flavors.map(flavor => (
-              <FlavorChip key={flavor} label={flavor} size="small" />
-            ))}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary">Flavors:</Typography>
+            <Box>
+              {strain.flavors.slice(0, 5).map(flavor => (
+                <FlavorChip key={flavor} label={flavor} size="small" />
+              ))}
+            </Box>
           </Box>
         )}
+
+        <Box sx={{ mt: 'auto', pt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Button size="small" variant="outlined" onClick={() => onNavigate?.('seeds')} fullWidth>
+            🌱 Find Seeds
+          </Button>
+          <Button size="small" variant="outlined" onClick={() => onNavigate?.('growers')} fullWidth>
+            👨‍🌾 Find Growers
+          </Button>
+          <Button size="small" variant="outlined" onClick={() => onNavigate?.('dispensaries')} fullWidth>
+            🏪 Find Dispensaries
+          </Button>
+        </Box>
       </CardContent>
     </StyledStrainCard>
   );
 }
 
 // Main strain browser
-export default function StrainBrowser() {
+export default function StrainBrowser({ onNavigate }) {
   const [strains, setStrains] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [filters, setFilters] = useState({});
   
   const loadStrains = useCallback(async () => {
@@ -180,7 +206,8 @@ export default function StrainBrowser() {
       });
       const response = await fetch(`${API}/strains?${params}`);
       const data = await response.json();
-      setStrains(data.strains);
+      setStrains(data.strains || []);
+      setTotalPages(data.pages || 1);
     } catch (e) {
       console.error('Error loading strains:', e);
     } finally {
@@ -194,8 +221,11 @@ export default function StrainBrowser() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>
-        Strain Library
+      <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
+        🌿 Browse Strain Database
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+        Explore our library of cannabis strains and find seeds, growers, and dispensaries.
       </Typography>
 
       <StrainFilters onFilterChange={setFilters} />
@@ -204,30 +234,46 @@ export default function StrainBrowser() {
         <Box display="flex" justifyContent="center" p={4}>
           <CircularProgress />
         </Box>
+      ) : strains.length === 0 ? (
+        <Box textAlign="center" p={4}>
+          <Typography variant="h6" color="text.secondary">
+            No strains found. Try adjusting your filters.
+          </Typography>
+        </Box>
       ) : (
-        <Grid container spacing={3}>
-          {strains.map(strain => (
-            <Grid key={strain.slug} item xs={12} sm={6} md={4}>
-              <StrainCard strain={strain} />
-            </Grid>
-          ))}
-        </Grid>
+        <>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Showing {strains.length} strains (Page {page} of {totalPages})
+          </Typography>
+          <Grid container spacing={3}>
+            {strains.map(strain => (
+              <Grid key={strain.slug} item xs={12} sm={6} md={4}>
+                <StrainCard strain={strain} onNavigate={onNavigate} />
+              </Grid>
+            ))}
+          </Grid>
+        </>
       )}
 
-      <Box display="flex" justifyContent="center" mt={4}>
-        <Button
-          disabled={page === 1}
-          onClick={() => setPage(p => p - 1)}
-        >
-          Previous
-        </Button>
-        <Box mx={2}>Page {page}</Box>
-        <Button
-          onClick={() => setPage(p => p + 1)}
-        >
-          Next
-        </Button>
-      </Box>
+      {totalPages > 1 && (
+        <Box display="flex" justifyContent="center" alignItems="center" mt={4} gap={2}>
+          <Button
+            variant="outlined"
+            disabled={page === 1}
+            onClick={() => setPage(p => p - 1)}
+          >
+            Previous
+          </Button>
+          <Typography>Page {page} of {totalPages}</Typography>
+          <Button
+            variant="outlined"
+            disabled={page >= totalPages}
+            onClick={() => setPage(p => p + 1)}
+          >
+            Next
+          </Button>
+        </Box>
+      )}
     </Container>
   );
 }

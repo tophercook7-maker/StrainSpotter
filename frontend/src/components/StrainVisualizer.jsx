@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE } from '../config';
 import {
   Box,
   Card,
@@ -19,8 +20,8 @@ const StrainVisualizer = ({ strain }) => {
   useEffect(() => {
     if (strain) {
       Promise.all([
-        fetch(`/api/strains/${strain.slug}/similar`).then(r => r.json()),
-        fetch(`/api/analytics/effectiveness/${strain.slug}`).then(r => r.json())
+        fetch(`${API_BASE}/api/strains/${strain.slug}/similar`).then(r => r.json()),
+        fetch(`${API_BASE}/api/analytics/effectiveness/${strain.slug}`).then(r => r.json())
       ]).then(([similarData, analyticsData]) => {
         setSimilar(similarData.similar);
         setAnalytics(analyticsData);
@@ -28,7 +29,6 @@ const StrainVisualizer = ({ strain }) => {
       });
     }
   }, [strain]);
-
   if (!strain || loading) {
     return <CircularProgress />;
   }

@@ -21,7 +21,7 @@ export default function GrowerDirectory() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/growers`);
+  const res = await fetch(`${API_BASE}/api/growers`);
         if (res.ok) setGrowers(await res.json());
       } finally {
         setLoading(false);
