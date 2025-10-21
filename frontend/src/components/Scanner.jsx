@@ -177,12 +177,14 @@ function Scanner() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: scanId, image_url: uploadData.image_url })
           });
-          if (ef.ok) {
-            const efData = await ef.json();
-            return efData.result || null;
+          if (!ef.ok) {
+            const msg = await ef.text();
+            throw new Error(`Process error: ${msg}`);
           }
-        } catch (_) {
-          // ignore, fall through to legacy API if available
+          const efData = await ef.json();
+          return efData.result || null;
+        } catch (e) {
+          console.warn('Edge process failed, will try legacy if available:', e);
         }
 
         // Legacy backend (only if running Express API)
