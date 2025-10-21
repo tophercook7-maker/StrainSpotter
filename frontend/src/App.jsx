@@ -49,6 +49,11 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
+      {typeof window !== 'undefined' && !/localhost|127\.0\.0\.1/.test(window.location.host) && /localhost:5181/.test(import.meta.env.VITE_API_BASE || '') && (
+        <div style={{ background: '#ff5555', color: '#fff', padding: '6px 12px', textAlign: 'center', fontWeight: 700 }}>
+          Warning: Frontend is calling localhost API_BASE. Update VITE_API_BASE or config.js.
+        </div>
+      )}
       <TopNav current={currentView} onNavigate={setCurrentView} />
       {currentView === 'home' && (
         <Home onNavigate={setCurrentView} />

@@ -20,7 +20,7 @@ import {
   Grid
 } from '@mui/material';
 import { CameraAlt, History, Close } from '@mui/icons-material';
-import { API_BASE } from '../config';
+import { API_BASE, FUNCTIONS_BASE } from '../config';
 import CannabisLeafIcon from './CannabisLeafIcon';
 
 function Scanner() {
@@ -158,7 +158,7 @@ function Scanner() {
       // Helper to process a single image (upload + Vision)
       const processOne = async (file) => {
         const base64 = await fileToBase64Resized(file, 1600, 0.85);
-        const uploadResponse = await fetch(`${API_BASE}/api/uploads`, {
+        const uploadResponse = await fetch(`${FUNCTIONS_BASE}/uploads`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ filename: file.name, contentType: file.type, base64 })
@@ -169,13 +169,33 @@ function Scanner() {
         }
         const uploadData = await uploadResponse.json();
         const scanId = uploadData.id;
-        const processResponse = await fetch(`${API_BASE}/api/scans/${scanId}/process`, { method: 'POST' });
-        if (!processResponse.ok) {
-          const msg = await parseErrorResponse(processResponse);
-          throw new Error(`Processing failed: ${msg}`);
+
+        // Prefer Edge Function for processing if present
+        try {
+          const ef = await fetch(`${FUNCTIONS_BASE}/scans-process`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: scanId, image_url: uploadData.image_url })
+          });
+          if (ef.ok) {
+            const efData = await ef.json();
+            return efData.result || null;
+          }
+        } catch (_) {
+          // ignore, fall through to legacy API if available
         }
-        const processData = await processResponse.json();
-        return processData.result;
+
+        // Legacy backend (only if running Express API)
+        try {
+          const processResponse = await fetch(`${API_BASE}/api/scans/${scanId}/process`, { method: 'POST' });
+          if (processResponse.ok) {
+            const processData = await processResponse.json();
+            return processData.result;
+          }
+        } catch (_) {}
+
+        // As a last resort, return null (upload succeeded; processing unavailable)
+        return null;
       };
 
       // Sequentially process up to 3 images to avoid rate spikes
