@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Container,
@@ -30,11 +30,7 @@ export default function Friends({ userId = 'demo-user' }) {
   const [error, setError] = useState(null);
   const [friendUsername, setFriendUsername] = useState('');
 
-  useEffect(() => {
-    fetchFriends();
-  }, []);
-
-  const fetchFriends = async () => {
+  const fetchFriends = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/friends?user_id=${userId}`);
@@ -48,7 +44,11 @@ export default function Friends({ userId = 'demo-user' }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    fetchFriends();
+  }, [fetchFriends]);
 
   const sendRequest = async () => {
     if (!friendUsername.trim()) return;

@@ -1,16 +1,13 @@
 /* eslint-env serviceworker */
 /* global clients */
-// eslint-disable-next-line no-unused-vars
-self.addEventListener('install', event => {
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
-// eslint-disable-next-line no-unused-vars
-self.addEventListener('activate', event => {
+self.addEventListener('activate', () => {
   clients.claim();
 });
 
-// eslint-disable-next-line no-unused-vars
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   // Always bypass SW for API requests to avoid caching/interception issues
