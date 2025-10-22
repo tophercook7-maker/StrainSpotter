@@ -380,21 +380,19 @@ app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
     // Load strain library (try primary path, fallback to enhanced or latest backup)
     let strains = [];
     try {
-      const primary = path.join(import.meta.dirname, 'data', 'strain_library.json');
+      const dataDir = new URL('./data/', import.meta.url).pathname;
+      const primary = path.join(dataDir, 'strain_library.json');
+      const enhanced = path.join(dataDir, 'strain_library_enhanced.json');
       if (fs.existsSync(primary)) {
         strains = JSON.parse(fs.readFileSync(primary, 'utf8'));
+      } else if (fs.existsSync(enhanced)) {
+        strains = JSON.parse(fs.readFileSync(enhanced, 'utf8'));
       } else {
-        const enhanced = path.join(import.meta.dirname, 'data', 'strain_library_enhanced.json');
-        if (fs.existsSync(enhanced)) {
-          strains = JSON.parse(fs.readFileSync(enhanced, 'utf8'));
+        const files = fs.readdirSync(dataDir).filter(f => /^strain_library\..*\.bak\.json$/.test(f)).sort().reverse();
+        if (files.length) {
+          strains = JSON.parse(fs.readFileSync(path.join(dataDir, files[0]), 'utf8'));
         } else {
-          const dataDir = path.join(import.meta.dirname, 'data');
-          const files = fs.readdirSync(dataDir).filter(f => /^strain_library\..*\.bak\.json$/.test(f)).sort().reverse();
-          if (files.length) {
-            strains = JSON.parse(fs.readFileSync(path.join(dataDir, files[0]), 'utf8'));
-          } else {
-            throw new Error('strain library not found');
-          }
+          throw new Error('strain library not found');
         }
       }
     } catch (e) {
@@ -475,6 +473,12 @@ app.post('/api/strains/suggest', writeLimiter, express.json(), (req, res) => {
 });
 
 app.use(errorHandler);
-app.listen(PORT, () => {
-  console.log(`[strainspotter] backend listening on http://localhost:${PORT}`);
-});
+
+// In Vercel serverless, don't call listen(); export the app handler instead
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`[strainspotter] backend listening on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
