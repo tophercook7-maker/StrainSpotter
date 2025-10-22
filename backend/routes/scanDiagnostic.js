@@ -9,20 +9,23 @@ import path from 'path';
 
 const router = express.Router();
 
-/**
- * GET /api/diagnostic/scan-test?url=<image_url>
- * Runs a full end-to-end scan diagnostic:
- * - Health check
- * - Create scan from URL
- * - Process with Vision
- * - Visual match
- * - Return comprehensive diagnostics JSON
- */
-router.get('/scan-test', async (req, res) => {
+// Shared example images for quick testing
+const EXAMPLE_IMAGES = [
+  // Close-up bud photos
+  'https://images.unsplash.com/photo-1542451313056-b7c8e626645f?q=80&w=1200&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1623043284279-e1de67d82f8d?q=80&w=1200&auto=format&fit=crop',
+  // Packaged product with text (tests OCR path)
+  'https://images.unsplash.com/photo-1558155316-50a38f1b4f2a?q=80&w=1200&auto=format&fit=crop',
+  // Generic fallback image service
+  'https://picsum.photos/seed/cannabis/800'
+];
+
+async function runScanDiagnostic(req, res) {
   const startTime = Date.now();
   const diagnostics = {
     timestamp: new Date().toISOString(),
-    testUrl: req.query.url || 'https://picsum.photos/seed/cannabis/600',
+    testUrl: req.query.url || EXAMPLE_IMAGES[0],
+    examples: EXAMPLE_IMAGES,
     steps: {},
     summary: {
       allPassed: false,
@@ -71,11 +74,9 @@ router.get('/scan-test', async (req, res) => {
     };
 
     try {
-      const { supabaseAdmin } = await import('../supabaseAdmin.js');
-      const { supabase } = await import('../supabaseClient.js');
       const writeClient = supabaseAdmin ?? supabase;
 
-      const testUrl = req.query.url || 'https://picsum.photos/seed/cannabis/600';
+      const testUrl = req.query.url || EXAMPLE_IMAGES[0];
       const insert = await writeClient
         .from('scans')
         .insert({ image_url: testUrl, status: 'pending' })
@@ -255,6 +256,18 @@ router.get('/scan-test', async (req, res) => {
     diagnostics.summary.totalDuration = Date.now() - startTime;
     res.status(500).json(diagnostics);
   }
-});
+}
+
+/**
+ * GET /api/diagnostic/scan-test?url=<image_url>
+ * Legacy path maintained for compatibility.
+ */
+router.get('/scan-test', runScanDiagnostic);
+
+/**
+ * GET /api/diagnostic/scan?url=<image_url>
+ * Canonical diagnostic endpoint: runs health → create → process → match.
+ */
+router.get('/scan', runScanDiagnostic);
 
 export default router;
