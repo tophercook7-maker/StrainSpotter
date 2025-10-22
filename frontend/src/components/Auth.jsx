@@ -47,9 +47,17 @@ export default function Auth() {
     }
     setLoading(true);
     setError(null);
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) setError(error.message);
+    const { data, error } = await supabase.auth.signUp({ email, password });
     setLoading(false);
+    if (error) {
+      setError(error.message);
+    } else if (data?.user?.identities?.length === 0) {
+      setError('This email is already registered. Please sign in instead.');
+    } else {
+      setError(null);
+      // Success - Supabase may require email confirmation
+      alert('Account created! Check your email to confirm (or sign in now if confirmation is disabled).');
+    }
   }
 
   async function signOut() {

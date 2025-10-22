@@ -86,6 +86,12 @@ fs.watch(DATA_DIR, (eventType, filename) => {
 // Helper function to filter strains
 function filterStrains(query = {}) {
   return strains.filter(strain => {
+    if (query.search) {
+      const q = String(query.search).toLowerCase();
+      const inName = strain.name?.toLowerCase().includes(q);
+      const inDesc = strain.description?.toLowerCase().includes(q);
+      if (!inName && !inDesc) return false;
+    }
     if (query.type && strain.type?.toLowerCase() !== query.type.toLowerCase()) return false;
     if (query.effect && !strain.effects?.includes(query.effect.toLowerCase())) return false;
     if (query.flavor && !strain.flavors?.includes(query.flavor.toLowerCase())) return false;

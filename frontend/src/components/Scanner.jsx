@@ -20,7 +20,7 @@ import {
   Grid
 } from '@mui/material';
 import { CameraAlt, History, Close } from '@mui/icons-material';
-import { API_BASE, FUNCTIONS_BASE } from '../config';
+import { API_BASE } from '../config';
 import CannabisLeafIcon from './CannabisLeafIcon';
 
 function Scanner() {
@@ -158,43 +158,39 @@ function Scanner() {
       // Helper to process a single image (upload + Vision)
       const processOne = async (file) => {
         const base64 = await fileToBase64Resized(file, 1600, 0.85);
-        const uploadResponse = await fetch(`${FUNCTIONS_BASE}/uploads`, {
+        console.log('[Scanner] Uploading to:', `${API_BASE}/api/uploads`);
+        const uploadResponse = await fetch(`${API_BASE}/api/uploads`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ filename: file.name, contentType: file.type, base64 })
         });
         if (!uploadResponse.ok) {
           const msg = await parseErrorResponse(uploadResponse);
+          console.error('[Scanner] Upload failed:', msg);
           throw new Error(`Upload failed: ${msg}`);
         }
         const uploadData = await uploadResponse.json();
         const scanId = uploadData.id;
+        console.log('[Scanner] Uploaded, scan ID:', scanId);
 
-        // Prefer Edge Function for processing if present
+        // Try Express backend processing (Edge Functions not deployed yet)
         try {
-          const ef = await fetch(`${FUNCTIONS_BASE}/scans-process`, {
+          console.log('[Scanner] Processing via:', `${API_BASE}/api/scans/${scanId}/process`);
+          const processResponse = await fetch(`${API_BASE}/api/scans/${scanId}/process`, { 
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: scanId, image_url: uploadData.image_url })
+            headers: { 'Content-Type': 'application/json' }
           });
-          if (!ef.ok) {
-            const msg = await ef.text();
-            throw new Error(`Process error: ${msg}`);
-          }
-          const efData = await ef.json();
-          return efData.result || null;
-        } catch (e) {
-          console.warn('Edge process failed, will try legacy if available:', e);
-        }
-
-        // Legacy backend (only if running Express API)
-        try {
-          const processResponse = await fetch(`${API_BASE}/api/scans/${scanId}/process`, { method: 'POST' });
           if (processResponse.ok) {
             const processData = await processResponse.json();
+            console.log('[Scanner] Process succeeded:', processData);
             return processData.result;
+          } else {
+            const errText = await processResponse.text();
+            console.error('[Scanner] Process failed:', errText);
           }
-        } catch (_) {}
+        } catch (e) {
+          console.error('[Scanner] Process error:', e);
+        }
 
         // As a last resort, return null (upload succeeded; processing unavailable)
         return null;
@@ -234,7 +230,7 @@ function Scanner() {
         
         if (topWord) {
           try {
-            const suggestResponse = await fetch(`${FUNCTIONS_BASE}/strains-search?q=${encodeURIComponent(topWord)}&limit=5`);
+            const suggestResponse = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(topWord)}&limit=5`);
             const suggestions = await suggestResponse.json();
             setSuggestedStrains(Array.isArray(suggestions) ? suggestions : []);
           } catch (e) {

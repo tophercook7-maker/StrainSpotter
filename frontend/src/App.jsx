@@ -19,6 +19,7 @@ import Friends from './components/Friends';
 import StrainBrowser from './components/StrainBrowser';
 import MembershipJoin from './components/MembershipJoin';
 import MembershipAdmin from './components/MembershipAdmin';
+import PipelineStatus from './components/PipelineStatus';
 
 // Apply full marijuana-themed design with cannabis leaf icon and hero.png
 const theme = createTheme(muiThemeOverrides);
@@ -108,6 +109,9 @@ function App() {
       )}
       {currentView === 'membership-admin' && (
         <MembershipAdmin />
+      )}
+      {currentView === 'pipeline' && (
+        <PipelineStatus />
       )}
     </ThemeProvider>
   );

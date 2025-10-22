@@ -34,6 +34,7 @@ import diagnosticRoutes from './routes/diagnostic.js';
 import scanDiagnosticRoutes from './routes/scanDiagnostic.js';
 import friendsRoutes from './routes/friends.js';
 import membershipRoutes from './routes/membership.js';
+import pipelineRoutes from './routes/pipeline.js';
 import { matchStrainByVisuals } from './services/visualMatcher.js';
 import { checkAccess, enforceTrialLimit } from './middleware/membershipCheck.js';
 
@@ -95,11 +96,15 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
   res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+    return res.sendStatus(204);
+  }
   next();
 });
 
@@ -481,6 +486,7 @@ app.use('/api/diagnostic', diagnosticRoutes);
 app.use('/api/diagnostic', scanDiagnosticRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/membership', membershipRoutes);
+app.use('/api/pipeline', pipelineRoutes);
 
 // POST /api/strains/suggest - user suggests a new strain
 app.post('/api/strains/suggest', writeLimiter, express.json(), (req, res) => {

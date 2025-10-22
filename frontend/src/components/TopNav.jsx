@@ -18,7 +18,8 @@ const NAV_TABS = [
   { id: 'dispensaries', label: 'Dispensaries' },
   { id: 'groups', label: 'Groups' },
   { id: 'help', label: 'Help' },
-  { id: 'feedback', label: 'Feedback' }
+  { id: 'feedback', label: 'Feedback' },
+  { id: 'pipeline', label: 'Pipeline' }
 ];
 
 // Only show Dev tab if window location is localhost or user is dev

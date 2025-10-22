@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Box, Card, CardContent, TextField, Button, Typography, Stack } from '@mui/material';
-import { FUNCTIONS_BASE } from '../config';
+import { API_BASE } from '../config';
 
 export default function FeedbackChat() {
   const [messages, setMessages] = useState([]);
@@ -8,9 +8,13 @@ export default function FeedbackChat() {
   const [posting, setPosting] = useState(false);
 
   const load = async () => {
-    const res = await fetch(`${FUNCTIONS_BASE}/feedback-messages`);
-    if (res.ok) {
-      setMessages(await res.json());
+    try {
+      const res = await fetch(`${API_BASE}/api/feedback/messages`);
+      if (res.ok) {
+        setMessages(await res.json());
+      }
+    } catch (e) {
+      console.error('[Feedback] Load error:', e);
     }
   };
 
@@ -23,21 +27,34 @@ export default function FeedbackChat() {
     if (!content) return;
     setPosting(true);
     try {
-      const accessToken = localStorage.getItem('sb-access-token');
-      const res = await fetch(`${FUNCTIONS_BASE}/feedback-messages`, {
+      console.log('[Feedback] Sending to:', `${API_BASE}/api/feedback/messages`);
+      const res = await fetch(`${API_BASE}/api/feedback/messages`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ content })
+        body: JSON.stringify({ content, user_id: null })
       });
       if (res.ok) {
         setInput('');
         await load();
+      } else {
+        const errText = await res.text();
+        console.error('[Feedback] Send failed:', errText);
+        alert('Failed to send feedback. Please try again.');
       }
+    } catch (e) {
+      console.error('[Feedback] Error:', e);
+      alert('Network error sending feedback.');
     } finally {
       setPosting(false);
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
     }
   };
 
@@ -58,7 +75,14 @@ export default function FeedbackChat() {
             )}
           </Stack>
           <Stack direction="row" spacing={1}>
-            <TextField fullWidth size="small" placeholder="Type feedback..." value={input} onChange={e => setInput(e.target.value)} />
+            <TextField 
+              fullWidth 
+              size="small" 
+              placeholder="Type feedback... (press Enter to send)" 
+              value={input} 
+              onChange={e => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+            />
             <Button variant="contained" onClick={send} disabled={posting}>Send</Button>
           </Stack>
         </CardContent>

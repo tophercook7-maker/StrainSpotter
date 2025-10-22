@@ -82,11 +82,12 @@ export default function MembershipJoin() {
         return;
       }
 
-      setSuccess(data.message || 'Application submitted successfully!');
+      setSuccess('Application submitted! We will review and be in touch via email within 24-48 hours. Thank you!');
       setShowForm(false);
       setFormData({ email: '', full_name: '', phone: '', message: '' });
     } catch (e) {
-      setError('Network error. Please try again.');
+      console.error('Membership apply error:', e);
+      setError('Network error. Please check your connection and try again.');
     } finally {
       setApplying(false);
     }
