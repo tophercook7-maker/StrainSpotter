@@ -16,6 +16,8 @@ import GrowerRegistration from './components/GrowerRegistration';
 import Help from './components/Help';
 import Friends from './components/Friends';
 import StrainBrowser from './components/StrainBrowser';
+import MembershipJoin from './components/MembershipJoin';
+import MembershipAdmin from './components/MembershipAdmin';
 
 // Apply full marijuana-themed design with cannabis leaf icon and hero.png
 const theme = createTheme(muiThemeOverrides);
@@ -93,6 +95,12 @@ function App() {
       )}
       {currentView === 'strains' && (
         <StrainBrowser onNavigate={setCurrentView} />
+      )}
+      {currentView === 'join' && (
+        <MembershipJoin />
+      )}
+      {currentView === 'membership-admin' && (
+        <MembershipAdmin />
       )}
     </ThemeProvider>
   );

@@ -12,7 +12,7 @@ import {
   Container
 } from '@mui/material';
 import { LocationOn, EmojiEvents } from '@mui/icons-material';
-import { API_BASE } from '../config';
+import { FUNCTIONS_BASE } from '../config';
 
 export default function GrowerDirectory() {
   const [growers, setGrowers] = useState([]);
@@ -21,7 +21,7 @@ export default function GrowerDirectory() {
   useEffect(() => {
     (async () => {
       try {
-  const res = await fetch(`${API_BASE}/api/growers`);
+        const res = await fetch(`${FUNCTIONS_BASE}/growers-list`);
         if (res.ok) setGrowers(await res.json());
       } finally {
         setLoading(false);

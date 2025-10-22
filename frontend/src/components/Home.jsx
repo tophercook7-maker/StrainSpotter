@@ -10,7 +10,7 @@ export default function Home({ onNavigate }) {
   const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
   useEffect(() => {
-    fetch('/api/strains/count')
+    fetch(`${window.FUNCTIONS_BASE || '/functions'}/strains-count`)
       .then(r => r.json())
       .then(data => setStrainCount(data.count))
       .catch(() => setStrainCount(null));

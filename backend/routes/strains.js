@@ -1,7 +1,3 @@
-// Strain count endpoint for homepage
-router.get('/strains/count', (req, res) => {
-  res.json({ count: Array.isArray(strains) ? strains.length : 0 });
-});
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
@@ -87,6 +83,11 @@ function filterStrains(query = {}) {
     return true;
   });
 }
+
+// Strain count endpoint for homepage
+router.get('/strains/count', (req, res) => {
+  res.json({ count: Array.isArray(strains) ? strains.length : 0 });
+});
 
 // Routes
 

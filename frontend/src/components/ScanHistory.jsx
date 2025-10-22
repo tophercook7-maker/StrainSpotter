@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import { ArrowBack, LocalFlorist } from '@mui/icons-material';
 
-import { API_BASE } from '../config';
+import { FUNCTIONS_BASE } from '../config';
 
 function ScanHistory() {
   const [scans, setScans] = useState([]);
@@ -29,9 +29,13 @@ function ScanHistory() {
 
   const fetchScans = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/scans`);
+      // Get JWT from localStorage (or Supabase client if available)
+      const accessToken = localStorage.getItem('sb-access-token');
+      if (!accessToken) throw new Error('Not signed in');
+      const response = await fetch(`${FUNCTIONS_BASE}/scans-history`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
       if (!response.ok) throw new Error('Failed to fetch scans');
-      
       const data = await response.json();
       setScans(data.scans || []);
     } catch (err) {

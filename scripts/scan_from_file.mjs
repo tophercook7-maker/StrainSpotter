@@ -23,8 +23,9 @@ if (!args.file) {
 }
 
 const API = (args.api || 'http://localhost:5181').replace(/\/$/, '');
-const filePath = path.resolve(process.cwd(), String(args.file));
-const filename = String(args.name || path.basename(filePath));
+const isUrl = /^https?:\/\//i.test(String(args.file));
+const filePath = isUrl ? null : path.resolve(process.cwd(), String(args.file));
+const filename = isUrl ? (args.name || path.basename(new URL(String(args.file)).pathname) || 'image.jpg') : String(args.name || path.basename(filePath));
 
 function detectType(p) {
   const ext = path.extname(p).toLowerCase();
@@ -35,25 +36,43 @@ function detectType(p) {
   return 'application/octet-stream';
 }
 
-const contentType = String(args.type || detectType(filePath));
+const contentType = isUrl ? null : String(args.type || detectType(filePath));
 
 async function main() {
-  const buf = await fs.readFile(filePath);
-  const base64 = buf.toString('base64');
+  let id, imageUrl;
+  if (isUrl) {
+    const fromUrlRes = await fetch(`${API}/api/scans/from-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: String(args.file) })
+    });
+    const fromUrlJson = await fromUrlRes.json();
+    if (!fromUrlRes.ok) {
+      console.error('Create from URL failed:', fromUrlJson);
+      process.exit(1);
+    }
+    id = fromUrlJson.id;
+    imageUrl = fromUrlJson.image_url;
+    console.log('Scan created from URL:', id, imageUrl || '');
+  } else {
+    const buf = await fs.readFile(filePath);
+    const base64 = buf.toString('base64');
 
-  // 1) Upload
-  const upRes = await fetch(`${API}/api/uploads`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ filename, contentType, base64 })
-  });
-  const upJson = await upRes.json();
-  if (!upRes.ok) {
-    console.error('Upload failed:', upJson);
-    process.exit(1);
+    // 1) Upload
+    const upRes = await fetch(`${API}/api/uploads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename, contentType, base64 })
+    });
+    const upJson = await upRes.json();
+    if (!upRes.ok) {
+      console.error('Upload failed:', upJson);
+      process.exit(1);
+    }
+    id = upJson.id;
+    imageUrl = upJson.image_url;
+    console.log('Scan created:', id, imageUrl || '');
   }
-  const id = upJson.id;
-  console.log('Scan created:', id, upJson.image_url || '');
 
   // 2) Process
   const procRes = await fetch(`${API}/api/scans/${id}/process`, { method: 'POST' });
@@ -63,24 +82,47 @@ async function main() {
     process.exit(1);
   }
   console.log('Process status:', procJson.ok ? 'ok' : 'error');
+  
+  // Show debug info if present
+  if (procJson.debug) {
+    console.log('\n📊 Vision API Debug:');
+    console.log(`  Labels detected: ${procJson.debug.labelCount}`);
+    if (procJson.debug.topLabels?.length) {
+      console.log('  Top labels:');
+      procJson.debug.topLabels.forEach(l => console.log(`    - ${l.label} (${l.score}%)`));
+    }
+    console.log(`  Text blocks: ${procJson.debug.textBlocks}`);
+    console.log(`  Web entities: ${procJson.debug.webEntities}`);
+    console.log(`  Objects: ${procJson.debug.objects?.length || 0}`);
+    if (procJson.debug.objects?.length) {
+      console.log('  Detected objects:');
+      procJson.debug.objects.forEach(o => console.log(`    - ${o.name} (${o.score}%)`));
+    }
+    if (procJson.debug.dominantColors?.length) {
+      console.log('  Dominant colors:');
+      procJson.debug.dominantColors.forEach(c => console.log(`    - ${c.rgb} (${c.pixelFraction}% of image, score: ${c.score}%)`));
+    }
+  }
 
-  // 3) Fetch result
+  const result = procJson.result || {};
+
+  // 3) Fetch final scan record
   const resRes = await fetch(`${API}/api/scans/${id}`);
   const resJson = await resRes.json();
   if (!resRes.ok) {
     console.error('Fetch scan failed:', resJson);
     process.exit(1);
   }
-  const scan = resJson.scan || {};
-  const result = scan.result || {};
+  const scan = resJson || {};
 
-  // 4) Summarize
-  const labels = (result.labelAnnotations || []).slice(0, 8).map(x => `${x.description}(${Math.round((x.score||0)*100)}%)`);
-  const webs = (result.webDetection?.webEntities || []).filter(x => x.description).slice(0, 8).map(x => `${x.description}(${Math.round((x.score||0)*100)}%)`);
+  // 4) Summarize (legacy summary from stored result)
+  const storedResult = scan.result || {};
+  const labels = (storedResult.labelAnnotations || []).slice(0, 8).map(x => `${x.description}(${Math.round((x.score||0)*100)}%)`);
+  const webs = (storedResult.webDetection?.webEntities || []).filter(x => x.description).slice(0, 8).map(x => `${x.description}(${Math.round((x.score||0)*100)}%)`);
 
-  console.log('\nSummary:');
+  console.log('\n📝 Summary (from stored scan):');
   console.log('- Status:', scan.status);
-  if (result.error) console.log('- Vision Error:', result.error.message || result.error);
+  if (storedResult.error) console.log('- Vision Error:', storedResult.error.message || storedResult.error);
   console.log('- Labels:', labels.join(', ') || 'none');
   console.log('- Web Entities:', webs.join(', ') || 'none');
 

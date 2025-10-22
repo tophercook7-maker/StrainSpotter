@@ -10,6 +10,7 @@ const NAV_TABS = [
   { id: 'scanner', label: 'Scanner' },
   { id: 'strains', label: 'Browse Strains' },
   { id: 'history', label: 'History' },
+  { id: 'join', label: 'Join Club' },
   { id: 'friends', label: 'Friends' },
   { id: 'growers', label: 'Growers' },
   { id: 'register', label: 'Register' },

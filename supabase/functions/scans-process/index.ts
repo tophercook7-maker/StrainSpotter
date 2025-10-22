@@ -1,4 +1,5 @@
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { serve } from "std/server";
+// Supabase Edge Functions: use runtime config for env vars
 import { supabase } from './_shared.ts';
 
 const ALLOW_ORIGINS = [
@@ -45,7 +46,9 @@ serve(async (req) => {
   }
 
   // Load Google Vision API key
-  const VISION_API_KEY = Deno.env.get('GOOGLE_VISION_API_KEY');
+  // Supabase Edge Functions: get env vars from runtime config
+  // @ts-ignore
+  const VISION_API_KEY = Deno.env.get('GOOGLE_VISION_API_KEY') || Deno.env.get('VISION_API_KEY') || '';
   const VISION_ENDPOINT = `https://vision.googleapis.com/v1/images:annotate?key=${VISION_API_KEY}`;
   if (!VISION_API_KEY) {
     return new Response(JSON.stringify({ error: 'GOOGLE_VISION_API_KEY not set' }), { status: 500, headers });

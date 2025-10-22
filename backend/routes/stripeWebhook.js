@@ -1,12 +1,19 @@
-// Stripe webhook handler for updating user subscription status
-// Place in backend/routes/stripeWebhook.js
+// Stripe webhook handler for updating user subscription status (ESM)
+import express from 'express';
+import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
 
-const express = require('express');
 const router = express.Router();
-const { createClient } = require('@supabase/supabase-js');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+// Lazily initialize clients so env from dotenv in index.js is available
+function getSupabase() {
+  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY || '';
+  return new Stripe(key, { apiVersion: '2022-11-15' });
+}
 
 // Map Stripe price IDs to subscription tiers
 function getTierByPriceId(priceId) {
@@ -22,6 +29,8 @@ function getTierByPriceId(priceId) {
 }
 
 router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const stripe = getStripe();
+  const supabase = getSupabase();
   const sig = req.headers['stripe-signature'];
   let event;
   try {
@@ -33,7 +42,10 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const email = session.customer_email;
-    const priceId = session.display_items ? session.display_items[0].price.id : (session.subscription && session.subscription.items.data[0].price.id);
+    const priceId = (session.display_items && session.display_items[0]?.price?.id)
+      || (session.subscription && session.subscription.items?.data?.[0]?.price?.id)
+      || (session.line_items && session.line_items.data?.[0]?.price?.id)
+      || null;
     const tier = getTierByPriceId(priceId);
     const expiry = tier === 'full' && priceId === process.env.STRIPE_PRICE_FULL_YEARLY
       ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
@@ -45,4 +57,4 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   res.json({ received: true });
 });
 
-module.exports = router;
+export default router;

@@ -7,9 +7,10 @@ import { supabase } from './supabaseClient.js';
 import { ensureBucketExists, supabaseAdmin } from './supabaseAdmin.js';
 import fs from 'fs';
 import path from 'path';
+import sharp from 'sharp';
 
 // Import all route modules at the top (ES module requirement)
-import stripeWebhook from './routes/stripeWebhook.js';
+// import stripeWebhook from './routes/stripeWebhook.js'; // Removed: not using Stripe
 import strainRoutes from './routes/strains.js';
 import healthRoutes from './routes/health.js';
 import compareRoutes from './routes/compare.js';
@@ -30,8 +31,11 @@ import journalsRoutes from './routes/journals.js';
 import eventsRoutes from './routes/events.js';
 import feedbackRoutes from './routes/feedback.js';
 import diagnosticRoutes from './routes/diagnostic.js';
+import scanDiagnosticRoutes from './routes/scanDiagnostic.js';
 import friendsRoutes from './routes/friends.js';
+import membershipRoutes from './routes/membership.js';
 import { matchStrainByVisuals } from './services/visualMatcher.js';
+import { checkAccess, enforceTrialLimit } from './middleware/membershipCheck.js';
 
 // Load env from ../env/.env.local (works when launched from backend/)
 dotenv.config({ path: new URL('../env/.env.local', import.meta.url).pathname });
@@ -57,7 +61,8 @@ app.use(helmet({
 }));
 
 // JSON body (for base64 uploads from frontend)
-app.use(express.json({ limit: '10mb' }));
+// Increased to 50MB to accept large images, which we'll compress server-side with sharp
+app.use(express.json({ limit: '50mb' }));
 
 // CORS allowlist
 const ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173').split(',');
@@ -73,17 +78,24 @@ app.use((req, res, next) => {
   next();
 });
 
+// Centralized error handler middleware
+function errorHandler(err, req, res, next) {
+  const status = err.status || 500;
+  const message = err.message || String(err);
+  res.status(status).json({ error: message });
+}
+
 // Rate limiter for write-heavy endpoints
 const writeLimiter = rateLimit({ windowMs: 60 * 1000, max: 30 }); // 30 req/min per IP
 
 // --- Health ---
-app.get('/health', async (req, res) => {
+app.get('/health', async (req, res, next) => {
   try {
     const supabaseOk = !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
     const visionOk = !!process.env.GOOGLE_APPLICATION_CREDENTIALS || !!process.env.GOOGLE_VISION_JSON;
     res.json({ ok: true, supabaseConfigured: supabaseOk, googleVisionConfigured: visionOk });
   } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) });
+    next(e);
   }
 });
 
@@ -105,19 +117,30 @@ app.get('/', (req, res) => {
   }
 })();
 
-// POST /api/uploads  { filename, contentType, base64 }
-app.post('/api/uploads', writeLimiter, async (req, res) => {
+// POST /api/uploads  { filename, contentType, base64 } - with trial enforcement
+app.post('/api/uploads', checkAccess, enforceTrialLimit('scan'), writeLimiter, async (req, res, next) => {
   try {
     const { filename, contentType, base64 } = req.body || {};
     if (!filename || !base64) return res.status(400).json({ error: 'filename and base64 are required' });
     if (contentType && !/^image\/(png|jpe?g|webp)$/i.test(contentType)) {
       return res.status(400).json({ error: 'unsupported contentType' });
     }
-    if (base64.length > 10 * 1024 * 1024) { // 10MB encoded (approx)
-      return res.status(413).json({ error: 'image too large' });
+
+    let buffer = Buffer.from(base64, 'base64');
+    
+    // Auto-compress/resize if image is too large
+    const MAX_SIZE = 2 * 1024 * 1024; // 2MB target
+    const MAX_DIMENSION = 2048; // Max width/height
+    
+    if (buffer.length > MAX_SIZE) {
+      console.log(`[upload] Compressing image from ${(buffer.length / 1024 / 1024).toFixed(2)}MB`);
+      buffer = await sharp(buffer)
+        .resize(MAX_DIMENSION, MAX_DIMENSION, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 85, progressive: true })
+        .toBuffer();
+      console.log(`[upload] Compressed to ${(buffer.length / 1024 / 1024).toFixed(2)}MB`);
     }
 
-    const buffer = Buffer.from(base64, 'base64');
     const key = `${Date.now()}-${filename}`;
     const bucket = 'scans';
 
@@ -161,7 +184,7 @@ app.post('/api/uploads', writeLimiter, async (req, res) => {
 });
 
 // GET /api/scans - list recent
-app.get('/api/scans', async (req, res) => {
+app.get('/api/scans', async (req, res, next) => {
   try {
     const { user_id } = req.query; // Optional: filter to user's own + friends' scans
     // Use service role for reads if available to ensure visibility of all scans
@@ -169,7 +192,6 @@ app.get('/api/scans', async (req, res) => {
     
     if (user_id) {
       // Fetch user's scans + friends' scans only
-      // Step 1: Get user's friend IDs
       const { data: friendships, error: friendErr } = await readClient
         .from('friendships')
         .select('user_id, friend_id')
@@ -207,21 +229,21 @@ app.get('/api/scans', async (req, res) => {
 });
 
 // POST /api/scans/from-url { url }
-app.post('/api/scans/from-url', async (req, res) => {
+app.post('/api/scans/from-url', async (req, res, next) => {
   const writeClient = supabaseAdmin ?? supabase;
   try {
     const { url } = req.body || {};
     if (!url) return res.status(400).json({ error: 'url required' });
     const insert = await writeClient.from('scans').insert({ image_url: url, status: 'pending' }).select().single();
-    if (insert.error) return res.status(500).json({ error: insert.error.message });
+    if (insert.error) return res.status(400).json({ error: insert.error.message });
     res.json({ id: insert.data.id, image_url: url });
   } catch (e) {
-    res.status(500).json({ error: String(e) });
+    next(e);
   }
 });
 
 // GET /api/scans/:id - single
-app.get('/api/scans/:id', async (req, res) => {
+app.get('/api/scans/:id', async (req, res, next) => {
   try {
     const id = req.params.id;
     // Use service role for reads if available to ensure visibility of all scans
@@ -229,14 +251,14 @@ app.get('/api/scans/:id', async (req, res) => {
     const { data, error } = await readClient.from('scans').select('*').eq('id', id).maybeSingle();
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'scan not found' });
-    res.json({ scan: data });
+    res.json(data);
   } catch (e) {
-    res.status(500).json({ error: String(e) });
+    next(e);
   }
 });
 
 // POST /api/scans/:id/process - Vision annotate and save
-app.post('/api/scans/:id/process', writeLimiter, async (req, res) => {
+app.post('/api/scans/:id/process', writeLimiter, async (req, res, next) => {
   // Use service role for all scan operations when available
   const readClient = supabaseAdmin ?? supabase;
   const writeClient = supabaseAdmin ?? supabase;
@@ -257,6 +279,17 @@ app.post('/api/scans/:id/process', writeLimiter, async (req, res) => {
       if (resp.ok) {
         const ab = await resp.arrayBuffer();
         contentBuffer = Buffer.from(ab);
+        
+        // Auto-compress if needed (Google Vision has 20MB limit)
+        const MAX_VISION_SIZE = 10 * 1024 * 1024; // 10MB to be safe
+        if (contentBuffer.length > MAX_VISION_SIZE) {
+          console.log(`[process] Compressing image from ${(contentBuffer.length / 1024 / 1024).toFixed(2)}MB for Vision API`);
+          contentBuffer = await sharp(contentBuffer)
+            .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 85, progressive: true })
+            .toBuffer();
+          console.log(`[process] Compressed to ${(contentBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+        }
       }
     } catch {}
 
@@ -287,13 +320,20 @@ app.post('/api/scans/:id/process', writeLimiter, async (req, res) => {
     const [result] = await visionClient.annotateImage({
       image: { content: contentBuffer },
       features: [
-        { type: 'LABEL_DETECTION', maxResults: 30 },      // More labels for better matching
+        { type: 'LABEL_DETECTION', maxResults: 50 },      // Increased for cannabis feature detection
         { type: 'TEXT_DETECTION' },                       // Text (strain names, labels)
-        { type: 'OBJECT_LOCALIZATION' },                  // Objects in image
-        { type: 'IMAGE_PROPERTIES' },                     // Dominant colors
-        { type: 'WEB_DETECTION' }                         // Find similar images on web
-      ]
+        { type: 'OBJECT_LOCALIZATION', maxResults: 20 },  // Objects in image
+        { type: 'IMAGE_PROPERTIES' },                     // Dominant colors (critical for strain ID)
+        { type: 'WEB_DETECTION', maxResults: 30 },        // Find similar images on web
+        { type: 'SAFE_SEARCH_DETECTION' },                // Validate image content
+        { type: 'CROP_HINTS', maxResults: 5 }             // Optimal crop suggestions
+      ],
     });
+
+    console.log('[Vision Debug] Labels:', result.labelAnnotations?.length || 0);
+    console.log('[Vision Debug] Web entities:', result.webDetection?.webEntities?.length || 0);
+    console.log('[Vision Debug] Dominant colors:', result.imagePropertiesAnnotation?.dominantColors?.colors?.length || 0);
+    console.log('[Vision Debug] Objects:', result.localizedObjectAnnotations?.length || 0);
 
     const { error: upErr } = await writeClient
       .from('scans')
@@ -301,7 +341,23 @@ app.post('/api/scans/:id/process', writeLimiter, async (req, res) => {
       .eq('id', id);
     if (upErr) return res.status(500).json({ error: upErr.message });
 
-    res.json({ ok: true, result });
+    // Return debug info in response
+    res.json({ 
+      ok: true, 
+      result,
+      debug: {
+        labelCount: result.labelAnnotations?.length || 0,
+        topLabels: (result.labelAnnotations || []).slice(0, 10).map(x => ({ label: x.description, score: Math.round((x.score||0)*100) })),
+        textBlocks: result.textAnnotations?.length || 0,
+        webEntities: result.webDetection?.webEntities?.length || 0,
+        dominantColors: (result.imagePropertiesAnnotation?.dominantColors?.colors || []).slice(0, 5).map(c => ({
+          rgb: `rgb(${Math.round(c.color.red || 0)}, ${Math.round(c.color.green || 0)}, ${Math.round(c.color.blue || 0)})`,
+          score: Math.round((c.score || 0) * 100),
+          pixelFraction: Math.round((c.pixelFraction || 0) * 100)
+        })),
+        objects: (result.localizedObjectAnnotations || []).map(o => ({ name: o.name, score: Math.round((o.score||0)*100) }))
+      }
+    });
   } catch (e) {
     try {
       await writeClient
@@ -314,7 +370,7 @@ app.post('/api/scans/:id/process', writeLimiter, async (req, res) => {
 });
 
 // POST /api/visual-match - Match strain by Vision API results
-app.post('/api/visual-match', writeLimiter, async (req, res) => {
+app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
   try {
     const { visionResult } = req.body;
     if (!visionResult) {
@@ -378,7 +434,7 @@ app.post('/api/visual-match', writeLimiter, async (req, res) => {
 });
 
 // --- Mount Route Modules ---
-app.use('/api/stripe', stripeWebhook);
+// app.use('/api/stripe', stripeWebhook); // Removed: not using Stripe
 app.use('/api/health', healthRoutes);
 app.use('/api', strainRoutes);
 app.use('/api/compare', compareRoutes);
@@ -399,7 +455,9 @@ app.use('/api/journals', journalsRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/diagnostic', diagnosticRoutes);
+app.use('/api/diagnostic', scanDiagnosticRoutes);
 app.use('/api/friends', friendsRoutes);
+app.use('/api/membership', membershipRoutes);
 
 // POST /api/strains/suggest - user suggests a new strain
 app.post('/api/strains/suggest', writeLimiter, express.json(), (req, res) => {
@@ -416,6 +474,7 @@ app.post('/api/strains/suggest', writeLimiter, express.json(), (req, res) => {
   res.json({ ok: true });
 });
 
+app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`[strainspotter] backend listening on http://localhost:${PORT}`);
 });

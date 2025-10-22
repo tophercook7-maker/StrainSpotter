@@ -234,7 +234,7 @@ function Scanner() {
         
         if (topWord) {
           try {
-            const suggestResponse = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(topWord)}&limit=5`);
+            const suggestResponse = await fetch(`${FUNCTIONS_BASE}/strains-search?q=${encodeURIComponent(topWord)}&limit=5`);
             const suggestions = await suggestResponse.json();
             setSuggestedStrains(Array.isArray(suggestions) ? suggestions : []);
           } catch (e) {

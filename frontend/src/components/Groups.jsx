@@ -13,7 +13,7 @@ import {
   Chip,
   Container
 } from '@mui/material';
-import { API_BASE } from '../config';
+import { FUNCTIONS_BASE } from '../config';
 
 export default function Groups({ userId = 'demo-user' }) {
   const [groups, setGroups] = useState([]);
@@ -25,30 +25,15 @@ export default function Groups({ userId = 'demo-user' }) {
   const [newGroupName, setNewGroupName] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [isMember, setIsMember] = useState(false);
+  // NOTE: Group creation is not yet migrated to Edge Function (add if needed)
   const createGroup = async () => {
-    const name = newGroupName.trim();
-    if (!name) return;
-    setCreatingGroup(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/groups`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-      });
-      if (res.ok) {
-        setNewGroupName('');
-        const updated = await fetch(`${API_BASE}/api/groups`);
-        if (updated.ok) setGroups(await updated.json());
-      }
-    } finally {
-      setCreatingGroup(false);
-    }
+    // ...existing code...
   };
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/groups`);
+        const res = await fetch(`${FUNCTIONS_BASE}/groups-list`);
         if (res.ok) setGroups(await res.json());
       } finally {
         setLoading(false);
@@ -57,12 +42,12 @@ export default function Groups({ userId = 'demo-user' }) {
   }, []);
 
   const loadMessages = async (groupId) => {
-    const res = await fetch(`${API_BASE}/api/groups/${groupId}/messages`);
+    const res = await fetch(`${FUNCTIONS_BASE}/group-messages?id=${groupId}`);
     if (res.ok) setMessages(await res.json());
   };
 
   const loadMembers = async (groupId) => {
-    const res = await fetch(`${API_BASE}/api/groups/${groupId}/members`);
+    const res = await fetch(`${FUNCTIONS_BASE}/group-members?id=${groupId}`);
     if (res.ok) {
       const data = await res.json();
       setMembers(data);
@@ -78,10 +63,14 @@ export default function Groups({ userId = 'demo-user' }) {
 
   const joinGroup = async () => {
     if (!selectedGroup) return;
-    const res = await fetch(`${API_BASE}/api/groups/${selectedGroup.id}/join`, {
+    const accessToken = localStorage.getItem('sb-access-token');
+    const res = await fetch(`${FUNCTIONS_BASE}/group-join`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId })
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ group_id: selectedGroup.id })
     });
     if (res.ok) {
       await loadMembers(selectedGroup.id);
@@ -90,10 +79,14 @@ export default function Groups({ userId = 'demo-user' }) {
 
   const leaveGroup = async () => {
     if (!selectedGroup) return;
-    const res = await fetch(`${API_BASE}/api/groups/${selectedGroup.id}/leave`, {
+    const accessToken = localStorage.getItem('sb-access-token');
+    const res = await fetch(`${FUNCTIONS_BASE}/group-leave`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId })
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ group_id: selectedGroup.id })
     });
     if (res.ok) {
       await loadMembers(selectedGroup.id);
@@ -103,10 +96,14 @@ export default function Groups({ userId = 'demo-user' }) {
   const sendMessage = async () => {
     const content = input.trim();
     if (!content || !selectedGroup) return;
-    const res = await fetch(`${API_BASE}/api/groups/${selectedGroup.id}/messages`, {
+    const accessToken = localStorage.getItem('sb-access-token');
+    const res = await fetch(`${FUNCTIONS_BASE}/group-messages?id=${selectedGroup.id}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, user_id: userId })
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ content })
     });
     if (res.ok) {
       setInput('');
@@ -128,8 +125,20 @@ export default function Groups({ userId = 'demo-user' }) {
               Groups
             </Typography>
             <Stack spacing={2}>
+              <Button
+                variant="contained"
+                color="primary"
+                sx={{ mb: 1, fontWeight: 700 }}
+                onClick={() => {
+                  const input = document.getElementById('add-group-input');
+                  if (input) input.focus();
+                }}
+              >
+                + Add Group
+              </Button>
               <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
                 <TextField
+                  id="add-group-input"
                   size="small"
                   label="New Group Name"
                   value={newGroupName}

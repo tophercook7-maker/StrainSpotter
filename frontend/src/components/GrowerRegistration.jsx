@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { API_BASE } from '../config';
+import { FUNCTIONS_BASE } from '../config';
 import {
   Box,
   Button,
@@ -41,9 +41,13 @@ export default function GrowerRegistration() {
         specialties: form.specialties.split(',').map(s => s.trim()).filter(Boolean),
         bio: form.bio
       };
-      const res = await fetch(`${API_BASE}/api/growers/register`, {
+      const accessToken = localStorage.getItem('sb-access-token');
+      const res = await fetch(`${FUNCTIONS_BASE}/growers-register`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        },
         body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to register');
