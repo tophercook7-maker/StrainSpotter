@@ -38,7 +38,10 @@ import { matchStrainByVisuals } from './services/visualMatcher.js';
 import { checkAccess, enforceTrialLimit } from './middleware/membershipCheck.js';
 
 // Load env from ../env/.env.local (works when launched from backend/)
-dotenv.config({ path: new URL('../env/.env.local', import.meta.url).pathname });
+// In Vercel, environment variables are injected automatically
+if (!process.env.VERCEL) {
+  dotenv.config({ path: new URL('../env/.env.local', import.meta.url).pathname });
+}
 if (process.env.NODE_ENV !== 'production') {
   console.log('[boot] SUPABASE_URL present =', !!process.env.SUPABASE_URL);
   console.log('[boot] GOOGLE_APPLICATION_CREDENTIALS set =', !!process.env.GOOGLE_APPLICATION_CREDENTIALS || !!process.env.GOOGLE_VISION_JSON);

@@ -17,11 +17,23 @@ function loadData() {
     const strainPath = path.join(DATA_DIR, 'strain_library.json');
     const mappingPath = path.join(DATA_DIR, 'test_mapping.json');
 
-    const rawStrains = fs.readFileSync(strainPath, 'utf8');
-    const rawMapping = fs.readFileSync(mappingPath, 'utf8');
+    // Check if files exist before trying to read (Vercel serverless may not have them)
+    if (!fs.existsSync(strainPath)) {
+      console.warn('[strains] strain_library.json not found, using empty array');
+      strains = [];
+      testMapping = { strains: {} };
+      return;
+    }
 
+    const rawStrains = fs.readFileSync(strainPath, 'utf8');
     strains = JSON.parse(rawStrains);
-    testMapping = JSON.parse(rawMapping);
+    
+    if (fs.existsSync(mappingPath)) {
+      const rawMapping = fs.readFileSync(mappingPath, 'utf8');
+      testMapping = JSON.parse(rawMapping);
+    } else {
+      testMapping = { strains: {} };
+    }
 
     // Normalize mapping shape: allow either { strains: {id: {mappedTo: slug}} } or { strains: {id: "Name or Slug"} }
     if (!testMapping || typeof testMapping !== 'object') testMapping = {};
