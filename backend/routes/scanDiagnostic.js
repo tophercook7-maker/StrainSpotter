@@ -208,16 +208,14 @@ async function runScanDiagnostic(req, res) {
     };
 
     try {
-      // Load strain library
+      // Load strain library (resolve relative to this file for portability across envs)
       let strains = [];
-      const primary = path.join(process.cwd(), 'backend', 'data', 'strain_library.json');
-      if (fs.existsSync(primary)) {
-        strains = JSON.parse(fs.readFileSync(primary, 'utf8'));
-      } else {
-        const enhanced = path.join(process.cwd(), 'backend', 'data', 'strain_library_enhanced.json');
-        if (fs.existsSync(enhanced)) {
-          strains = JSON.parse(fs.readFileSync(enhanced, 'utf8'));
-        }
+      const primaryPath = new URL('../data/strain_library.json', import.meta.url).pathname;
+      const enhancedPath = new URL('../data/strain_library_enhanced.json', import.meta.url).pathname;
+      if (fs.existsSync(primaryPath)) {
+        strains = JSON.parse(fs.readFileSync(primaryPath, 'utf8'));
+      } else if (fs.existsSync(enhancedPath)) {
+        strains = JSON.parse(fs.readFileSync(enhancedPath, 'utf8'));
       }
 
       if (strains.length === 0) {

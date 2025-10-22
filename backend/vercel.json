@@ -6,6 +6,12 @@
       "use": "@vercel/node"
     }
   ],
+  "functions": {
+    "index.js": {
+      "excludeFiles": "data/**",
+      "includeFiles": "data/strain_library.json"
+    }
+  },
   "routes": [
     {
       "src": "/(.*)",
