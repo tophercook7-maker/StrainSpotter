@@ -1,5 +1,11 @@
 // Diagnostic endpoint for comprehensive scan testing
 import express from 'express';
+import { ImageAnnotatorClient } from '@google-cloud/vision';
+import { supabaseAdmin } from '../supabaseAdmin.js';
+import { supabase } from '../supabaseClient.js';
+import { matchStrainByVisuals } from '../services/visualMatcher.js';
+import fs from 'fs';
+import path from 'path';
 
 const router = express.Router();
 
@@ -108,9 +114,6 @@ router.get('/scan-test', async (req, res) => {
     };
 
     try {
-      const { ImageAnnotatorClient } = await import('@google-cloud/vision');
-      const { supabaseAdmin } = await import('../supabaseAdmin.js');
-      const { supabase } = await import('../supabaseClient.js');
       const readClient = supabaseAdmin ?? supabase;
       const writeClient = supabaseAdmin ?? supabase;
 
@@ -204,10 +207,6 @@ router.get('/scan-test', async (req, res) => {
     };
 
     try {
-      const { matchStrainByVisuals } = await import('../services/visualMatcher.js');
-      const fs = await import('fs');
-      const path = await import('path');
-
       // Load strain library
       let strains = [];
       const primary = path.join(process.cwd(), 'backend', 'data', 'strain_library.json');
