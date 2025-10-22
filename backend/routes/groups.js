@@ -44,9 +44,13 @@ router.get('/:id/messages', async (req, res) => {
   }
 });
 
-router.post('/:id/messages', async (req, res) => {
+import { rejectIfProfane, checkAndCleanMessage } from '../middleware/moderation.js';
+
+router.post('/:id/messages', rejectIfProfane, async (req, res) => {
   try {
-    const payload = { group_id: req.params.id, user_id: req.body?.user_id || null, content: req.body?.content || '' };
+    const rawContent = req.body?.content || '';
+    const { cleaned } = checkAndCleanMessage(rawContent);
+    const payload = { group_id: req.params.id, user_id: req.body?.user_id || null, content: cleaned };
     const { data, error } = await writeClient.from('messages').insert(payload).select().single();
     if (error) {
       const hint = (!supabaseAdmin && /row-level security/i.test(error.message))
