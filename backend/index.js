@@ -50,7 +50,14 @@ if (process.env.NODE_ENV !== 'production') {
 // Optional Google Vision client (only if creds are present)
 let visionClient;
 try {
-  visionClient = new ImageAnnotatorClient();
+  // For Vercel/serverless: support GOOGLE_VISION_JSON inline credentials
+  if (process.env.GOOGLE_VISION_JSON) {
+    const credentials = JSON.parse(process.env.GOOGLE_VISION_JSON);
+    visionClient = new ImageAnnotatorClient({ credentials });
+  } else {
+    // Fall back to default credentials file (local development)
+    visionClient = new ImageAnnotatorClient();
+  }
 } catch (e) {
   console.warn('[boot] Google Vision client not initialized:', e.message);
 }
@@ -68,15 +75,30 @@ app.use(helmet({
 app.use(express.json({ limit: '50mb' }));
 
 // CORS allowlist
-const ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173').split(',');
+const ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  if (ALLOW_ORIGINS.includes(origin)) return true;
+  // Allow Vercel preview/prod frontend domains for this project
+  try {
+    const { host } = new URL(origin);
+    if (host.endsWith('.vercel.app') && host.includes('strainspotter-frontend')) return true;
+  } catch {}
+  return false;
+}
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && ALLOW_ORIGINS.includes(origin)) {
+  if (isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });

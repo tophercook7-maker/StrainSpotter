@@ -118,7 +118,10 @@ async function runScanDiagnostic(req, res) {
       const readClient = supabaseAdmin ?? supabase;
       const writeClient = supabaseAdmin ?? supabase;
 
-      const visionClient = new ImageAnnotatorClient();
+      // Initialize Vision client with inline credentials if available
+      const visionClient = process.env.GOOGLE_VISION_JSON
+        ? new ImageAnnotatorClient({ credentials: JSON.parse(process.env.GOOGLE_VISION_JSON) })
+        : new ImageAnnotatorClient();
 
       // Fetch scan
       const { data: scan, error: fetchErr } = await readClient

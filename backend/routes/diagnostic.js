@@ -14,7 +14,10 @@ router.post('/vision-test', async (req, res) => {
     // Check if Vision client is available
     let visionClient;
     try {
-      visionClient = new ImageAnnotatorClient();
+      // Initialize with inline credentials if available (for Vercel/serverless)
+      visionClient = process.env.GOOGLE_VISION_JSON
+        ? new ImageAnnotatorClient({ credentials: JSON.parse(process.env.GOOGLE_VISION_JSON) })
+        : new ImageAnnotatorClient();
     } catch (e) {
       return res.status(500).json({ 
         error: 'Google Vision not configured', 
