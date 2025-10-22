@@ -2,14 +2,13 @@
   "version": 2,
   "functions": {
     "api/index.js": {
-      "excludeFiles": "data/**",
-      "includeFiles": "data/strain_library.json"
+      "maxDuration": 30
     }
   },
-  "routes": [
-    { "src": "/(.*)", "dest": "/api/index.js" }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.js"
+    }
+  ]
 }
