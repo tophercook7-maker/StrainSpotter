@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import AgeGate from './components/AgeGate';
+import Auth from './components/Auth';
 import Scanner from './components/Scanner';
 import ScanHistory from './components/ScanHistory';
 import DevDashboard from './components/DevDashboard';
@@ -63,6 +64,9 @@ function App() {
       {currentView === 'scanner' && (
         <Scanner onViewHistory={() => setCurrentView('history')} />
       )}
+      {currentView === 'guest-scan' && (
+        <Scanner onViewHistory={() => setCurrentView('history')} />
+      )}
       {currentView === 'history' && (
         <ScanHistory onBack={() => setCurrentView('scanner')} />
       )}
@@ -89,6 +93,9 @@ function App() {
       )}
       {currentView === 'help' && (
         <Help onNavigate={setCurrentView} />
+      )}
+      {currentView === 'login' && (
+        <Auth />
       )}
       {currentView === 'friends' && (
         <Friends />

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Box, Button, Stack, Typography, Chip, Dialog, IconButton } from '@mui/material';
 import CannabisLeafIcon from './CannabisLeafIcon';
+import { isAuthConfigured } from '../supabaseClient';
 import DevDashboard from './DevDashboard';
 
 export default function Home({ onNavigate }) {
@@ -85,7 +86,7 @@ export default function Home({ onNavigate }) {
             <Button size="large" variant="contained" color="primary" sx={{ background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(2px)', border: '1.5px solid #fff', color: '#fff', fontWeight: 700, boxShadow: 3 }} onClick={() => onNavigate('guest-scan')}>
               Try It Now
             </Button>
-            <Button size="large" variant="outlined" color="secondary" sx={{ background: 'rgba(255,255,255,0.10)', border: '1.5px solid #fff', color: '#fff', fontWeight: 700 }} onClick={() => onNavigate('scanner')}>
+            <Button size="large" variant="outlined" color="secondary" sx={{ background: 'rgba(255,255,255,0.10)', border: '1.5px solid #fff', color: '#fff', fontWeight: 700 }} onClick={() => onNavigate(isAuthConfigured() ? 'login' : 'scanner')}>
               Sign In & Scan
             </Button>
             <Button size="large" variant="outlined" color="secondary" onClick={() => onNavigate('history')}>
