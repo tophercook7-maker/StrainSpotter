@@ -112,10 +112,11 @@ export default function Auth({ onBack }) {
     setError(null);
     setInfo(null);
     try {
-      const redirectTo = typeof window !== 'undefined' ? window.location.origin + '#type=recovery' : undefined;
+      // Important: redirectTo must match exactly what's in Supabase Auth settings
+      const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/` : undefined;
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) setError(error.message);
-      else setInfo('Password reset email sent. Open the link in your email to set a new password.');
+      else setInfo('Password reset email sent. Check your email and click the link to reset your password. The link expires in 1 hour.');
     } finally {
       setLoading(false);
     }

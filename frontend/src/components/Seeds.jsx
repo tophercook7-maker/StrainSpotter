@@ -19,10 +19,14 @@ export default function Seeds({ onBack }) {
       })
       .catch(e => {
         console.error('[Seeds] Error:', e);
-        // Dev fallback: show two sample entries instead of failing
+        // Fallback: show popular seed banks
         setSeeds([
-          { id: 'blue-dream-ilgm', name: 'Blue Dream — Seeds', breeder: 'ILGM', type: 'hybrid', thc: 18, cbd: 2, url: 'https://ilgm.com/products/blue-dream-feminized-seeds' },
-          { id: 'og-kush-seedsman', name: 'OG Kush — Seeds', breeder: 'Seedsman', type: 'hybrid', thc: 20, cbd: 0.2, url: 'https://www.seedsman.com/en/og-kush-seeds' }
+          { id: 'ilgm', name: 'I Love Growing Marijuana (ILGM)', breeder: 'ILGM', type: 'seed bank', description: 'Premium cannabis seeds with germination guarantee. Feminized, autoflower, and regular seeds available.', url: 'https://ilgm.com' },
+          { id: 'seedsman', name: 'Seedsman', breeder: 'Seedsman', type: 'seed bank', description: 'One of the oldest and most trusted online seed banks. Huge selection from top breeders worldwide.', url: 'https://www.seedsman.com' },
+          { id: 'crop-king', name: 'Crop King Seeds', breeder: 'Crop King', type: 'seed bank', description: 'Canadian seed bank with fast shipping to US. Great selection of feminized and autoflower strains.', url: 'https://www.cropkingseeds.com' },
+          { id: 'msnl', name: 'Marijuana Seeds NL', breeder: 'MSNL', type: 'seed bank', description: 'Established seed bank with stealth shipping worldwide. Competitive prices and frequent sales.', url: 'https://www.msnl.com' },
+          { id: 'growers-choice', name: 'Growers Choice Seeds', breeder: 'Growers Choice', type: 'seed bank', description: 'US-based seed company with 90% germination guarantee. Fast domestic shipping.', url: 'https://growerschoiceseeds.com' },
+          { id: 'homegrown', name: 'Homegrown Cannabis Co.', breeder: 'Homegrown', type: 'seed bank', description: 'Premium genetics with expert growing advice. Free seeds with every order.', url: 'https://homegrowncannabisco.com' }
         ]);
         setError(null);
       })

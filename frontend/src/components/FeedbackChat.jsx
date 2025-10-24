@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Box, Card, CardContent, TextField, Button, Typography, Stack } from '@mui/material';
 import { API_BASE } from '../config';
 
-export default function FeedbackChat() {
+export default function FeedbackChat({ onBack }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [posting, setPosting] = useState(false);
@@ -60,6 +60,24 @@ export default function FeedbackChat() {
 
   return (
     <Box sx={{ p: 2 }}>
+      {onBack && (
+        <Button 
+          onClick={onBack} 
+          size="small" 
+          variant="contained" 
+          sx={{ 
+            bgcolor: 'white', 
+            color: 'black', 
+            textTransform: 'none', 
+            fontWeight: 700, 
+            borderRadius: 999, 
+            mb: 2,
+            '&:hover': { bgcolor: 'grey.100' } 
+          }}
+        >
+          Home
+        </Button>
+      )}
       <Card>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>Feedback</Typography>

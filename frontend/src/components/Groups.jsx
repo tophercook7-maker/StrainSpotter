@@ -25,10 +25,12 @@ import {
 import FlagIcon from '@mui/icons-material/Flag';
 import { API_BASE } from '../config';
 import { supabase } from '../supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
+  const { user: authUser } = useAuth(); // Get user from global context
   const [groups, setGroups] = useState([]);
-  const [userId, setUserId] = useState(userIdProp || null);
+  const [userId, setUserId] = useState(userIdProp || authUser?.id || null);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [members, setMembers] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -60,17 +62,32 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
 
   // Track auth user id if not provided via props
   useEffect(() => {
-    if (userIdProp) return; // external override
+    if (userIdProp) {
+      setUserId(userIdProp);
+      return; // external override
+    }
+    
+    // Use authUser from context first
+    if (authUser?.id) {
+      setUserId(authUser.id);
+      console.log('[Groups] Using auth context user:', authUser.email);
+      return;
+    }
+    
+    // Fallback to checking session directly
     let sub;
     (async () => {
       try {
         if (!supabase) return;
         const { data } = await supabase.auth.getSession();
-        setUserId(data?.session?.user?.id || null);
+        const sessionUserId = data?.session?.user?.id || null;
+        console.log('[Groups] Session user ID:', sessionUserId);
+        setUserId(sessionUserId);
       } catch (e) {
         console.debug('Groups: getSession failed', e);
       }
     })();
+    
     if (supabase) {
       const listener = supabase.auth.onAuthStateChange((_e, session) => {
         setUserId(session?.user?.id || null);
@@ -78,12 +95,13 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       sub = listener?.data?.subscription;
     }
     return () => sub?.unsubscribe?.();
-  }, [userIdProp]);
+  }, [userIdProp, authUser]);
   
   // Create a new group via backend API
   const createGroup = async () => {
     const name = newGroupName.trim();
     if (!name) return;
+    
     // Always use the current Supabase user ID
     let validUserId = userId;
     if (!validUserId && supabase) {
@@ -94,30 +112,82 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         console.debug('Groups: getSession in createGroup failed', e);
       }
     }
+    
     if (!validUserId) {
-      alert('Please log in to create a group.');
+      alert('Please sign in to create a group.');
       onNavigate && onNavigate('login');
       return;
     }
+    
     setCreatingGroup(true);
+    
     try {
+      // Get user info from supabase session for email/username
+      let userEmail = null;
+      let userName = null;
+      if (supabase) {
+        try {
+          const { data } = await supabase.auth.getSession();
+          userEmail = data?.session?.user?.email || null;
+          userName = data?.session?.user?.user_metadata?.username || 
+                     userEmail?.split('@')[0] || 
+                     `user_${validUserId.substring(0, 8)}`;
+        } catch (e) {
+          console.log('[Groups] Could not fetch session for email');
+        }
+      }
+      
+      // First, ensure user record exists with email and username
+      console.log('[Groups] Ensuring user record exists for:', validUserId, userEmail);
+      const ensureRes = await fetch(`${API_BASE}/api/users/ensure`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          user_id: validUserId,
+          email: userEmail,
+          username: userName
+        })
+      });
+      
+      if (!ensureRes.ok) {
+        console.error('[Groups] Failed to ensure user record');
+        const ensureErr = await ensureRes.json().catch(() => ({}));
+        console.error('[Groups] Ensure error:', ensureErr);
+      } else {
+        console.log('[Groups] User record verified/created');
+      }
+      
+      // Now create the group
+      console.log('[Groups] Creating group:', name, 'for user:', validUserId);
       const res = await fetch(`${API_BASE}/api/groups`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, user_id: validUserId })
       });
+      
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Failed to create group');
+        const errorMsg = err.error || 'Failed to create group';
+        console.error('[Groups] Create failed:', errorMsg, err);
+        
+        // Show more helpful error messages
+        if (errorMsg.includes('already exists')) {
+          alert(`The "${name}" group already exists. Please join it from the list below.`);
+        } else {
+          alert(errorMsg + (err.hint ? `\n\n${err.hint}` : ''));
+        }
         return;
       }
+      
       const g = await res.json();
+      console.log('[Groups] Group created successfully:', g);
       setGroups([g, ...groups]);
-      setNewGroupName('');
+      setNewGroupName(ALLOWED_GROUPS[0]); // Reset to first option
       selectGroup(g);
+      
     } catch (e) {
-      console.error('Failed to create group', e);
-      alert('Failed to create group');
+      console.error('[Groups] Exception:', e);
+      alert('Network error creating group. Please check your connection and try again.');
     } finally {
       setCreatingGroup(false);
     }
@@ -125,6 +195,32 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
 
   useEffect(() => {
     (async () => {
+      // Auto-setup user account when component loads
+      if (userId) {
+        try {
+          console.log('[Groups] Auto-setting up user account for:', userId);
+          const { data: { session } } = await supabase.auth.getSession();
+          const email = session?.user?.email;
+          const userName = session?.user?.user_metadata?.username || 
+                          (email ? email.split('@')[0] : null) || 
+                          `user_${userId.substring(0, 8)}`;
+          
+          if (email) {
+            console.log('[Groups] Ensuring user record exists for:', userId, email);
+            const ensureRes = await fetch(`${API_BASE}/api/users/ensure`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_id: userId, email, username: userName })
+            });
+            if (ensureRes.ok) {
+              console.log('[Groups] User account ready');
+            }
+          }
+        } catch (e) {
+          console.error('[Groups] Auto-setup error:', e);
+        }
+      }
+      
       try {
         const res = await fetch(`${API_BASE}/api/groups`);
         if (res.ok) setGroups(await res.json());
@@ -134,7 +230,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     })();
     const stored = localStorage.getItem(guidelinesKey);
     if (stored === 'true') setGuidelinesAccepted(true);
-  }, [guidelinesKey]);
+  }, [guidelinesKey, userId]);
 
   const loadMessages = async (groupId) => {
     const res = await fetch(`${API_BASE}/api/groups/${groupId}/messages`);
@@ -288,40 +384,49 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
               Groups
             </Typography>
             <Stack spacing={2}>
-              <Button
-                variant="contained"
-                color="primary"
-                sx={{ mb: 1, fontWeight: 700 }}
-                onClick={() => {
-                  const input = document.getElementById('add-group-input');
-                  if (input) input.focus();
-                }}
-              >
-                + Add Group
-              </Button>
-              <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-                <TextField
-                  id="add-group-input"
-                  select
-                  size="small"
-                  label="Group Name"
-                  value={newGroupName}
-                  onChange={e => setNewGroupName(e.target.value)}
-                  disabled={creatingGroup}
-                  SelectProps={{ native: true }}
-                >
-                  {ALLOWED_GROUPS.map(g => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
-                </TextField>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                {userId ? 'Select a group below or create a new one:' : 'Sign in to create or join groups'}
+              </Typography>
+              
+              {!userId && (
                 <Button
                   variant="contained"
-                  onClick={createGroup}
-                  disabled={creatingGroup || !newGroupName.trim()}
+                  color="primary"
+                  fullWidth
+                  onClick={() => onNavigate && onNavigate('login')}
+                  sx={{ mb: 2 }}
                 >
-                  Create
+                  Sign In to Continue
                 </Button>
-              </Stack>
+              )}
+              
+              {userId && (
+                <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                  <TextField
+                    id="add-group-input"
+                    select
+                    size="small"
+                    label="Select Group Type"
+                    value={newGroupName}
+                    onChange={e => setNewGroupName(e.target.value)}
+                    disabled={creatingGroup}
+                    fullWidth
+                    SelectProps={{ native: true }}
+                  >
+                    {ALLOWED_GROUPS.map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </TextField>
+                  <Button
+                    variant="contained"
+                    onClick={createGroup}
+                    disabled={creatingGroup || !newGroupName.trim()}
+                    sx={{ minWidth: 120 }}
+                  >
+                    {creatingGroup ? 'Creating...' : 'Create Group'}
+                  </Button>
+                </Stack>
+              )}
               {loading ? (
                 <Typography variant="body2" color="text.secondary">
                   Loading...

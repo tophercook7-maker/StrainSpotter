@@ -31,9 +31,19 @@ export default function GrowerDirectory({ onBack }) {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      {onBack && (
-        <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 1, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
-      )}
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+        {onBack && (
+          <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
+        )}
+        <Button 
+          variant="contained" 
+          color="primary"
+          onClick={() => window.location.href = '#/auth'}
+          sx={{ textTransform: 'none', fontWeight: 600 }}
+        >
+          Register as Grower
+        </Button>
+      </Stack>
       <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
         Grower Directory
       </Typography>

@@ -22,13 +22,20 @@ import { styled } from '@mui/material/styles';
 import { API_BASE } from '../config';
 const API = `${API_BASE}/api`;
 
-// Styled components
+// Styled components with glassmorphism
 const StyledStrainCard = styled(Card)(({ theme }) => ({
   height: '100%',
   display: 'flex',
   flexDirection: 'column',
+  background: 'rgba(255, 255, 255, 0.75)',
+  backdropFilter: 'blur(10px)',
+  WebkitBackdropFilter: 'blur(10px)',
+  border: '1px solid rgba(255, 255, 255, 0.3)',
+  transition: 'all 0.3s ease',
   '&:hover': {
-    boxShadow: theme.shadows[4]
+    boxShadow: theme.shadows[8],
+    background: 'rgba(255, 255, 255, 0.85)',
+    transform: 'translateY(-4px)'
   }
 }));
 
@@ -222,24 +229,39 @@ export default function StrainBrowser({ onNavigate }) {
   }, [loadStrains]);
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container 
+      maxWidth="lg" 
+      sx={{ 
+        py: 4,
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, rgba(76, 175, 80, 0.05) 0%, rgba(139, 195, 74, 0.05) 100%)'
+      }}
+    >
       {/* Back Button */}
       {onNavigate && (
         <Box sx={{ mb: 2 }}>
           <Button
             startIcon={<ArrowBack />}
             onClick={() => onNavigate('home')}
-            sx={{ textTransform: 'none', fontWeight: 600 }}
+            sx={{ 
+              textTransform: 'none', 
+              fontWeight: 600,
+              background: 'rgba(255, 255, 255, 0.7)',
+              backdropFilter: 'blur(10px)',
+              '&:hover': {
+                background: 'rgba(255, 255, 255, 0.9)'
+              }
+            }}
           >
             Home
           </Button>
         </Box>
       )}
       
-      <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
+      <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
         🌿 Browse Strain Database
       </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 3, background: 'rgba(255, 255, 255, 0.6)', backdropFilter: 'blur(5px)', p: 2, borderRadius: 2 }}>
         Explore our library of cannabis strains and find seeds, growers, and dispensaries.
       </Typography>
 

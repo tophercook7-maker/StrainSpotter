@@ -1,31 +1,54 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
 import { Box, Card, CardContent, TextField, Button, Typography, Stack, Alert, CircularProgress } from '@mui/material';
 
-export default function PasswordReset() {
+export default function PasswordReset({ onBack }) {
+  const { user } = useAuth();
   const [newPassword, setNewPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [info, setInfo] = useState('');
   const [ready, setReady] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    // When arriving from password recovery link, Supabase sets a session from the hash token
-    // We just need to render the form to set a new password
-    (async () => {
+    let timeout;
+    let cleanup = false;
+    
+    // When arriving from password recovery link, Supabase needs to process the hash token
+    // Give it time to establish the recovery session from the URL
+    timeout = setTimeout(async () => {
       try {
-        const session = await supabase?.auth.getSession();
-        if (session?.data?.session) {
+        // First, check if Supabase has processed the recovery hash
+        const { data, error: sessionError } = await supabase?.auth.getSession();
+        console.log('[PasswordReset] Session check:', data?.session?.user?.email || 'none');
+        
+        if (data?.session) {
           setReady(true);
           setInfo('Enter a new password below to complete the reset.');
+          
+          // Clean up the hash after successful session establishment
+          if (!cleanup && typeof window !== 'undefined') {
+            setTimeout(() => {
+              history.replaceState(null, '', window.location.pathname + window.location.search);
+            }, 500);
+          }
         } else {
+          console.error('[PasswordReset] No session found:', sessionError);
           setError('Recovery link is invalid or expired. Please request a new reset email from the Sign In screen.');
         }
-      } catch {
-        setError('Unable to validate session.');
+      } catch (err) {
+        console.error('[PasswordReset] Session error:', err);
+        setError('Unable to validate session. Please request a new reset link.');
       }
-    })();
+    }, 1500); // Increased delay to give Supabase more time
+    
+    return () => {
+      cleanup = true;
+      clearTimeout(timeout);
+    };
   }, []);
 
   async function updatePassword() {
@@ -40,30 +63,144 @@ export default function PasswordReset() {
     setLoading(true);
     setError(null);
     setInfo(null);
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    setLoading(false);
-    if (error) setError(error.message);
-    else setInfo('Password updated. You can now sign in with your new password.');
+    try {
+      console.log('[PasswordReset] Updating password');
+      const { data, error } = await supabase.auth.updateUser({ password: newPassword });
+      
+      if (error) {
+        console.error('[PasswordReset] Error:', error);
+        setError(error.message);
+      } else {
+        console.log('[PasswordReset] Password updated successfully');
+        
+        // Ensure user record exists in public.users table
+        if (data?.user?.id) {
+          try {
+            await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:5181'}/api/users/ensure`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_id: data.user.id })
+            });
+          } catch (err) {
+            console.warn('[PasswordReset] Failed to ensure user record:', err);
+          }
+        }
+        
+        setInfo('✅ Password updated! You are now signed in. Redirecting to home...');
+        setTimeout(() => {
+          if (onBack) {
+            onBack(); // Use App's navigation
+          } else {
+            window.location.hash = '#/';
+          }
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('[PasswordReset] Catch error:', err);
+      setError('Failed to update password. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function goToLogin() {
+    if (onBack) {
+      onBack(); // This will set currentView to 'home'
+      // Then navigate to login
+      setTimeout(() => {
+        window.location.hash = '#/login';
+      }, 100);
+    } else {
+      window.location.hash = '#/login';
+    }
+  }
+
+  function goHome() {
+    if (onBack) {
+      onBack(); // Use the App.jsx's setCurrentView
+    } else {
+      window.location.hash = '#/';
+    }
   }
 
   return (
     <Box sx={{ maxWidth: 420, mx: 'auto', py: 4 }}>
+      <Button 
+        onClick={goHome} 
+        size="small" 
+        variant="contained" 
+        sx={{ 
+          mb: 2,
+          bgcolor: 'white', 
+          color: 'black', 
+          textTransform: 'none', 
+          fontWeight: 700, 
+          borderRadius: 999, 
+          '&:hover': { bgcolor: 'grey.100' } 
+        }}
+      >
+        ← Home
+      </Button>
       <Card>
         <CardContent>
           <Stack spacing={2}>
             <Typography variant="h5">Reset Password</Typography>
-            {info && <Alert severity="info">{info}</Alert>}
+            {info && <Alert severity="success">{info}</Alert>}
             {error && <Alert severity="error">{error}</Alert>}
             {ready ? (
               <>
-                <TextField label="New Password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} fullWidth />
-                <TextField label="Confirm Password" type="password" value={confirm} onChange={e => setConfirm(e.target.value)} fullWidth />
-                <Button variant="contained" onClick={updatePassword} disabled={loading}>
-                  {loading ? <CircularProgress size={20} /> : 'Update Password'}
+                <TextField 
+                  label="New Password" 
+                  type={showPassword ? "text" : "password"}
+                  value={newPassword} 
+                  onChange={e => setNewPassword(e.target.value)} 
+                  fullWidth 
+                  autoComplete="new-password"
+                  helperText={
+                    <Button 
+                      size="small" 
+                      onClick={() => setShowPassword(!showPassword)}
+                      sx={{ textTransform: 'none', p: 0, minWidth: 0 }}
+                    >
+                      {showPassword ? 'Hide' : 'Show'} password
+                    </Button>
+                  }
+                />
+                <TextField 
+                  label="Confirm Password" 
+                  type={showPassword ? "text" : "password"}
+                  value={confirm} 
+                  onChange={e => setConfirm(e.target.value)} 
+                  fullWidth 
+                  autoComplete="new-password"
+                />
+                <Button variant="contained" onClick={updatePassword} disabled={loading} fullWidth>
+                  {loading ? <CircularProgress size={20} /> : 'Update Password & Sign In'}
                 </Button>
               </>
             ) : (
-              <Typography variant="body2">Verifying link…</Typography>
+              <>
+                {!error ? (
+                  <Typography variant="body2">Verifying recovery link…</Typography>
+                ) : (
+                  <Alert severity="warning" sx={{ mt: 1 }}>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      <strong>Link Expired</strong>
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                      Password reset links expire after 1 hour. Please request a new one from the Sign In page using the "Forgot Password?" button.
+                    </Typography>
+                    <Stack spacing={1}>
+                      <Button variant="contained" onClick={goToLogin} fullWidth>
+                        Go to Sign In & Request New Link
+                      </Button>
+                      <Button variant="outlined" onClick={goHome} fullWidth>
+                        Back to Home
+                      </Button>
+                    </Stack>
+                  </Alert>
+                )}
+              </>
             )}
           </Stack>
         </CardContent>

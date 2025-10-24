@@ -4,12 +4,14 @@ import { Box, Button, Stack, Typography, Chip, Divider, ButtonBase } from '@mui/
 import { History as HistoryIcon, LocalFlorist } from '@mui/icons-material';
 import CannabisLeafIcon from './CannabisLeafIcon';
 import { API_BASE } from '../config';
+import { useAuth } from '../contexts/AuthContext';
 
 // Icon imports removed for pure text actions
 
 import AIAssistantBubble from './AIAssistantBubble';
 
 export default function Home({ onNavigate }) {
+  const { user } = useAuth();
   const [strainCount, setStrainCount] = useState(null);
   const isPro = typeof window !== 'undefined' && localStorage.getItem('strainspotter_membership') === 'pro';
 
@@ -159,6 +161,12 @@ export default function Home({ onNavigate }) {
               border: '1px solid rgba(255,255,255,0.18)'
             }} 
           />
+
+          {user && (
+            <Typography variant="body2" sx={{ color: 'rgba(76, 175, 80, 1)', fontWeight: 700, textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
+              ✓ Signed in as {user.email}
+            </Typography>
+          )}
 
           {strainCount !== null && (
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>

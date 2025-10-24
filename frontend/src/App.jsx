@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import { AuthProvider } from './contexts/AuthContext';
 import AgeGate from './components/AgeGate';
 import Auth from './components/Auth';
 import Scanner from './components/Scanner';
@@ -46,12 +47,16 @@ function App() {
       const hash = window.location.hash;
       if (/type=recovery/.test(hash)) {
         setCurrentView('reset');
+        // DON'T clear hash yet - Supabase needs it to establish the recovery session
+        // The PasswordReset component will handle it
       } else if (/access_token=/.test(hash)) {
-        // Signed in via magic link; go home and clear hash
+        // Signed in via magic link; go home
         setCurrentView('home');
+        // Clean up hash after magic link to avoid re-triggering
+        setTimeout(() => {
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+        }, 1000);
       }
-      // Clean up hash to avoid re-triggering
-      history.replaceState(null, '', window.location.pathname + window.location.search);
     }
   }, []);
 
@@ -74,17 +79,22 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      {/* Global background layer */}
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 0,
-        backgroundImage: 'url(/strainspotter-bg.jpg)',
-        backgroundSize: 'cover', backgroundPosition: 'center',
-        // Keep the background true-to-source and crisp
-        filter: 'brightness(1)'
-      }} />
-      {/* No overlay tint: keep background fully visible */}
-      <ErrorBoundary>
-        <GuidelinesGate>
+      <AuthProvider>
+        {/* Global background layer */}
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 0,
+          backgroundImage: 'url(/strainspotter-bg.jpg)',
+          backgroundSize: 'cover', backgroundPosition: 'center',
+          // Darken the background so UI elements stand out
+          filter: 'brightness(0.4)'
+        }} />
+        {/* Dark overlay for better contrast */}
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 0,
+          background: 'rgba(0, 0, 0, 0.3)'
+        }} />
+        <ErrorBoundary>
+          <GuidelinesGate>
           {typeof window !== 'undefined' && !/localhost|127\.0\.0\.1/.test(window.location.host) && /localhost:5181/.test(import.meta.env.VITE_API_BASE || '') && (
             <div style={{ background: '#ff5555', color: '#fff', padding: '6px 12px', textAlign: 'center', fontWeight: 700 }}>
               Warning: Frontend is calling localhost API_BASE. Update VITE_API_BASE or config.js.
@@ -156,7 +166,7 @@ function App() {
         <Guidelines onBack={() => setCurrentView('home')} />
       )}
       {currentView === 'reset' && (
-        <PasswordReset />
+        <PasswordReset onBack={() => setCurrentView('home')} />
       )}
       {currentView === 'errors' && (
         <ErrorViewer onBack={() => setCurrentView('home')} />
@@ -164,6 +174,7 @@ function App() {
           </div>
         </GuidelinesGate>
       </ErrorBoundary>
+      </AuthProvider>
     </ThemeProvider>
   );
 }
