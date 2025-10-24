@@ -116,6 +116,19 @@ export default function Help({ onNavigate, onBack }) {
           {/* Deeper tips */}
           <Card sx={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)' }}>
             <CardContent>
+              <Typography variant="h6" gutterBottom>Getting Started</Typography>
+              <Stack spacing={1}>
+                <Typography variant="body2"><strong>1. Create an Account:</strong> Tap the Account tile to sign up with email and password.</Typography>
+                <Typography variant="body2"><strong>2. Enable Location:</strong> Allow location access for nearby dispensaries and grower directory.</Typography>
+                <Typography variant="body2"><strong>3. Start Scanning:</strong> Tap the Scanner tile and take a photo of your cannabis to identify the strain.</Typography>
+                <Typography variant="body2"><strong>4. Join the Community:</strong> Use Groups & Chat to connect with other cannabis enthusiasts.</Typography>
+                <Typography variant="body2"><strong>5. Upgrade to Premium:</strong> Get unlimited scans, exclusive features, and support the app.</Typography>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <Card sx={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)' }}>
+            <CardContent>
               <Typography variant="h6" gutterBottom>Scanning tips</Typography>
               <Stack spacing={1}>
                 <Typography variant="body2">• Frame the whole bud inside the guide. Avoid extreme macro.</Typography>

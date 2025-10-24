@@ -10,10 +10,13 @@ import {
   Button,
   Stack,
   Chip,
-  Grid
+  Grid,
+  ButtonGroup
 } from '@mui/material';
 import PhoneIcon from '@mui/icons-material/Phone';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
+import DirectionsIcon from '@mui/icons-material/Directions';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 export default function Dispensaries({ onBack }) {
   const [dispensaries, setDispensaries] = useState([]);
@@ -169,24 +172,65 @@ export default function Dispensaries({ onBack }) {
                   </Stack>
                 </CardContent>
                 
-                {d.phone && (
-                  <Box sx={{ p: 2, pt: 0 }}>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      startIcon={<PhoneIcon />}
-                      href={`tel:${d.phone.replace(/[^0-9+]/g, '')}`}
-                      sx={{
-                        background: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
-                        '&:hover': {
-                          background: 'linear-gradient(45deg, #388e3c 30%, #4caf50 90%)'
-                        }
-                      }}
-                    >
-                      Call {d.phone}
-                    </Button>
-                  </Box>
-                )}
+                <Box sx={{ p: 2, pt: 0 }}>
+                  <ButtonGroup fullWidth orientation="vertical" variant="contained">
+                    {d.phone && (
+                      <Button
+                        startIcon={<PhoneIcon />}
+                        href={`tel:${d.phone.replace(/[^0-9+]/g, '')}`}
+                        sx={{
+                          background: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
+                          '&:hover': {
+                            background: 'linear-gradient(45deg, #388e3c 30%, #4caf50 90%)'
+                          }
+                        }}
+                      >
+                        Call {d.phone}
+                      </Button>
+                    )}
+                    
+                    {(d.lat && d.lng) || (d.address && d.city && d.state) ? (
+                      <Button
+                        startIcon={<DirectionsIcon />}
+                        onClick={() => {
+                          // Use coordinates if available, otherwise use address
+                          const destination = (d.lat && d.lng) 
+                            ? `${d.lat},${d.lng}`
+                            : `${d.address}, ${d.city}, ${d.state} ${d.zip || ''}`.trim();
+                          
+                          // Google Maps directions URL
+                          const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+                          window.open(mapsUrl, '_blank');
+                        }}
+                        sx={{
+                          background: 'linear-gradient(45deg, #2196f3 30%, #42a5f5 90%)',
+                          '&:hover': {
+                            background: 'linear-gradient(45deg, #1976d2 30%, #2196f3 90%)'
+                          }
+                        }}
+                      >
+                        Get Directions
+                      </Button>
+                    ) : null}
+                    
+                    {d.website && (
+                      <Button
+                        startIcon={<OpenInNewIcon />}
+                        href={d.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{
+                          background: 'linear-gradient(45deg, #ff9800 30%, #ffa726 90%)',
+                          '&:hover': {
+                            background: 'linear-gradient(45deg, #f57c00 30%, #ff9800 90%)'
+                          }
+                        }}
+                      >
+                        Visit Website
+                      </Button>
+                    )}
+                  </ButtonGroup>
+                </Box>
               </Card>
             </Grid>
           ))}

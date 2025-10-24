@@ -51,6 +51,14 @@ router.post('/messages', rejectIfProfane, async (req, res) => {
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    
+    // Log feedback to console for monitoring (until email service is configured)
+    console.log(`[FEEDBACK] User ${user_id || 'anonymous'} submitted: ${cleaned.substring(0, 100)}...`);
+    
+    // TODO: Send email notification to strainspotterfeedback@gmail.com
+    // Options: Use nodemailer with Gmail SMTP, SendGrid, or Supabase Edge Function with Resend
+    // For now, admins can monitor feedback via the database or console logs
+    
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: String(e) });
