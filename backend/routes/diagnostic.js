@@ -1,5 +1,6 @@
 import express from 'express';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
+import { sendMail, isEmailConfigured } from '../services/mailer.js';
 
 const router = express.Router();
 
@@ -76,3 +77,33 @@ router.get('/search-test', async (req, res) => {
 });
 
 export default router;
+
+// Email test endpoint to verify SMTP config quickly
+router.post('/email-test', async (req, res) => {
+  try {
+    if (!isEmailConfigured()) {
+      return res.status(501).json({
+        ok: false,
+        error: 'SMTP not configured',
+        hint: 'Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM, EMAIL_TO in the backend environment.'
+      });
+    }
+
+    const to = (req.body && req.body.to) || process.env.EMAIL_TO;
+    if (!to) {
+      return res.status(400).json({ ok: false, error: 'Recipient missing. Set EMAIL_TO or provide { "to": "you@example.com" }.' });
+    }
+
+    const subject = 'StrainSpotter Feedback — SMTP Test';
+    const text = 'This is a test email from the StrainSpotter backend to verify SMTP configuration.';
+    const html = '<p>This is a <strong>test email</strong> from the StrainSpotter backend to verify SMTP configuration.</p>';
+
+    const result = await sendMail({ to, subject, text, html });
+    if (result.skipped) {
+      return res.status(501).json({ ok: false, error: 'Email send skipped: SMTP not configured' });
+    }
+    return res.json({ ok: true, messageId: result.id, to });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e) });
+  }
+});
