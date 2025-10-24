@@ -1,124 +1,204 @@
 
 import { useEffect, useState } from 'react';
-import { Box, Button, Stack, Typography, Chip, Dialog, IconButton } from '@mui/material';
+import { Box, Button, Stack, Typography, Chip, Divider, ButtonBase } from '@mui/material';
+import { History as HistoryIcon, LocalFlorist } from '@mui/icons-material';
 import CannabisLeafIcon from './CannabisLeafIcon';
-import { isAuthConfigured } from '../supabaseClient';
-import DevDashboard from './DevDashboard';
+import { API_BASE } from '../config';
+
+// Icon imports removed for pure text actions
+
+import AIAssistantBubble from './AIAssistantBubble';
 
 export default function Home({ onNavigate }) {
   const [strainCount, setStrainCount] = useState(null);
-  const [showDev, setShowDev] = useState(false);
-  const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const isPro = typeof window !== 'undefined' && localStorage.getItem('strainspotter_membership') === 'pro';
 
   useEffect(() => {
-    fetch(`${window.FUNCTIONS_BASE || '/functions'}/strains-count`)
-      .then(r => r.json())
-      .then(data => setStrainCount(data.count))
-      .catch(() => setStrainCount(null));
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await fetch(`${API_BASE}/api/strains/count`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!cancelled) setStrainCount(typeof data.count === 'number' ? data.count : null);
+      } catch {
+        setStrainCount(null);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
-  return (
-    <Box sx={{ position: 'relative', minHeight: '100vh', bgcolor: 'background.default' }}>
-      {/* Hero background */}
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: 'url(/strainspotter-bg.jpg)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          filter: 'saturate(1.05) contrast(1.02)',
-        }}
-      />
-      {/* Gradient overlay */}
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          background: 'linear-gradient(180deg, rgba(6,15,6,0.70) 0%, rgba(10,25,10,0.85) 55%, rgba(10,25,10,1) 100%)',
-          backdropFilter: 'blur(2px)',
-        }}
-      />
+  const tiles = [
+    { key: 'wizard', nav: 'wizard', title: 'Start Strain Scan', blurb: 'Guided scan with AI results, seeds and product near you', emoji: '📷' },
+    { key: 'history', nav: 'history', title: 'Scan History', blurb: 'See all your past scans', emoji: '🕘' },
+      { key: 'strains', nav: 'strains', title: 'Browse Strains', blurb: `Explore ${strainCount ? strainCount.toLocaleString() : '35k+'} strains with links to seeds & dispensaries`, icon: LocalFlorist },
+      { key: 'groups', nav: 'groups', title: 'Groups & Chat', blurb: 'Connect with growers and enthusiasts', emoji: '💬' },
+      { key: 'growers', nav: 'growers', title: 'Find Growers', blurb: 'Discover local cultivators and their expertise', emoji: '🧑‍🌾' },
+    { key: 'dispensaries', nav: 'dispensaries', title: 'Dispensaries', blurb: 'Find nearby shops and retailers', emoji: '🛍️' },
+    { key: 'seeds', nav: 'seeds', title: 'Seeds', blurb: 'Where to buy seed packs', emoji: '🌱' },
+    { key: 'grow-coach', nav: 'grow-coach', title: 'Grow Coach', blurb: 'Step‑by‑step from seed to harvest', emoji: '📘' },
+    { key: 'login', nav: 'login', title: 'Login / Account', blurb: 'Sign in or manage membership', emoji: '👤' },
+    { key: 'help', nav: 'help', title: 'Help & Getting Started', blurb: 'Learn how to use StrainSpotter', emoji: '📖' },
+    { key: 'feedback', nav: 'feedback', title: 'Send Feedback', blurb: 'Share your thoughts and suggestions', emoji: '✉️' },
+  ];
 
-      <Box maxWidth="md" sx={{ position: 'relative', zIndex: 1, py: { xs: 10, md: 16 }, mx: 'auto' }}>
-        <Stack spacing={3} alignItems="center" textAlign="center">
-          {/* Hero icon with long-press-to-enter-dev */}
-          <Box
-            sx={{ cursor: 'pointer', mb: 1 }}
-            onClick={() => (isDev ? setShowDev(true) : onNavigate('help'))}
-            onPointerDown={e => {
-              if (e.pointerType === 'touch' || e.pointerType === 'mouse') {
-                e.target._pressTimer = setTimeout(() => {
-                  setShowDev(true);
-                }, 1200);
-              }
-            }}
-            onPointerUp={e => {
-              clearTimeout(e.target._pressTimer);
-            }}
-            onPointerLeave={e => {
-              clearTimeout(e.target._pressTimer);
-            }}
-            aria-label="StrainSpotter Hero Icon"
-          >
-            <img
-              src="/hero.png"
-              alt="StrainSpotter Hero"
-              style={{ width: 72, height: 72, filter: 'drop-shadow(0 0 12px #4caf50aa)' }}
-              draggable={false}
+  const GlassTile = ({ title, emoji, icon: Icon, onClick, pro }) => (
+    <ButtonBase
+      disableRipple
+      onClick={onClick}
+      sx={{
+        position: 'relative',
+        borderRadius: 3,
+        p: 0.5,
+        // Phone-first: even smaller buttons
+        minHeight: { xs: 64, sm: 72 },
+        aspectRatio: '1 / 1',
+        width: '100%',
+        textAlign: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 0.75,
+        // Single-layer, highly see-through glass with muted green
+        background: 'rgba(20, 40, 30, 0.10)',
+        border: '1px solid rgba(124,179,66,0.14)',
+        backdropFilter: 'blur(3px)',
+        boxShadow: '0 1px 8px rgba(0,0,0,0.10)',
+        color: 'white',
+        transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+        outline: 'none',
+        '&:focus-visible': { outline: 'none', boxShadow: 'none' },
+        '&:hover': {
+          transform: 'none',
+          background: 'rgba(24, 52, 38, 0.12)',
+          borderColor: 'rgba(124,179,66,0.22)',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.12)'
+        }
+      }}
+    >
+      {pro && (
+        <Chip 
+          label="Pro" 
+          color="success" 
+          size="small" 
+          sx={{ 
+            position: 'absolute', 
+            top: 6, 
+            right: 6, 
+            fontSize: '0.6rem', 
+            height: 16,
+            fontWeight: 700,
+            backdropFilter: 'blur(8px)'
+          }} 
+        />
+      )}
+      {Icon ? (
+        <Icon sx={{ 
+          fontSize: { xs: 20, sm: 22 },
+          color: '#7CB342',
+          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
+        }} />
+      ) : (
+        <Box sx={{ 
+          fontSize: { xs: 20, sm: 22 }, 
+          lineHeight: 1,
+          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
+        }} aria-hidden>
+          {emoji}
+        </Box>
+      )}
+      <Typography 
+        variant="subtitle2" 
+        sx={{ 
+          fontWeight: 700, 
+          lineHeight: 1.3, 
+          fontSize: { xs: '0.65rem', sm: '0.75rem' },
+          textShadow: '0 1px 2px rgba(0,0,0,0.25)',
+          maxWidth: '90%'
+        }}
+      >
+        {title}
+      </Typography>
+
+      {/* Leaf watermark */}
+      <Box sx={{ position: 'absolute', bottom: 6, left: 6, opacity: 0.08 }} aria-hidden>
+        <CannabisLeafIcon />
+      </Box>
+    </ButtonBase>
+  );
+
+  return (
+    <Box sx={{ bgcolor: 'transparent', minHeight: '100vh', pb: 6 }}>
+      {/* Hero Section - Mobile Optimized */}
+  <Box sx={{ px: 2, pt: 4, pb: 1, textAlign: 'center', position: 'relative' }}>
+        <Stack spacing={2} alignItems="center" sx={{ position: 'relative', zIndex: 1 }}>
+            <img 
+              src="/hero.png" 
+              alt="StrainSpotter" 
+              style={{ 
+                width: 80, 
+                height: 80,
+                filter: 'drop-shadow(0 0 18px rgba(0,0,0,0.35))'
+              }} 
+              draggable={false} 
             />
-          </Box>
-          <Chip icon={<CannabisLeafIcon size={20} />} label="Cannabis AI" color="success" variant="outlined" sx={{ bgcolor: 'rgba(76,175,80,0.12)', borderColor: 'rgba(76,175,80,0.35)', color: 'success.light' }} />
-          <Typography variant="h2" sx={{ fontWeight: 800, letterSpacing: -0.5 }}>
+          
+          <Typography variant="h4" sx={{ fontWeight: 800, color: '#fff', textShadow: '0 2px 8px rgba(0,0,0,0.25)' }}>
             StrainSpotter
           </Typography>
-          <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 720 }}>
-            Identify strains from labels and plants, explore a living database, and grow with the community.
-          </Typography>
+          
+          <Chip 
+            icon={<CannabisLeafIcon size={18} />} 
+            label="AI-Powered Cannabis ID"
+            sx={{ 
+              bgcolor: 'rgba(255,255,255,0.10)', 
+              color: '#fff',
+              fontWeight: 600,
+              backdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255,255,255,0.18)'
+            }} 
+          />
 
           {strainCount !== null && (
-            <Typography variant="h5" color="primary" sx={{ fontWeight: 700, mt: 2 }}>
-              {strainCount.toLocaleString()} strains in our database
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>
+              {strainCount.toLocaleString()} strains • and climbing 🌱
             </Typography>
           )}
-
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 1 }}>
-            <Button size="large" variant="contained" color="primary" sx={{ background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(2px)', border: '1.5px solid #fff', color: '#fff', fontWeight: 700, boxShadow: 3 }} onClick={() => onNavigate('guest-scan')}>
-              Try It Now
-            </Button>
-            <Button size="large" variant="outlined" color="secondary" sx={{ background: 'rgba(255,255,255,0.10)', border: '1.5px solid #fff', color: '#fff', fontWeight: 700 }} onClick={() => onNavigate(isAuthConfigured() ? 'login' : 'scanner')}>
-              Sign In & Scan
-            </Button>
-            <Button size="large" variant="outlined" color="secondary" onClick={() => onNavigate('history')}>
-              View History
-            </Button>
-          </Stack>
-
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 4, opacity: 0.95 }}>
-            <Button variant="text" color="inherit" onClick={() => onNavigate('feedback')}>
-              Leave Feedback
-            </Button>
-          </Stack>
-
-          <Box sx={{ mt: 4, p: 2, borderRadius: 2, bgcolor: 'background.paper', boxShadow: 2, maxWidth: 420, mx: 'auto', opacity: 0.98 }}>
-            <Typography variant="body1" color="text.secondary">
-              <b>Unlock full access:</b> Subscribe to view all strains, details, and advanced features. Only paid members can browse the full database.
-            </Typography>
-          </Box>
         </Stack>
       </Box>
 
-      {/* Hidden Dev Dashboard Dialog */}
-      {isDev && (
-      <Dialog open={showDev} onClose={() => setShowDev(false)} maxWidth="md" fullWidth>
-        <Box sx={{ p: 2, position: 'relative' }}>
-          <IconButton onClick={() => setShowDev(false)} sx={{ position: 'absolute', top: 8, right: 8 }}>
-            ×
-          </IconButton>
-          <DevDashboard />
+      {/* All Actions - Glass Tiles Grid */}
+      <Box sx={{ px: 2, mt: 1, position: 'relative', zIndex: 10 }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: 'white', textAlign: 'center', opacity: 0.95 }}>
+          What would you like to do?
+        </Typography>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gap: 1.25,
+            gridTemplateColumns: {
+              xs: 'repeat(4, minmax(0, 1fr))',
+              sm: 'repeat(5, minmax(0, 1fr))',
+              md: 'repeat(6, minmax(0, 1fr))'
+            }
+          }}
+        >
+          {tiles.map((t) => (
+            <GlassTile
+              key={t.key}
+              title={t.title}
+              emoji={t.emoji}
+              icon={t.icon}
+              pro={t.pro}
+              onClick={() => onNavigate(t.nav || t.key)}
+            />
+          ))}
         </Box>
-      </Dialog>
-      )}
+      </Box>
+      {/* Floating AI Assistant */}
+      <AIAssistantBubble onNavigate={onNavigate} />
     </Box>
   );
 }

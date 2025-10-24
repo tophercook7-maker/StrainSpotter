@@ -1,8 +1,10 @@
+/* Remove Vite starter layout constraints so the app can be full-bleed underlay
+   with our global cannabis background. Keep only minimal resets here. */
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  text-align: initial;
 }
 
 .logo {

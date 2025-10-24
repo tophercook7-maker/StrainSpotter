@@ -35,6 +35,7 @@ import scanDiagnosticRoutes from './routes/scanDiagnostic.js';
 import friendsRoutes from './routes/friends.js';
 import membershipRoutes from './routes/membership.js';
 import pipelineRoutes from './routes/pipeline.js';
+import moderationRoutes from './routes/moderation.js';
 import { matchStrainByVisuals } from './services/visualMatcher.js';
 import { checkAccess, enforceTrialLimit } from './middleware/membershipCheck.js';
 
@@ -46,6 +47,8 @@ if (!process.env.VERCEL) {
 if (process.env.NODE_ENV !== 'production') {
   console.log('[boot] SUPABASE_URL present =', !!process.env.SUPABASE_URL);
   console.log('[boot] GOOGLE_APPLICATION_CREDENTIALS set =', !!process.env.GOOGLE_APPLICATION_CREDENTIALS || !!process.env.GOOGLE_VISION_JSON);
+  // Helpful to confirm admin client usage without exposing secrets
+  console.log('[boot] Service role client active =', !!supabaseAdmin);
 }
 
 // Optional Google Vision client (only if creds are present)
@@ -75,8 +78,13 @@ app.use(helmet({
 // Increased to 50MB to accept large images, which we'll compress server-side with sharp
 app.use(express.json({ limit: '50mb' }));
 
-// CORS allowlist
-const ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
+// CORS allowlist: allow any localhost/127.0.0.1 port in dev
+const DEFAULT_ORIGINS = [
+  'http://localhost:5173', 'http://127.0.0.1:5173',
+  'http://localhost:5174', 'http://127.0.0.1:5174',
+  'http://localhost:4173', 'http://127.0.0.1:4173'
+];
+const ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS || DEFAULT_ORIGINS.join(','))
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
@@ -84,6 +92,15 @@ const ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS || 'http://localhost:5173,
 function isAllowedOrigin(origin) {
   if (!origin) return false;
   if (ALLOW_ORIGINS.includes(origin)) return true;
+  // Allow any localhost or 127.0.0.1 with any port explicitly for dev previews
+  // This permits local dev machines to call the backend regardless of port drift
+  try {
+    const u = new URL(origin);
+    if ((u.hostname === 'localhost' || u.hostname === '127.0.0.1')) {
+      // Accept any localhost/127.0.0.1 port (no port restriction for maximum dev flexibility)
+      return true;
+    }
+  } catch {}
   // Allow Vercel preview/prod frontend domains for this project
   try {
     const { host } = new URL(origin);
@@ -108,11 +125,53 @@ app.use((req, res, next) => {
   next();
 });
 
+// Enhanced error logging and handler
+const errorLog = [];
+const MAX_ERROR_LOG = 100;
+
+function logError(err, req) {
+  const timestamp = new Date().toISOString();
+  const errorEntry = {
+    timestamp,
+    method: req?.method,
+    url: req?.originalUrl || req?.url,
+    error: err.message || String(err),
+    stack: err.stack,
+    status: err.status || 500,
+    userId: req?.body?.user_id || req?.query?.user_id || 'unknown'
+  };
+  
+  // Console log with clear formatting
+  console.error('\n═══════════════════════════════════════════════════════');
+  console.error('🚨 ERROR CAUGHT');
+  console.error('───────────────────────────────────────────────────────');
+  console.error('Time:', timestamp);
+  console.error('Endpoint:', `${errorEntry.method} ${errorEntry.url}`);
+  console.error('Status:', errorEntry.status);
+  console.error('User:', errorEntry.userId);
+  console.error('Message:', errorEntry.error);
+  console.error('───────────────────────────────────────────────────────');
+  if (err.stack) {
+    console.error('Stack Trace:');
+    console.error(err.stack);
+  }
+  console.error('═══════════════════════════════════════════════════════\n');
+  
+  // Keep in-memory log (last 100 errors)
+  errorLog.unshift(errorEntry);
+  if (errorLog.length > MAX_ERROR_LOG) errorLog.pop();
+}
+
 // Centralized error handler middleware
 function errorHandler(err, req, res, next) {
+  logError(err, req);
   const status = err.status || 500;
   const message = err.message || String(err);
-  res.status(status).json({ error: message });
+  res.status(status).json({ 
+    error: message,
+    timestamp: new Date().toISOString(),
+    endpoint: `${req.method} ${req.originalUrl || req.url}`
+  });
 }
 
 // Rate limiter for write-heavy endpoints
@@ -147,10 +206,10 @@ app.get('/', (req, res) => {
   }
 })();
 
-// POST /api/uploads  { filename, contentType, base64 } - with trial enforcement
-app.post('/api/uploads', checkAccess, enforceTrialLimit('scan'), writeLimiter, async (req, res, next) => {
+// POST /api/uploads  { filename, contentType, base64, user_id? } - with trial enforcement
+app.post('/api/uploads', writeLimiter, async (req, res, next) => {
   try {
-    const { filename, contentType, base64 } = req.body || {};
+    const { filename, contentType, base64, user_id } = req.body || {};
     if (!filename || !base64) return res.status(400).json({ error: 'filename and base64 are required' });
     if (contentType && !/^image\/(png|jpe?g|webp)$/i.test(contentType)) {
       return res.status(400).json({ error: 'unsupported contentType' });
@@ -171,7 +230,17 @@ app.post('/api/uploads', checkAccess, enforceTrialLimit('scan'), writeLimiter, a
       console.log(`[upload] Compressed to ${(buffer.length / 1024 / 1024).toFixed(2)}MB`);
     }
 
-    const key = `${Date.now()}-${filename}`;
+    // Normalize storage key: users/{owner}/{timestamp-filename}
+    // Prefer authenticated user id; otherwise use a session-based bucket to avoid collisions
+    const rawName = String(filename || 'upload.jpg').split('/').pop();
+    const safeName = rawName
+      .replace(/[^A-Za-z0-9._-]+/g, '_')
+      .replace(/^[_\.\-]+/, '')
+      .slice(0, 100) || `file_${Date.now()}.jpg`;
+
+    const ownerId = (user_id && String(user_id)) || (req.headers['x-session-id'] && String(req.headers['x-session-id'])) || req.ip || 'anon';
+    const safeOwner = String(ownerId).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'anon';
+    const key = `users/${safeOwner}/${Date.now()}-${safeName}`;
     const bucket = 'scans';
 
   // Prefer service role for storage writes to bypass RLS
@@ -197,7 +266,7 @@ app.post('/api/uploads', checkAccess, enforceTrialLimit('scan'), writeLimiter, a
 
   // Use service role for table insert to bypass RLS
   const dbClient = supabaseAdmin ?? supabase;
-    const insert = await dbClient.from('scans').insert({ image_url: publicUrl, status: 'pending' }).select();
+    const insert = await dbClient.from('scans').insert({ image_url: publicUrl, image_key: key, status: 'pending', user_id: user_id || null }).select();
     if (insert.error) {
       const msg = insert.error.message || 'insert failed';
       const rlsHint = (!supabaseAdmin && /row-level security/i.test(msg))
@@ -221,26 +290,11 @@ app.get('/api/scans', async (req, res, next) => {
     const readClient = supabaseAdmin ?? supabase;
     
     if (user_id) {
-      // Fetch user's scans + friends' scans only
-      const { data: friendships, error: friendErr } = await readClient
-        .from('friendships')
-        .select('user_id, friend_id')
-        .or(`user_id.eq.${user_id},friend_id.eq.${user_id}`)
-        .eq('status', 'accepted');
-      
-      if (friendErr) return res.status(500).json({ error: friendErr.message });
-      
-      const friendIds = new Set([user_id]);
-      (friendships || []).forEach(f => {
-        if (f.user_id === user_id) friendIds.add(f.friend_id);
-        else friendIds.add(f.user_id);
-      });
-      
-      // Step 2: Get scans from user + friends
+      // Fetch user's own scans only
       const { data, error } = await readClient
         .from('scans')
         .select('*')
-        .in('user_id', Array.from(friendIds))
+        .eq('user_id', user_id)
         .order('created_at', { ascending: false })
         .limit(100);
       
@@ -399,6 +453,24 @@ app.post('/api/scans/:id/process', writeLimiter, async (req, res, next) => {
   }
 });
 
+// Save match selection and associate with user
+app.post('/api/scans/:id/save-match', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { matched_strain_slug, user_id } = req.body || {};
+    if (!id || !matched_strain_slug) return res.status(400).json({ error: 'id and matched_strain_slug required' });
+    const writeClient = supabaseAdmin ?? supabase;
+    const { error } = await writeClient
+      .from('scans')
+      .update({ matched_strain_slug, user_id: user_id || null })
+      .eq('id', id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // POST /api/visual-match - Match strain by Vision API results
 app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
   try {
@@ -487,6 +559,20 @@ app.use('/api/diagnostic', scanDiagnosticRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/membership', membershipRoutes);
 app.use('/api/pipeline', pipelineRoutes);
+app.use('/api/moderation', moderationRoutes);
+
+// Error logs viewer endpoint (only accessible in development)
+app.get('/api/errors/recent', (req, res) => {
+  const isDev = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+  if (!isDev) {
+    return res.status(403).json({ error: 'Error logs only available in development' });
+  }
+  res.json({ 
+    total: errorLog.length, 
+    errors: errorLog.slice(0, 20),
+    message: 'Showing last 20 errors. Full log in PM2: pm2 logs strainspotter-backend' 
+  });
+});
 
 // POST /api/strains/suggest - user suggests a new strain
 app.post('/api/strains/suggest', writeLimiter, express.json(), (req, res) => {
@@ -504,6 +590,29 @@ app.post('/api/strains/suggest', writeLimiter, express.json(), (req, res) => {
 });
 
 app.use(errorHandler);
+
+// Global uncaught error handlers
+process.on('uncaughtException', (err) => {
+  console.error('\n💥 UNCAUGHT EXCEPTION 💥');
+  console.error('═══════════════════════════════════════════════════════');
+  console.error('Time:', new Date().toISOString());
+  console.error('Error:', err.message);
+  console.error('Stack:', err.stack);
+  console.error('═══════════════════════════════════════════════════════\n');
+  // Keep process alive in development
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('\n⚠️  UNHANDLED PROMISE REJECTION ⚠️');
+  console.error('═══════════════════════════════════════════════════════');
+  console.error('Time:', new Date().toISOString());
+  console.error('Reason:', reason);
+  console.error('Promise:', promise);
+  console.error('═══════════════════════════════════════════════════════\n');
+});
 
 // In Vercel serverless, don't call listen(); export the app handler instead
 if (!process.env.VERCEL) {

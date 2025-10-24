@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Card,
@@ -11,47 +11,142 @@ import {
   ListItem,
   ListItemText,
   Chip,
-  Container
+  Container,
+  IconButton,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControlLabel,
+  Checkbox,
+  Link as MuiLink
 } from '@mui/material';
-import { FUNCTIONS_BASE } from '../config';
+import FlagIcon from '@mui/icons-material/Flag';
+import { API_BASE } from '../config';
+import { supabase } from '../supabaseClient';
 
-export default function Groups({ userId = 'demo-user' }) {
+export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   const [groups, setGroups] = useState([]);
+  const [userId, setUserId] = useState(userIdProp || null);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [members, setMembers] = useState([]);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
-  const [newGroupName, setNewGroupName] = useState('');
+  const ALLOWED_GROUPS = [
+    'Growers',
+    'Budtenders',
+    'Medical',
+    'Recreational',
+    'Local Chat',
+    'General',
+    'Dispensary Owners',
+    'Seed Swap',
+    'Events',
+    'Help & Advice'
+  ];
+  const [newGroupName, setNewGroupName] = useState(ALLOWED_GROUPS[0]);
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [isMember, setIsMember] = useState(false);
-  // NOTE: Group creation is not yet migrated to Edge Function (add if needed)
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportingMessage, setReportingMessage] = useState(null);
+  const [reportReason, setReportReason] = useState('inappropriate');
+  const [reportDetails, setReportDetails] = useState('');
+  const [guidelinesOpen, setGuidelinesOpen] = useState(false);
+  const [guidelinesChecked, setGuidelinesChecked] = useState(false);
+  const [guidelinesAccepted, setGuidelinesAccepted] = useState(false);
+  const guidelinesKey = useMemo(() => `ss_guidelines_accepted_${userId || 'guest'}`, [userId]);
+
+  // Track auth user id if not provided via props
+  useEffect(() => {
+    if (userIdProp) return; // external override
+    let sub;
+    (async () => {
+      try {
+        if (!supabase) return;
+        const { data } = await supabase.auth.getSession();
+        setUserId(data?.session?.user?.id || null);
+      } catch (e) {
+        console.debug('Groups: getSession failed', e);
+      }
+    })();
+    if (supabase) {
+      const listener = supabase.auth.onAuthStateChange((_e, session) => {
+        setUserId(session?.user?.id || null);
+      });
+      sub = listener?.data?.subscription;
+    }
+    return () => sub?.unsubscribe?.();
+  }, [userIdProp]);
+  
+  // Create a new group via backend API
   const createGroup = async () => {
-    // ...existing code...
+    const name = newGroupName.trim();
+    if (!name) return;
+    // Always use the current Supabase user ID
+    let validUserId = userId;
+    if (!validUserId && supabase) {
+      try {
+        const { data } = await supabase.auth.getSession();
+        validUserId = data?.session?.user?.id || null;
+      } catch (e) {
+        console.debug('Groups: getSession in createGroup failed', e);
+      }
+    }
+    if (!validUserId) {
+      alert('Please log in to create a group.');
+      onNavigate && onNavigate('login');
+      return;
+    }
+    setCreatingGroup(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/groups`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, user_id: validUserId })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to create group');
+        return;
+      }
+      const g = await res.json();
+      setGroups([g, ...groups]);
+      setNewGroupName('');
+      selectGroup(g);
+    } catch (e) {
+      console.error('Failed to create group', e);
+      alert('Failed to create group');
+    } finally {
+      setCreatingGroup(false);
+    }
   };
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${FUNCTIONS_BASE}/groups-list`);
+        const res = await fetch(`${API_BASE}/api/groups`);
         if (res.ok) setGroups(await res.json());
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+    const stored = localStorage.getItem(guidelinesKey);
+    if (stored === 'true') setGuidelinesAccepted(true);
+  }, [guidelinesKey]);
 
   const loadMessages = async (groupId) => {
-    const res = await fetch(`${FUNCTIONS_BASE}/group-messages?id=${groupId}`);
+    const res = await fetch(`${API_BASE}/api/groups/${groupId}/messages`);
     if (res.ok) setMessages(await res.json());
   };
 
   const loadMembers = async (groupId) => {
-    const res = await fetch(`${FUNCTIONS_BASE}/group-members?id=${groupId}`);
+    const res = await fetch(`${API_BASE}/api/groups/${groupId}/members`);
     if (res.ok) {
       const data = await res.json();
       setMembers(data);
-      setIsMember(data.some(m => m.user_id === userId));
+      setIsMember(userId ? data.some(m => m.user_id === userId) : false);
     }
   };
 
@@ -63,56 +158,124 @@ export default function Groups({ userId = 'demo-user' }) {
 
   const joinGroup = async () => {
     if (!selectedGroup) return;
-    const accessToken = localStorage.getItem('sb-access-token');
-    const res = await fetch(`${FUNCTIONS_BASE}/group-join`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({ group_id: selectedGroup.id })
-    });
-    if (res.ok) {
-      await loadMembers(selectedGroup.id);
+    try {
+      if (!userId) {
+        alert('Please log in to join groups.');
+        onNavigate && onNavigate('login');
+        return;
+      }
+      const res = await fetch(`${API_BASE}/api/groups/${selectedGroup.id}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId })
+      });
+      if (res.ok) {
+        await loadMembers(selectedGroup.id);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to join group');
+      }
+    } catch (e) {
+      console.error('Failed to join group', e);
+      alert('Failed to join group');
     }
   };
 
   const leaveGroup = async () => {
     if (!selectedGroup) return;
-    const accessToken = localStorage.getItem('sb-access-token');
-    const res = await fetch(`${FUNCTIONS_BASE}/group-leave`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({ group_id: selectedGroup.id })
-    });
-    if (res.ok) {
-      await loadMembers(selectedGroup.id);
+    try {
+      if (!userId) {
+        alert('Please log in to leave groups.');
+        onNavigate && onNavigate('login');
+        return;
+      }
+      const res = await fetch(`${API_BASE}/api/groups/${selectedGroup.id}/leave`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId })
+      });
+      if (res.ok) {
+        await loadMembers(selectedGroup.id);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to leave group');
+      }
+    } catch (e) {
+      console.error('Failed to leave group', e);
+      alert('Failed to leave group');
     }
   };
 
   const sendMessage = async () => {
     const content = input.trim();
     if (!content || !selectedGroup) return;
+    if (!guidelinesAccepted) {
+      setGuidelinesOpen(true);
+      return;
+    }
+    if (!userId) {
+      alert('Please log in to send messages.');
+      onNavigate && onNavigate('login');
+      return;
+    }
     const accessToken = localStorage.getItem('sb-access-token');
-    const res = await fetch(`${FUNCTIONS_BASE}/group-messages?id=${selectedGroup.id}`, {
+    const res = await fetch(`${API_BASE}/api/groups/${selectedGroup.id}/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`
       },
-      body: JSON.stringify({ content })
+      body: JSON.stringify({ content, user_id: userId })
     });
     if (res.ok) {
       setInput('');
       await loadMessages(selectedGroup.id);
+    } else {
+      const err = await res.json();
+      alert(err.error || 'Failed to send message');
+    }
+  };
+
+  const handleReport = async () => {
+    if (!reportingMessage) return;
+    
+    try {
+      if (!userId) {
+        alert('Please log in to report messages.');
+        onNavigate && onNavigate('login');
+        return;
+      }
+      const res = await fetch(`${API_BASE}/api/moderation/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message_id: reportingMessage.id,
+          reported_by: userId,
+          reason: reportReason,
+          details: reportDetails
+        })
+      });
+      
+      if (res.ok) {
+        alert('Report submitted. Thank you for helping keep our community safe.');
+        setReportDialogOpen(false);
+        setReportingMessage(null);
+        setReportDetails('');
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to submit report');
+      }
+    } catch (e) {
+      console.error('Failed to submit report', e);
+      alert('Failed to submit report');
     }
   };
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      {onBack && (
+        <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 1, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
+      )}
       <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
         Groups & Chat
       </Typography>
@@ -139,13 +302,18 @@ export default function Groups({ userId = 'demo-user' }) {
               <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
                 <TextField
                   id="add-group-input"
+                  select
                   size="small"
-                  label="New Group Name"
+                  label="Group Name"
                   value={newGroupName}
                   onChange={e => setNewGroupName(e.target.value)}
-                  onKeyPress={e => e.key === 'Enter' && createGroup()}
                   disabled={creatingGroup}
-                />
+                  SelectProps={{ native: true }}
+                >
+                  {ALLOWED_GROUPS.map(g => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </TextField>
                 <Button
                   variant="contained"
                   onClick={createGroup}
@@ -198,6 +366,16 @@ export default function Groups({ userId = 'demo-user' }) {
                     <Button size="small" variant="contained" onClick={joinGroup}>Join</Button>
                   )}
                 </Stack>
+                {!guidelinesAccepted && (
+                  <Box sx={{ p: 1, bgcolor: 'warning.light', color: 'black', borderRadius: 1 }}>
+                    <Typography variant="caption">
+                      By participating, you agree to our{' '}
+                      <MuiLink component="button" onClick={() => onNavigate && onNavigate('guidelines')} sx={{ fontWeight: 700 }}>
+                        Community Guidelines
+                      </MuiLink>.
+                    </Typography>
+                  </Box>
+                )}
                 <Typography variant="caption" color="text.secondary">
                   {members.length} member{members.length !== 1 ? 's' : ''}
                   {members.length > 0 && ': '}
@@ -211,7 +389,23 @@ export default function Groups({ userId = 'demo-user' }) {
                     </ListItem>
                   ) : (
                     messages.map((m) => (
-                      <ListItem key={m.id}>
+                      <ListItem 
+                        key={m.id}
+                        secondaryAction={
+                          <Tooltip title="Report this message">
+                            <IconButton 
+                              edge="end" 
+                              size="small"
+                              onClick={() => {
+                                setReportingMessage(m);
+                                setReportDialogOpen(true);
+                              }}
+                            >
+                              <FlagIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        }
+                      >
                         <ListItemText
                           primary={m.content}
                           secondary={new Date(m.created_at).toLocaleString()}
@@ -244,6 +438,91 @@ export default function Groups({ userId = 'demo-user' }) {
           </CardContent>
         </Card>
       </Box>
+
+      {/* Report Dialog */}
+      <Dialog open={reportDialogOpen} onClose={() => setReportDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Report Message</DialogTitle>
+        <DialogContent>
+          {reportingMessage && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" color="text.secondary">
+                Message:
+              </Typography>
+              <Typography variant="body2" sx={{ p: 1, bgcolor: 'grey.100', borderRadius: 1 }}>
+                {reportingMessage.content}
+              </Typography>
+            </Box>
+          )}
+          
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <TextField
+              select
+              label="Reason"
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              fullWidth
+              SelectProps={{ native: true }}
+            >
+              <option value="inappropriate">Inappropriate content</option>
+              <option value="harassment">Harassment or bullying</option>
+              <option value="spam">Spam or advertising</option>
+              <option value="hate">Hate speech</option>
+              <option value="threats">Threats or violence</option>
+              <option value="other">Other</option>
+            </TextField>
+            
+            <TextField
+              label="Additional details (optional)"
+              multiline
+              rows={3}
+              fullWidth
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value)}
+              placeholder="Provide any additional context..."
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReportDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleReport} variant="contained" color="error">
+            Submit Report
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Guidelines Acceptance Dialog */}
+      <Dialog open={guidelinesOpen} onClose={() => setGuidelinesOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Agree to Community Guidelines</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2">
+              To keep conversations helpful and safe, please agree to follow our
+              community rules (no solicitations, no personal contact info, no harassment, obey local laws).
+            </Typography>
+            <MuiLink component="button" onClick={() => onNavigate && onNavigate('guidelines')} sx={{ alignSelf: 'flex-start' }}>
+              View full Community Guidelines
+            </MuiLink>
+            <FormControlLabel
+              control={<Checkbox checked={guidelinesChecked} onChange={(e) => setGuidelinesChecked(e.target.checked)} />}
+              label="I agree to follow the Community Guidelines"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setGuidelinesOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              localStorage.setItem(guidelinesKey, 'true');
+              setGuidelinesAccepted(true);
+              setGuidelinesOpen(false);
+            }}
+            variant="contained"
+            disabled={!guidelinesChecked}
+          >
+            Accept & Continue
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Container,
@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import { API_BASE } from '../config';
 
-export default function MembershipJoin() {
+export default function MembershipJoin({ onBack }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
@@ -32,16 +32,19 @@ export default function MembershipJoin() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  useEffect(() => {
-    loadStatus();
+  const getSessionId = useCallback(() => {
+    let sid = localStorage.getItem('ss-session-id');
+    if (!sid) {
+      sid = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('ss-session-id', sid);
+    }
+    return sid;
   }, []);
 
-  const loadStatus = async () => {
+  const loadStatus = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/membership/status`, {
-        headers: {
-          'x-session-id': getSessionId()
-        }
+        headers: { 'x-session-id': getSessionId() }
       });
       if (res.ok) {
         setStatus(await res.json());
@@ -51,16 +54,11 @@ export default function MembershipJoin() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getSessionId]);
 
-  const getSessionId = () => {
-    let sid = localStorage.getItem('ss-session-id');
-    if (!sid) {
-      sid = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('ss-session-id', sid);
-    }
-    return sid;
-  };
+  useEffect(() => {
+    loadStatus();
+  }, [loadStatus]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -107,6 +105,9 @@ export default function MembershipJoin() {
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
+      {onBack && (
+        <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 1, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
+      )}
       <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
         Join the Club
       </Typography>

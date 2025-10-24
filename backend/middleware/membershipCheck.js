@@ -16,23 +16,25 @@ export async function checkAccess(req, res, next) {
     const sessionId = req.headers['x-session-id'] || req.ip;
     const userId = req.user?.id || null; // Assumes auth middleware sets req.user
 
-    // Check if user has active membership
+    // Check if user has active membership (best-effort; tolerate schema differences)
     if (userId) {
-      const { data: membership } = await db
-        .from('memberships')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('status', 'active')
-        .single();
+      try {
+        const { data: membership, error: mErr } = await db
+          .from('memberships')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .maybeSingle();
 
-      if (membership) {
-        // Check expiration
-        if (!membership.expires_at || new Date(membership.expires_at) > new Date()) {
-          req.membershipStatus = 'active';
-          req.tier = membership.tier;
-          return next();
+        if (!mErr && membership) {
+          if (!membership.expires_at || new Date(membership.expires_at) > new Date()) {
+            req.membershipStatus = 'active';
+            req.tier = membership.tier;
+            return next();
+          }
         }
-      }
+        // If schema lacks user_id, silently continue to trial logic
+      } catch (ignore) {}
     }
 
     // Check trial usage
@@ -41,7 +43,7 @@ export async function checkAccess(req, res, next) {
       const resp = await db
         .from('trial_usage')
         .select('*')
-        .eq(userId ? 'user_id' : 'session_id', userId || sessionId)
+        .eq('session_id', sessionId)
         .maybeSingle();
       trial = resp.data || null;
       if (resp.error && resp.error.code !== 'PGRST116') {
@@ -61,15 +63,15 @@ export async function checkAccess(req, res, next) {
     }
 
     if (!trial) {
-      // Create new trial
+      // Create new trial (session-based; user_id optional depending on schema)
+      const insertBody = {
+        session_id: sessionId,
+        scan_count: 0,
+        search_count: 0
+      };
       const { data: newTrial, error: createError } = await db
         .from('trial_usage')
-        .insert({
-          session_id: sessionId,
-          user_id: userId,
-          scan_count: 0,
-          search_count: 0
-        })
+        .insert(insertBody)
         .select()
         .single();
 

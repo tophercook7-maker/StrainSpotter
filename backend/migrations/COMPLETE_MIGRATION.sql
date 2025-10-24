@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS public.scans (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
   image_url text,
+  image_key text,
   matched_strain_slug text REFERENCES public.strains(slug) ON DELETE SET NULL,
   status text DEFAULT 'pending',
   result jsonb,
@@ -66,6 +67,10 @@ CREATE TABLE IF NOT EXISTS public.scans (
   plant_health jsonb,
   grow_log_id uuid REFERENCES public.grow_logs(id) ON DELETE SET NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_scans_image_key ON public.scans(image_key);
+
+COMMENT ON COLUMN public.scans.image_key IS 'Supabase Storage object key (users/{owner}/{filename})';
 
 -- ========================================
 -- SOCIAL & COMMUNITY TABLES

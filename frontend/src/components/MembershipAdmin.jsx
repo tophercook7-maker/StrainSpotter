@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Container,
@@ -24,7 +24,7 @@ import {
 } from '@mui/material';
 import { API_BASE } from '../config';
 
-export default function MembershipAdmin() {
+export default function MembershipAdmin({ onBack }) {
   const [tab, setTab] = useState(0);
   const [applications, setApplications] = useState([]);
   const [members, setMembers] = useState([]);
@@ -38,10 +38,6 @@ export default function MembershipAdmin() {
     tier: 'full',
     expires_at: ''
   });
-
-  useEffect(() => {
-    loadData();
-  }, [tab]);
 
   const loadData = async () => {
     setLoading(true);
@@ -94,6 +90,9 @@ export default function MembershipAdmin() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      {onBack && (
+        <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 1, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
+      )}
       <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
         Membership Management
       </Typography>

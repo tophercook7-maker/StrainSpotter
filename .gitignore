@@ -33,3 +33,4 @@ pm2/*.pid
 .vscode/*.log
 .idea
 *.iml
+GOOGLE_VISION_JSON_FOR_VERCEL.txt

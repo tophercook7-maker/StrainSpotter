@@ -14,7 +14,7 @@ import {
 import { LocationOn, EmojiEvents } from '@mui/icons-material';
 import { FUNCTIONS_BASE } from '../config';
 
-export default function GrowerDirectory() {
+export default function GrowerDirectory({ onBack }) {
   const [growers, setGrowers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -31,6 +31,9 @@ export default function GrowerDirectory() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      {onBack && (
+        <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 1, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
+      )}
       <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
         Grower Directory
       </Typography>

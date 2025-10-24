@@ -14,7 +14,7 @@ import {
   Snackbar
 } from '@mui/material';
 
-export default function GrowerRegistration() {
+export default function GrowerRegistration({ onBack }) {
   const [mode, setMode] = useState('non-certified');
   const [form, setForm] = useState({
     growerId: '',
@@ -62,6 +62,9 @@ export default function GrowerRegistration() {
 
   return (
     <Box sx={{ maxWidth: 720, mx: 'auto', py: 4 }}>
+      {onBack && (
+        <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 1, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
+      )}
       <Card>
         <CardContent>
           <Stack spacing={2}>

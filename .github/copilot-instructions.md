@@ -1,131 +1,64 @@
-# StrainSpotter AI Agent Instructions
+## StrainSpotter — AI Coding Agent Guide
 
-## Project Overview
-StrainSpotter is a cannabis strain database and image scanning application with:
-- **Backend**: Express.js API (port 5181) with Supabase database + Google Vision integration
-- **Frontend**: React + Vite (basic starter - needs development by AI)
-- **Mobile**: Capacitor-based iOS/Android app (`StrainSpotter_Starter_Integrated_v5/`)
-- **Data Pipeline**: Node.js tools for scraping, normalizing, and importing strain data
-- **Deployment**: PM2 for local dev; GitHub Actions for automated data updates
+This repo powers a cannabis strain database and image scanning app spanning API, web, mobile, and a data pipeline.
 
-## Architecture & Data Flow
+### Architecture (where things live)
+- Backend API: `backend/` (Express on port 5181) with Supabase + Google Vision
+- Web frontend: `frontend/` (React + Vite starter; connect to the API)
+- Mobile app: `StrainSpotter_Starter_Integrated_v5/` (Capacitor iOS/Android)
+- Data tools: `tools/` (scrape → normalize → enhance → import)
 
-### Three-Layer Structure
-1. **Backend (`backend/`)**: Express API serving strain data from JSON files + Supabase for user-generated content
-2. **Frontend (`frontend/`)**: Vite/React starter with Material-UI - **AI should build this out**
-3. **Tools (`tools/`)**: Data pipeline scripts that populate `backend/data/` JSON files
+### Data model and hot-reload
+- Primary library: `backend/data/strain_library.json` loaded in memory; changes auto-reload via `fs.watch()` in `routes/strains.js`.
+- Anonymous lab tests map via `backend/data/test_mapping.json` → served at `/api/strains/:slug/tests`.
+- Optional DB mirror: Supabase `strains` table; JSON remains the source of truth for API reads.
 
-### Critical Path: Strain Data
-- **Primary source**: `backend/data/strain_library.json` (loaded in-memory by Express for performance)
-- **Supabase mirror**: `strains` table synced via import tools (optional, for persistence)
-- Routes in `backend/routes/strains.js` watch `data/` directory and **auto-reload** on JSON changes
-- Test mapping connects anonymous lab results to strains via `backend/data/test_mapping.json`
-- Pipeline: scrape → normalize → enhance → import (orchestrated by `tools/full_pipeline.mjs`)
+### Image scanning flow
+1) `POST /api/uploads` with `{ filename, contentType, base64 }` → uploaded to Supabase Storage bucket `scans`, row inserted in `scans` table.
+2) `POST /api/scans/:id/process` → Google Vision analysis runs server-side; results saved back to `scans.result`.
+3) Optional matching: `POST /api/visual-match` with a Vision result → returns ranked strain matches.
+4) Diagnostics: `GET /api/diagnostic/scan?url=...` for an end-to-end test.
 
-### Image Scanning Flow
-1. Frontend → `POST /api/uploads` (base64 image)
-2. Backend uploads to Supabase Storage bucket `scans`
-3. `POST /api/scans/:id/process` triggers Google Vision API
-4. Results saved to Supabase `scans` table with status tracking
+### Dev workflow (VS Code friendly)
+- Env lives in `env/.env.local` (NOT `backend/.env`). Vision creds supported via file (`GOOGLE_APPLICATION_CREDENTIALS=../env/google-vision-key.json`) or inline `GOOGLE_VISION_JSON`.
+- Tasks: "Install Backend Deps", "Start Backend", "PM2 Start Backend", and "Start Frontend".
+- Verify: `GET /health` → `{ ok:true, supabaseConfigured:true, googleVisionConfigured:true }`.
+- CORS origins: set `CORS_ALLOW_ORIGINS` (defaults to localhost:5173 variants).
+- Service role usage: Backend automatically uses `SUPABASE_SERVICE_ROLE_KEY` when present (preferred) for Storage and DB writes/reads on uploads/scans; if missing, it falls back to anon and RLS may block. On boot you'll see: `[boot] Service role client active = true`.
 
-### Supabase Database Schema
-**Core tables** (see `backend/migrations/`):
-- `scans` - Image scan results with Google Vision analysis
-- `users` - User profiles (if not using Supabase Auth)
-- `threads`, `thread_members`, `messages` - Chat/messaging system
-- `strains` - Mirror of JSON data (columns: `slug`, `name`, `type`, `description`, `effects[]`, `flavors[]`, `lineage`, `thc`, `cbd`, `lab_test_results`)
+### Environment keys (required)
+- Required for local dev:
+	- `SUPABASE_URL`
+	- `SUPABASE_ANON_KEY`
+- Strongly recommended (enables server-side writes bypassing RLS for uploads/scans):
+	- `SUPABASE_SERVICE_ROLE_KEY`
+- Google Vision (choose one):
+	- `GOOGLE_APPLICATION_CREDENTIALS=../env/google-vision-key.json`
+	- or `GOOGLE_VISION_JSON` (inline credentials; backend writes the file on boot)
 
-## Environment Setup
+Troubleshooting
+- Upload or scan insert fails with foreign key/RLS errors → ensure `SUPABASE_SERVICE_ROLE_KEY` is set in `env/.env.local` and restart backend. Check boot log for `[boot] Service role client active = true`.
 
-**All secrets in `env/.env.local`** (never `backend/.env` or root `.env`):
-```bash
-SUPABASE_URL=...
-SUPABASE_ANON_KEY=...
-GOOGLE_APPLICATION_CREDENTIALS=../env/google-vision-key.json
-# OR inline: GOOGLE_VISION_JSON='{"type":"service_account",...}'
-PORT=5181
-```
+### Conventions and patterns
+- Slug IDs: `/api/strains/:slug` (e.g., "Blue Dream" → `blue-dream`). Slug logic in `tools/normalize_strain_data.mjs`.
+- Pagination/filtering/sort in `/api/strains` via query params (e.g., `?page=1&limit=20&sort=thc:desc`).
+- File-first reads: JSON library served from disk; modify via tools and re-run the pipeline when schema changes.
+- Uploads are large: JSON body limit is 50MB; server auto-compresses images with `sharp` before storage/vision.
+- Membership middleware may enforce trial limits on write paths (see `middleware/membershipCheck.js`).
 
-Google Vision credentials: Backend automatically writes `GOOGLE_VISION_JSON` to file if provided inline (see `backend/supabaseClient.js`).
+### Key routes and files
+- Endpoints: `/api/strains`, `/api/strains/:slug`, `/api/strains/:slug/tests`, `/api/uploads`, `/api/scans`, `/api/scans/:id`, `/api/scans/:id/process`, `/api/visual-match`, `/api/diagnostic/*`.
+- Mounts defined in `backend/index.js`; route modules in `backend/routes/` (e.g., `strains.js`, `diagnostic.js`).
+- Supabase/credentials wiring: `backend/supabaseClient.js`, `backend/supabaseAdmin.js`.
 
-## Development Workflows
+### Extend safely
+- New API feature: create `backend/routes/<feature>.js`, export an `express.Router()`, and mount in `backend/index.js` under `/api/<feature>`.
+- New strain field: update `tools/normalize_strain_data.mjs`, then run `tools/full_pipeline.mjs`; API will hot-reload the updated JSON.
 
-### Starting Backend
-- **VS Code Task**: "Start Backend" (recommended) or "PM2 Start Backend" for crash recovery
-- **Manual**: `cd backend && npm run dev`
-- **Verify**: `http://localhost:5181/health` → should show `supabaseConfigured: true` and `googleVisionConfigured: true`
+### Common pitfalls
+1) Wrong env location → use `env/.env.local` only.
+2) Missing `scans` bucket or RLS blocks → add service role key (`SUPABASE_SERVICE_ROLE_KEY`) for writes/reads, or make bucket public in dev.
+3) Port/CORS mismatch → backend 5181, frontend 5173; adjust `CORS_ALLOW_ORIGINS`.
+4) Manual JSON edits without tools → changes may not follow schema; prefer running the pipeline.
 
-### Starting Frontend
-- `cd frontend && npm run dev` (Vite dev server, usually port 5173)
-- Point API calls to `http://localhost:5181`
-
-### Mobile App Development
-- **Build**: `cd StrainSpotter_Starter_Integrated_v5 && npm run build`
-- **iOS**: `npm run cap:ios` (opens Xcode for local device testing)
-- **Android**: Build via `npx cap open android`
-- Uses on-device CLIP + OCR (Tesseract.js) for strain identification
-
-### Validating Setup
-- Run `node scripts/setup.js` to check env vars before first run
-
-### Data Pipeline (run infrequently)
-- **Full import**: `node tools/full_pipeline.mjs` (scrape → normalize → enhance → import to Supabase)
-- **Single operations**: Run individual tools like `tools/normalize_strain_data.mjs`
-- **Direct Supabase import**: `tools/import_to_supabase_robust.mjs` (includes retry logic)
-- **Automated**: GitHub Actions workflow runs daily at 3 AM UTC (`.github/workflows/strain-pipeline.yml`)
-
-### Testing & Linting
-- **Frontend lint**: `cd frontend && npm run lint` (ESLint configured)
-- **No backend tests yet** - add via Vitest/Jest if needed
-
-### Route Modules
-Backend uses modular routes mounted in `backend/index.js`:
-- `/api/strains` → core CRUD (strains.js)
-- `/api/compare`, `/api/notes`, `/api/reviews` → feature-specific routes
-- `/api/availability`, `/api/growlogs`, `/api/legal`, `/api/trends` → additional features
-- `/api/admin`, `/api/analytics` → admin operations
-
-## Project-Specific Conventions
-
-### File-Based Caching
-- Backend serves strain data from **JSON files**, not live DB queries (performance optimization)
-- Changes to `backend/data/*.json` trigger automatic reload via `fs.watch()`
-- Always modify data via tools, not manual JSON edits
-
-### Slug-Based Identification
-- Strains use `slug` (URL-safe) as primary identifier: `/api/strains/:slug`
-- Example: "Blue Dream" → slug: `blue-dream`
-
-### Test Mapping Pattern
-- Anonymous lab tests in `test_mapping.json` link to strains via `mappedTo: 'strain-slug'`
-- Accessed via `/api/strains/:slug/tests` which merges direct + mapped results
-
-### PM2 Configuration
-- `pm2/ecosystem.config.cjs` watches `backend/` and `env/` for auto-restart
-- Use tasks "PM2 Start Backend" / "PM2 Stop Backend" for persistent dev server
-
-## Key Files to Reference
-
-- `backend/README.md` - **Backend developer guide** with implementation patterns and examples
-- `backend/index.js` - Main Express app with all route mounts
-- `backend/routes/strains.js` - Core strain query logic with filtering/pagination
-- `backend/supabaseClient.js` - Supabase client + Google Vision credential handling
-- `backend/README-ENDPOINTS.md` - API endpoint documentation
-- `tools/full_pipeline.mjs` - Complete data import workflow
-
-## Common Pitfalls
-
-1. **Wrong .env location**: Must be `env/.env.local`, not `backend/.env`
-2. **File-based data not refreshing**: Check `backend/data/` has correct JSON files; server auto-reloads via `fs.watch()`
-3. **Google Vision errors**: Ensure credentials JSON is valid and bucket `scans` is public in Supabase Storage
-4. **Port conflicts**: Default is 5181 (backend), 5173 (frontend); check `env/.env.local` PORT setting
-5. **Frontend disconnected**: Basic starter exists; AI should build features connecting to `http://localhost:5181`
-6. **Mobile app Bundle ID**: Must be `com.yourco.StrainSpotter` in Capacitor config
-
-## When Extending
-
-- **New API route**: Create `backend/routes/myfeature.js`, mount in `backend/index.js`
-- **New strain field**: Update `tools/normalize_strain_data.mjs` schema, re-run pipeline
-- **Frontend features**: Connect to backend via fetch/axios; Material-UI + React Router already in deps
-- **Data sources**: Add scraper to `tools/scrape_strain_sources.mjs`, integrate into `full_pipeline.mjs`
-- **Database migrations**: Add SQL files to `backend/migrations/`, run in Supabase SQL editor
+References: `backend/README.md`, `backend/README-ENDPOINTS.md`, `backend/index.js`, `backend/routes/strains.js`, `tools/full_pipeline.mjs`.

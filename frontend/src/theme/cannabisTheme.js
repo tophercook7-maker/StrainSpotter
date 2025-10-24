@@ -1,18 +1,18 @@
 // Cannabis/Marijuana Theme Configuration
 export const cannabisTheme = {
   colors: {
-    // Primary greens (cannabis leaf inspired)
+    // Primary greens (muted sage/olive green - less vivid)
     primary: {
-      main: '#4caf50',      // Cannabis green
-      light: '#81c784',     // Light green
-      dark: '#388e3c',      // Dark green
-      contrast: '#ffffff'
+      main: '#7CB342',      // Muted olive green
+      light: '#9CCC65',     // Soft sage
+      dark: '#558B2F',      // Deep olive
+      contrast: '#000000'
     },
     // Secondary (earth tones)
     secondary: {
-      main: '#8bc34a',      // Lime green
-      light: '#aed581',
-      dark: '#689f38',
+      main: '#9E9D24',      // Muted earth yellow
+      light: '#C5E1A5',
+      dark: '#827717',
       contrast: '#000000'
     },
     // Strain type colors
@@ -29,9 +29,9 @@ export const cannabisTheme = {
     },
     // Text
     text: {
-      primary: '#ffffff',
-      secondary: '#b0b0b0',
-      disabled: '#757575'
+      primary: '#9CCC65',    // Soft sage green for main text
+      secondary: '#7CB342',  // Muted olive green for secondary text
+      disabled: '#558B2F'    // Deep olive for disabled text
     },
     // Accents
     accent: {
@@ -49,22 +49,22 @@ export const cannabisTheme = {
   },
   // Gradient presets
   gradients: {
-    primary: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
+    primary: 'linear-gradient(45deg, #7CB342 30%, #9CCC65 90%)',
     dark: 'linear-gradient(135deg, #2c2c2c 0%, #1f3a1f 100%)',
     hero: 'linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0.7) 100%)',
     card: 'linear-gradient(135deg, #2d5a2d 0%, #1f3a1f 100%)'
   },
   // Border styles
   borders: {
-    primary: '2px solid #4caf50',
-    subtle: '1px solid rgba(76, 175, 80, 0.3)',
-    glow: '0 0 10px rgba(76, 175, 80, 0.5)'
+    primary: '2px solid #7CB342',
+    subtle: '1px solid rgba(124, 179, 66, 0.3)',
+    glow: '0 0 10px rgba(124, 179, 66, 0.4)'
   },
   // Shadows
   shadows: {
     card: '0 4px 20px rgba(0, 0, 0, 0.5)',
     elevated: '0 8px 30px rgba(0, 0, 0, 0.7)',
-    glow: '0 0 20px rgba(76, 175, 80, 0.3)'
+    glow: '0 0 20px rgba(124, 179, 66, 0.25)'
   }
 };
 
@@ -83,8 +83,8 @@ export const muiThemeOverrides = {
       dark: cannabisTheme.colors.secondary.dark
     },
     background: {
-      default: cannabisTheme.colors.background.default,
-      paper: cannabisTheme.colors.background.paper
+      default: 'transparent',
+      paper: 'transparent'
     },
     text: {
       primary: cannabisTheme.colors.text.primary,
@@ -95,7 +95,10 @@ export const muiThemeOverrides = {
     MuiCard: {
       styleOverrides: {
         root: {
-          backgroundImage: cannabisTheme.gradients.dark,
+          // Glassmorphism: translucent background so themed background shows through
+          backgroundColor: 'rgba(32, 64, 32, 0.35)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
           border: cannabisTheme.borders.subtle,
           boxShadow: cannabisTheme.shadows.card
         }
@@ -103,19 +106,62 @@ export const muiThemeOverrides = {
     },
     MuiButton: {
       styleOverrides: {
+        root: {
+          borderRadius: 10,
+          textTransform: 'none'
+        },
         contained: {
-          backgroundImage: cannabisTheme.gradients.primary,
+          // Semi-transparent with subtle glow
+          backgroundColor: 'rgba(124, 179, 66, 0.25)',
+          border: '1px solid rgba(124, 179, 66, 0.5)',
+          backdropFilter: 'blur(6px)',
+          WebkitBackdropFilter: 'blur(6px)',
+          boxShadow: '0 6px 20px rgba(124, 179, 66, 0.2)',
           '&:hover': {
-            backgroundImage: 'linear-gradient(45deg, #388e3c 30%, #4caf50 90%)'
+            backgroundColor: 'rgba(124, 179, 66, 0.35)'
           }
+        },
+        outlined: {
+          backgroundColor: 'rgba(255, 255, 255, 0.06)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)'
+        },
+        text: {
+          backgroundColor: 'transparent',
+          '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.06)' }
         }
       }
     },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundImage: cannabisTheme.gradients.dark,
+          // Translucent app bar
+          backgroundColor: 'rgba(0,0,0,0.35)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
           borderBottom: cannabisTheme.borders.primary
+        }
+      }
+    },
+    MuiDrawer: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: 'rgba(0, 0, 0, 0.45)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          borderRight: cannabisTheme.borders.subtle
+        }
+      }
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: 'rgba(25, 25, 25, 0.6)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: cannabisTheme.borders.subtle,
+          boxShadow: cannabisTheme.shadows.elevated
         }
       }
     }

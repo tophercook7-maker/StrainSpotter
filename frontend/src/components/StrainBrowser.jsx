@@ -14,8 +14,10 @@ import {
   MenuItem,
   Slider,
   Button,
-  CircularProgress
+  CircularProgress,
+  IconButton
 } from '@mui/material';
+import { ArrowBack } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { API_BASE } from '../config';
 const API = `${API_BASE}/api`;
@@ -221,6 +223,19 @@ export default function StrainBrowser({ onNavigate }) {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Back Button */}
+      {onNavigate && (
+        <Box sx={{ mb: 2 }}>
+          <Button
+            startIcon={<ArrowBack />}
+            onClick={() => onNavigate('home')}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Home
+          </Button>
+        </Box>
+      )}
+      
       <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
         🌿 Browse Strain Database
       </Typography>

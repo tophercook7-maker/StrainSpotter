@@ -21,7 +21,7 @@ import {
 } from '@mui/material';
 import { API_BASE } from '../config';
 
-export default function Friends({ userId = 'demo-user' }) {
+export default function Friends({ userId = 'demo-user', onBack }) {
   const [tab, setTab] = useState(0);
   const [friends, setFriends] = useState([]);
   const [sent, setSent] = useState([]);
@@ -32,15 +32,25 @@ export default function Friends({ userId = 'demo-user' }) {
 
   const fetchFriends = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`${API_BASE}/api/friends?user_id=${userId}`);
-      if (!res.ok) throw new Error('Failed to load friends');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to load friends');
+      }
       const data = await res.json();
       setFriends(data.friends || []);
       setSent(data.sent || []);
       setReceived(data.received || []);
+      setError(null);
     } catch (e) {
+      console.error('Friends fetch error:', e);
       setError(e.message);
+      // Set empty arrays on error so UI doesn't break
+      setFriends([]);
+      setSent([]);
+      setReceived([]);
     } finally {
       setLoading(false);
     }
@@ -110,8 +120,11 @@ export default function Friends({ userId = 'demo-user' }) {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+    <Box sx={{ minHeight: '100vh' }}>
       <Container maxWidth="md" sx={{ py: 4 }}>
+        {onBack && (
+          <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 1, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
+        )}
         <Typography variant="h4" gutterBottom>Friends</Typography>
 
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}

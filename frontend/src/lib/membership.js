@@ -11,7 +11,8 @@ const LOCAL_TRIAL_KEY = 'ss_trial_uses_v1';
 export function getLocalTrialUses() {
   try {
     return parseInt(localStorage.getItem(LOCAL_TRIAL_KEY) || '0', 10);
-  } catch {
+  } catch (e) {
+    console.debug('[membership] getLocalTrialUses failed', e);
     return 0;
   }
 }
@@ -19,7 +20,9 @@ export function getLocalTrialUses() {
 export function setLocalTrialUses(n) {
   try {
     localStorage.setItem(LOCAL_TRIAL_KEY, String(n));
-  } catch {}
+  } catch (e) {
+    console.debug('[membership] setLocalTrialUses failed', e);
+  }
 }
 
 export function incLocalTrialUses() {
@@ -40,7 +43,9 @@ export async function getMembershipStatus({ supabase }) {
       membership = user.user_metadata?.membership || 'none';
       isMember = membership === 'club';
     }
-  } catch {}
+  } catch (e) {
+    console.debug('[membership] getUser failed', e);
+  }
 
   // Local fallback for trial count; server remains source of truth when calling try-me
   const localTrial = getLocalTrialUses();
@@ -101,7 +106,11 @@ export async function verifySubscription({ payload, supabase, signal }) {
     throw error;
   }
   // Optionally refresh session to pick up updated user_metadata.membership
-  try { await supabase.auth.refreshSession(); } catch {}
+  try { 
+    await supabase.auth.refreshSession(); 
+  } catch (e) {
+    console.debug('[membership] refreshSession failed', e);
+  }
   return json; // expected: { status: 'active', membership: 'club' }
 }
 

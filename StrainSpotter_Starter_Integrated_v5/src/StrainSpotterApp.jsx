@@ -82,9 +82,13 @@ async function ocrImage(imgEl) {
 
 export default function StrainSpotterApp() {
   const [ageOk, setAgeOk] = useState(false);
-  const [tab, setTab] = useState("classify");
+  const [view, setView] = useState("home");
   const [items, setItems] = useState(() => loadData());
   useEffect(() => saveData(items), [items]);
+
+  const BackButton = () => (
+    <button onClick={()=>setView("home")} style={{position:'fixed',top:12,left:12,padding:8,borderRadius:999,background:'#fff',border:'1px solid #E2E8F0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)'}}>✕</button>
+  );
 
   return (
     <div style={{minHeight:'100vh',background:'linear-gradient(#ECFDF5,#fff)',color:'#0f172a',padding:24}}>
@@ -101,17 +105,32 @@ export default function StrainSpotterApp() {
           <AgeGate onContinue={() => setAgeOk(true)} />
         ) : (
           <>
-            <nav style={{marginTop:24,display:'grid',gridAutoFlow:'column',gap:8,justifyContent:'start'}}>
-              {["classify","gallery","dataset"].map(id => (
-                <button key={id} onClick={()=>setTab(id)} style={{padding:'8px 14px',borderRadius:16,border:'1px solid #E2E8F0',background: tab===id?'#0f172a':'#fff',color:tab===id?'#fff':'#0f172a',boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
-                  {id==="classify"?"Classify Photo":id==="gallery"?"My Gallery":"Import / Export"}
-                </button>
-              ))}
-            </nav>
+            {view === "home" && (
+              <div style={{marginTop:24,display:'grid',gap:12}}>
+                <DashboardButton
+                  title="Scan & Identify"
+                  desc="Use your camera to classify a photo with on-device AI"
+                  onClick={()=>setView("classify")}
+                />
+                <DashboardButton
+                  title="My Gallery"
+                  desc="Manage your strains and reference images"
+                  onClick={()=>setView("gallery")}
+                />
+                <DashboardButton
+                  title="Import / Export"
+                  desc="Backup or share your local dataset"
+                  onClick={()=>setView("dataset")}
+                />
+              </div>
+            )}
+
+            {view !== "home" && <BackButton />}
+
             <section style={{marginTop:24}}>
-              {tab === "classify" && <Classifier items={items} />}
-              {tab === "gallery" && <Gallery items={items} setItems={setItems} />}
-              {tab === "dataset" && <ImportExport items={items} setItems={setItems} />}
+              {view === "classify" && <Classifier items={items} />}
+              {view === "gallery" && <Gallery items={items} setItems={setItems} />}
+              {view === "dataset" && <ImportExport items={items} setItems={setItems} />}
             </section>
           </>
         )}
@@ -122,6 +141,21 @@ export default function StrainSpotterApp() {
         </footer>
       </div>
     </div>
+  );
+}
+
+function DashboardButton({ title, desc, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      display:'block',width:'100%',textAlign:'left',
+      background:'transparent',border:0,padding:14,
+      borderRadius:12
+    }}>
+      <div>
+        <div style={{fontSize:16,fontWeight:700}}>{title}</div>
+        <div style={{fontSize:13,color:'#475569',marginTop:4}}>{desc}</div>
+      </div>
+    </button>
   );
 }
 
@@ -156,9 +190,10 @@ function Gallery({ items, setItems }) {
       const url = URL.createObjectURL(file);
       const img = imgRef.current; img.src = url;
       await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-      const emb = await imageToEmbedding(extractor, img);
-      URL.revokeObjectURL(url);
-      setItems(prev => prev.map(s => s.id===id ? { ...s, images: [...s.images, await fileToDataUrl(file)], embs: [...s.embs, Array.from(emb)] } : s));
+  const emb = await imageToEmbedding(extractor, img);
+  URL.revokeObjectURL(url);
+  const dataUrl = await fileToDataUrl(file);
+  setItems(prev => prev.map(s => s.id===id ? { ...s, images: [...s.images, dataUrl], embs: [...s.embs, Array.from(emb)] } : s));
     } finally { setBusy(false); }
   };
 
@@ -215,7 +250,7 @@ function AddImageButton({ busy, onPick }) {
   const inputRef = useRef(null);
   return (
     <>
-      <input ref={inputRef} type="file" accept="image/*" onChange={(e)=>{ const f=e.target.files?.[0]; if(f) onPick(f); e.target.value=\"\"; }} style={{display:'none'}} />
+  <input ref={inputRef} type="file" accept="image/*" onChange={(e)=>{ const f=e.target.files?.[0]; if(f) onPick(f); e.target.value=''; }} style={{display:'none'}} />
       <button onClick={()=>inputRef.current?.click()} disabled={busy} style={{padding:'8px 14px',borderRadius:12,background:'#047857',color:'#fff',border:0,opacity: busy?0.6:1}}>
         {busy? "Adding…":"Add Image"}
       </button>

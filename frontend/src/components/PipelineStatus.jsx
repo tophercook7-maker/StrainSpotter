@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Box, Card, CardContent, Typography, Stack, Chip, Divider, LinearProgress, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material';
+import { Box, Card, CardContent, Typography, Stack, Chip, Divider, LinearProgress, Table, TableBody, TableCell, TableHead, TableRow, Button } from '@mui/material';
 import { API_BASE } from '../config';
 
-export default function PipelineStatus() {
+export default function PipelineStatus({ onBack }) {
   const [latest, setLatest] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +30,9 @@ export default function PipelineStatus() {
 
   return (
     <Box sx={{ maxWidth: 1000, mx: 'auto', p: 2 }}>
+      {onBack && (
+        <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 1, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
+      )}
       <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>Data Pipeline</Typography>
       <Typography variant="body1" sx={{ color: 'text.secondary', mb: 2 }}>
         Schedule: Daily at 3:00 AM UTC via GitHub Actions.

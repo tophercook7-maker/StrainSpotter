@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -17,24 +17,50 @@ import {
   Chip,
   Stack,
   Divider,
-  Grid
+  Grid,
+  TextField,
+  Rating
 } from '@mui/material';
-import { CameraAlt, History, Close } from '@mui/icons-material';
+import { CameraAlt, History, Close, CheckCircle } from '@mui/icons-material';
 import { API_BASE } from '../config';
 import CannabisLeafIcon from './CannabisLeafIcon';
+import { supabase } from '../supabaseClient';
 
-function Scanner() {
+function Scanner({ onViewHistory, onBack }) {
   const [showGuide, setShowGuide] = useState(true);
   const [images, setImages] = useState([]); // Array<File>
   const [imagePreviews, setImagePreviews] = useState([]); // Array<objectURL>
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState(''); // Progress feedback for user
   const [error, setError] = useState(null);
   const [matchedStrain, setMatchedStrain] = useState(null);
   const [suggestedStrains, setSuggestedStrains] = useState([]);
   const [detectedTextPreview, setDetectedTextPreview] = useState('');
   const [showResult, setShowResult] = useState(false);
   const [showTips, setShowTips] = useState(false);
+  const [lastScanId, setLastScanId] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [avgRating, setAvgRating] = useState(null);
+  const [myRating, setMyRating] = useState(0);
+  const [myComment, setMyComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Capture current user id if authenticated (once)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const session = await supabase?.auth.getSession();
+        const uid = session?.data?.session?.user?.id || null;
+        if (mounted && uid) setCurrentUserId(uid);
+      } catch (e) {
+        console.debug('[Scanner] getSession failed', e);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const handleImageCapture = (event) => {
     const files = Array.from(event.target.files || []);
@@ -152,17 +178,19 @@ function Scanner() {
     }
 
     setLoading(true);
+    setLoadingStatus('Preparing images...');
     setError(null);
 
     try {
       // Helper to process a single image (upload + Vision)
-      const processOne = async (file) => {
+      const processOne = async (file, index) => {
+        setLoadingStatus(`Uploading image ${index + 1} of ${images.length}...`);
         const base64 = await fileToBase64Resized(file, 1600, 0.85);
         console.log('[Scanner] Uploading to:', `${API_BASE}/api/uploads`);
         const uploadResponse = await fetch(`${API_BASE}/api/uploads`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: file.name, contentType: file.type, base64 })
+          body: JSON.stringify({ filename: file.name, contentType: file.type, base64, user_id: currentUserId })
         });
         if (!uploadResponse.ok) {
           const msg = await parseErrorResponse(uploadResponse);
@@ -173,13 +201,24 @@ function Scanner() {
         const scanId = uploadData.id;
         console.log('[Scanner] Uploaded, scan ID:', scanId);
 
+        setLoadingStatus(`Analyzing image ${index + 1} with AI (this may take 30-60 seconds)...`);
+        
         // Try Express backend processing (Edge Functions not deployed yet)
         try {
           console.log('[Scanner] Processing via:', `${API_BASE}/api/scans/${scanId}/process`);
+          
+          // Add timeout to prevent hanging
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+          
           const processResponse = await fetch(`${API_BASE}/api/scans/${scanId}/process`, { 
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal
           });
+          
+          clearTimeout(timeoutId);
+          
           if (processResponse.ok) {
             const processData = await processResponse.json();
             console.log('[Scanner] Process succeeded:', processData);
@@ -187,21 +226,29 @@ function Scanner() {
           } else {
             const errText = await processResponse.text();
             console.error('[Scanner] Process failed:', errText);
+            throw new Error(`Processing failed: ${errText || processResponse.status}`);
           }
         } catch (e) {
+          if (e.name === 'AbortError') {
+            console.error('[Scanner] Process timeout - AI analysis took too long');
+            throw new Error('AI analysis timed out after 60 seconds. Please try again with a clearer image or check your connection.');
+          }
           console.error('[Scanner] Process error:', e);
+          throw new Error(`AI processing failed: ${e.message}`);
         }
-
-        // As a last resort, return null (upload succeeded; processing unavailable)
-        return null;
       };
 
       // Sequentially process up to 3 images to avoid rate spikes
       const results = [];
-      for (const f of images) {
-        const r = await processOne(f);
-        results.push(r);
+      let lastId = null;
+      for (let i = 0; i < images.length; i++) {
+        const r = await processOne(images[i], i);
+        if (r?.id) lastId = r.id;
+        results.push(r?.result || r);
       }
+      if (lastId) setLastScanId(lastId);
+
+      setLoadingStatus('Matching results to strain database...');
 
       // Text preview from first result (UX)
       const firstText = results[0]?.textAnnotations?.[0]?.description || '';
@@ -220,6 +267,26 @@ function Scanner() {
           setSuggestedStrains(matchResult.allMatches.slice(1).map(m => m.strain));
         } else {
           setSuggestedStrains([]);
+        }
+        // Save the selected match to the scan record
+        if (lastId && matchResult.slug) {
+          try {
+            console.log('[Scanner] Saving match:', lastId, matchResult.slug);
+            const saveResponse = await fetch(`${API_BASE}/api/scans/${lastId}/save-match`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ matched_strain_slug: matchResult.slug, user_id: currentUserId })
+            });
+            if (saveResponse.ok) {
+              console.log('[Scanner] Match saved successfully');
+            } else {
+              console.error('[Scanner] Failed to save match:', await saveResponse.text());
+            }
+          } catch (e) {
+            console.error('[Scanner] Failed to save match:', e);
+          }
+        } else {
+          console.warn('[Scanner] Cannot save match - missing lastId or slug:', { lastId, slug: matchResult.slug });
         }
       } else {
         // Fallback: get top search results as suggestions
@@ -265,6 +332,7 @@ function Scanner() {
     setDetectedTextPreview('');
     setShowResult(false);
     setError(null);
+    setLastScanId(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -342,15 +410,119 @@ function Scanner() {
         setMatchedStrain(strain);
         setSuggestedStrains([]);
         setError(null);
+        // Save the selected suggestion to the scan
+        if (lastScanId && slug) {
+          try {
+            await fetch(`${API_BASE}/api/scans/${lastScanId}/save-match`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ matched_strain_slug: slug, user_id: currentUserId })
+            });
+          } catch (e) {
+            console.error('Failed to save suggestion selection:', e);
+          }
+        }
       }
     } catch (e) {
       console.error('Failed to load suggested strain:', e);
     }
   };
 
+  // Load reviews when a strain is identified/selected
+  useEffect(() => {
+    const load = async () => {
+      if (!matchedStrain?.slug) {
+        setReviews([]);
+        setAvgRating(null);
+        return;
+      }
+      try {
+        const resp = await fetch(`${API_BASE}/api/reviews?strain_slug=${encodeURIComponent(matchedStrain.slug)}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        setReviews(Array.isArray(data) ? data : []);
+        if (Array.isArray(data) && data.length) {
+          const avg = data.reduce((s, r) => s + (r.rating || 0), 0) / data.length;
+          setAvgRating(Math.round(avg * 10) / 10);
+        } else {
+          setAvgRating(null);
+        }
+      } catch (e) {
+        console.debug('[Scanner] load reviews failed', e);
+      }
+    };
+    load();
+  }, [matchedStrain?.slug]);
+
+  const submitReview = async () => {
+    if (!currentUserId) {
+      alert('Please sign in to leave a review.');
+      return;
+    }
+    if (!matchedStrain?.slug) return;
+    if (!(myRating >= 1 && myRating <= 5)) {
+      alert('Please select a rating from 1 to 5 stars.');
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      const resp = await fetch(`${API_BASE}/api/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: currentUserId,
+          strain_slug: matchedStrain.slug,
+          rating: myRating,
+          comment: myComment?.trim() || null,
+        })
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        alert(`Failed to submit review: ${txt}`);
+        return;
+      }
+      // Refresh list
+      setMyComment('');
+      const data = await fetch(`${API_BASE}/api/reviews?strain_slug=${encodeURIComponent(matchedStrain.slug)}`).then(r => r.json()).catch(() => []);
+      setReviews(Array.isArray(data) ? data : []);
+      if (Array.isArray(data) && data.length) {
+        const avg = data.reduce((s, r) => s + (r.rating || 0), 0) / data.length;
+        setAvgRating(Math.round(avg * 10) / 10);
+      } else {
+        setAvgRating(null);
+      }
+    } catch (e) {
+      console.error('Submit review failed', e);
+      alert('Submit failed. Please try again.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      {/* App Bar removed - using global TopNav */}
+    <Box sx={{ minHeight: '100vh' }}>
+      {/* Back to Home button */}
+      {onBack && (
+        <Box sx={{ position: 'fixed', top: 16, left: 16, zIndex: 1000 }}>
+          <Button
+            onClick={onBack}
+            size="small"
+            variant="contained"
+            sx={{
+              bgcolor: 'white',
+              color: 'black',
+              textTransform: 'none',
+              fontWeight: 700,
+              borderRadius: 999,
+              px: 1.5,
+              minWidth: 0,
+              '&:hover': { bgcolor: 'grey.100' }
+            }}
+          >
+            Home
+          </Button>
+        </Box>
+      )}
 
       <Container maxWidth="sm" sx={{ py: 4 }}>
         {/* Hero Card */}
@@ -425,7 +597,7 @@ function Scanner() {
                       component="img"
                       src={src}
                       alt={`Preview ${idx + 1}`}
-                      sx={{ width: '100%', maxHeight: 320, objectFit: 'cover', bgcolor: 'black', borderRadius: 1 }}
+                      sx={{ width: '100%', maxHeight: 320, objectFit: 'cover', bgcolor: 'transparent', borderRadius: 1 }}
                     />
                     {showGuide && (
                       <Box
@@ -532,7 +704,10 @@ function Scanner() {
                 }}
               >
                 {loading ? (
-                  <><CircularProgress size={24} color="inherit" sx={{ mr: 1 }} /> Scanning...</>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <CircularProgress size={24} color="inherit" />
+                    <Box component="span">{loadingStatus || 'Processing...'}</Box>
+                  </Stack>
                 ) : (
                   '🔬 Scan & Identify Strain'
                 )}
@@ -545,7 +720,7 @@ function Scanner() {
                 disabled={loading}
                 sx={{ color: 'primary.light' }}
               >
-                Add Another Photo (up to 3)
+                Add Another Photo
               </Button>
               
               <Button
@@ -648,6 +823,30 @@ function Scanner() {
 
           {matchedStrain ? (
             <>
+              {/* Saved confirmation */}
+              <Alert severity="success" icon={<CheckCircle />} sx={{ mb: 2 }}>
+                <Typography variant="body2" fontWeight="bold">
+                  ✓ Scan saved to your history!
+                </Typography>
+              </Alert>
+
+              {/* Show scanned image */}
+              {imagePreviews[0] && (
+                <Box sx={{ mb: 2, textAlign: 'center' }}>
+                  <img 
+                    src={imagePreviews[0]} 
+                    alt="Scanned" 
+                    style={{ 
+                      maxWidth: '100%', 
+                      maxHeight: 200, 
+                      borderRadius: 8,
+                      objectFit: 'contain',
+                      border: '2px solid #4caf50'
+                    }} 
+                  />
+                </Box>
+              )}
+
               {/* Strain Name */}
               <Typography variant="h4" gutterBottom fontWeight="bold" color="primary.main">
                 {matchedStrain.name}
@@ -787,6 +986,78 @@ function Scanner() {
                 </Box>
               )}
 
+              {/* Reviews Section */}
+              <Divider sx={{ my: 2, bgcolor: 'rgba(76, 175, 80, 0.3)' }} />
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="h6" gutterBottom color="primary.light">
+                  Community Reviews
+                </Typography>
+                {avgRating !== null ? (
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                    <Rating value={avgRating} readOnly precision={0.5} />
+                    <Typography variant="body2" color="text.secondary">
+                      {avgRating} average • {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
+                    </Typography>
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    No reviews yet. Be the first to rate this strain.
+                  </Typography>
+                )}
+
+                {/* Leave a review */}
+                <Card sx={{ mb: 2, bgcolor: 'rgba(76, 175, 80, 0.06)', border: '1px solid rgba(76, 175, 80, 0.3)' }}>
+                  <CardContent>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Leave a review
+                    </Typography>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }}>
+                      <Rating value={myRating} onChange={(_e, v) => setMyRating(v || 0)} />
+                      <TextField
+                        placeholder="Share your experience (optional)"
+                        fullWidth
+                        size="small"
+                        value={myComment}
+                        onChange={(e) => setMyComment(e.target.value)}
+                        inputProps={{ maxLength: 400 }}
+                      />
+                      <Button
+                        variant="contained"
+                        onClick={submitReview}
+                        disabled={submittingReview}
+                        sx={{ whiteSpace: 'nowrap' }}
+                      >
+                        {submittingReview ? 'Submitting…' : 'Submit'}
+                      </Button>
+                    </Stack>
+                    {!currentUserId && (
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                        Sign in to post a review.
+                      </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Recent reviews */}
+                {reviews.slice(0, 5).map((r) => (
+                  <Card key={r.id} sx={{ mb: 1.5, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <CardContent sx={{ py: 1.5 }}>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Rating value={r.rating || 0} readOnly size="small" />
+                        <Typography variant="caption" color="text.secondary">
+                          {new Date(r.created_at).toLocaleDateString()}
+                        </Typography>
+                      </Stack>
+                      {r.comment && (
+                        <Typography variant="body2" color="text.primary" sx={{ mt: 0.5 }}>
+                          {r.comment}
+                        </Typography>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
+
               <Button
                 variant="contained"
                 fullWidth
@@ -867,18 +1138,34 @@ function Scanner() {
                 </Box>
               )}
 
-              <Button
-                variant="outlined"
-                fullWidth
-                onClick={handleReset}
-                sx={{ 
-                  mt: 3,
-                  borderColor: '#4caf50',
-                  color: '#4caf50'
-                }}
-              >
-                Try Another Image
-              </Button>
+              {/* Action Buttons */}
+              <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  startIcon={<CheckCircle />}
+                  onClick={() => {
+                    setShowResult(false);
+                    onViewHistory?.();
+                  }}
+                  sx={{ 
+                    background: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
+                  }}
+                >
+                  View in History
+                </Button>
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  onClick={handleReset}
+                  sx={{ 
+                    borderColor: '#4caf50',
+                    color: '#4caf50'
+                  }}
+                >
+                  Scan Again
+                </Button>
+              </Stack>
             </>
           )}
         </DialogContent>

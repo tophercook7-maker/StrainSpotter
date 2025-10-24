@@ -1,64 +1,46 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"label": "Start Backend",
-			"type": "shell",
-			"command": "npm run dev",
-			"options": {
-				"cwd": "backend"
-			},
-			"problemMatcher": []
-		},
-		{
-			"label": "Install Backend Deps",
-			"type": "shell",
-			"command": "npm install",
-			"options": {
-				"cwd": "backend"
-			},
-			"problemMatcher": []
-		},
-		{
-			"label": "PM2 Start Backend",
-			"type": "shell",
-			"command": "pm2 start pm2/ecosystem.config.cjs",
-			"problemMatcher": []
-		},
-		{
-			"label": "PM2 Stop Backend",
-			"type": "shell",
-			"command": "pm2 delete strainspotter-backend || true",
-			"problemMatcher": []
-		},
-		{
-			"label": "Start Frontend",
-			"type": "shell",
-			"command": "npm run dev",
-			"isBackground": true,
-			"problemMatcher": []
-		},
-		{
-			"label": "Start Backend",
-			"type": "shell",
-			"command": "npm run dev",
-			"isBackground": false
-		},
-		{
-			"label": "Install Backend Deps",
-			"type": "shell",
-			"command": "npm install"
-		},
-		{
-			"label": "Start Backend",
-			"type": "shell",
-			"command": "npm run dev",
-			"isBackground": false
-		},
-		{
-			"label": "Install Backend Deps",
-			"type": "shell",
-			"command": "npm install"
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Install Backend Deps",
+      "type": "shell",
+      "command": "npm install",
+      "options": { "cwd": "backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Start Backend",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PM2 Start Backend",
+      "type": "shell",
+      "command": "pm2 start pm2/ecosystem.config.cjs",
+      "problemMatcher": []
+    },
+    {
+      "label": "PM2 Stop Backend",
+      "type": "shell",
+      "command": "pm2 delete strainspotter-backend || true",
+      "problemMatcher": []
+    },
+    {
+      "label": "Install Frontend Deps",
+      "type": "shell",
+      "command": "npm install",
+      "options": { "cwd": "frontend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Start Frontend",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "frontend" },
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
 }

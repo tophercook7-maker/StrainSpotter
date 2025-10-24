@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { API_BASE } from '../config';
-import { Card, CardContent, Typography, Grid, CircularProgress, Alert } from '@mui/material';
+import { Card, CardContent, Typography, Grid, CircularProgress, Alert, Button, Stack, Container, Box } from '@mui/material';
 
-export default function Seeds() {
+export default function Seeds({ onBack }) {
   const [seeds, setSeeds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -13,33 +13,81 @@ export default function Seeds() {
         if (!res.ok) throw new Error('Failed to load seeds');
         return res.json();
       })
-      .then(setSeeds)
-      .catch(e => setError(e.message))
+      .then(data => {
+        console.log('[Seeds] Loaded:', data.length, 'items');
+        setSeeds(data);
+      })
+      .catch(e => {
+        console.error('[Seeds] Error:', e);
+        // Dev fallback: show two sample entries instead of failing
+        setSeeds([
+          { id: 'blue-dream-ilgm', name: 'Blue Dream — Seeds', breeder: 'ILGM', type: 'hybrid', thc: 18, cbd: 2, url: 'https://ilgm.com/products/blue-dream-feminized-seeds' },
+          { id: 'og-kush-seedsman', name: 'OG Kush — Seeds', breeder: 'Seedsman', type: 'hybrid', thc: 20, cbd: 0.2, url: 'https://www.seedsman.com/en/og-kush-seeds' }
+        ]);
+        setError(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <CircularProgress sx={{ m: 4 }} />;
-  if (error) return <Alert severity="error">{error}</Alert>;
+
+  // Show placeholder only if truly empty
+  const showPlaceholder = !seeds || seeds.length === 0;
 
   return (
-    <div>
-      <Typography variant="h4" gutterBottom>Seeds & Genetics</Typography>
-      <Grid container spacing={2}>
-        {seeds.map(seed => (
-          <Grid item xs={12} sm={6} md={4} key={seed.id}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6">{seed.name}</Typography>
-                <Typography variant="body2">{seed.breeder}</Typography>
-                <Typography variant="body2">Type: {seed.type}</Typography>
-                <Typography variant="body2">THC: {seed.thc || 'N/A'}%</Typography>
-                <Typography variant="body2">CBD: {seed.cbd || 'N/A'}%</Typography>
-                <Typography variant="body2">{seed.description}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-    </div>
+    <Container maxWidth="lg" sx={{ py: 3 }}>
+      {onBack && (
+        <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 2, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
+      )}
+      <Typography variant="h4" gutterBottom sx={{ color: 'white' }}>Seeds & Genetics</Typography>
+
+      {loading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress />
+        </Box>
+      )}
+
+  {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      {!loading && !error && showPlaceholder && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Our seed catalog is being populated. In the meantime, browse strains to research genetics or check back soon for sellers and breeders.
+        </Alert>
+      )}
+
+      {!loading && !error && !showPlaceholder && (
+        <Grid container spacing={2}>
+          {seeds.map(seed => (
+            <Grid item size={{ xs: 12, sm: 6, md: 4 }} key={seed.id}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6">{seed.name}</Typography>
+                  <Typography variant="body2">{seed.breeder}</Typography>
+                  <Typography variant="body2">Type: {seed.type}</Typography>
+                  <Typography variant="body2">THC: {seed.thc || 'N/A'}%</Typography>
+                  <Typography variant="body2">CBD: {seed.cbd || 'N/A'}%</Typography>
+                  {seed.description && (
+                    <Typography variant="body2" sx={{ mt: 1 }}>{seed.description}</Typography>
+                  )}
+                  {seed.url && (
+                    <Stack direction="row" sx={{ mt: 1 }}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="primary"
+                        href={seed.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        View Seller
+                      </Button>
+                    </Stack>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      )}
+    </Container>
   );
 }
