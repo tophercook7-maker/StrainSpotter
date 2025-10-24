@@ -8,6 +8,8 @@ import ScanHistory from './components/ScanHistory';
 import ScanWizard from './components/ScanWizard';
 // Navigation components removed in favor of on-screen action buttons
 import FeedbackChat from './components/FeedbackChat';
+import { API_BASE } from './config';
+import { supabase } from './supabaseClient';
 import Home from './components/Home';
 import GrowerDirectory from './components/GrowerDirectory';
 import Groups from './components/Groups';
@@ -52,6 +54,25 @@ function App() {
       } else if (/access_token=/.test(hash)) {
         // Signed in via magic link; go home
         setCurrentView('home');
+        // Ensure user record exists immediately after magic link
+        // Grab the session and call backend /api/users/ensure with id + email
+        (async () => {
+          try {
+            const { data } = await supabase.auth.getSession();
+            const user = data?.session?.user;
+            if (user?.id) {
+              const email = user.email || undefined;
+              const username = email ? email.split('@')[0] : undefined;
+              await fetch(`${API_BASE}/api/users/ensure`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: user.id, email, username })
+              });
+            }
+          } catch (e) {
+            console.warn('[onboard] ensure user after magic link failed:', e);
+          }
+        })();
         // Clean up hash after magic link to avoid re-triggering
         setTimeout(() => {
           history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -118,7 +139,7 @@ function App() {
           <ScanHistory onBack={() => setCurrentView('home')} />
         )}
       {currentView === 'feedback' && (
-        <FeedbackChat />
+        <FeedbackChat onBack={() => setCurrentView('home')} />
       )}
       {currentView === 'growers' && (
         <GrowerDirectory onNavigate={setCurrentView} onBack={() => setCurrentView('home')} />

@@ -38,6 +38,7 @@ router.get('/messages', async (req, res) => {
 });
 
 import { rejectIfProfane, checkAndCleanMessage } from '../middleware/moderation.js';
+import { sendMail, isEmailConfigured } from '../services/mailer.js';
 
 router.post('/messages', rejectIfProfane, async (req, res) => {
   try {
@@ -55,9 +56,19 @@ router.post('/messages', rejectIfProfane, async (req, res) => {
     // Log feedback to console for monitoring (until email service is configured)
     console.log(`[FEEDBACK] User ${user_id || 'anonymous'} submitted: ${cleaned.substring(0, 100)}...`);
     
-    // TODO: Send email notification to strainspotterfeedback@gmail.com
-    // Options: Use nodemailer with Gmail SMTP, SendGrid, or Supabase Edge Function with Resend
-    // For now, admins can monitor feedback via the database or console logs
+    // Email notification (optional if SMTP configured)
+    try {
+      const to = process.env.EMAIL_TO;
+      if (to && isEmailConfigured()) {
+        const subject = 'New StrainSpotter Feedback';
+        const text = `New feedback${user_id ? ` from ${user_id}` : ''} at ${new Date().toISOString()}\n\n${cleaned}`;
+        await sendMail({ to, subject, text });
+      } else if (!to) {
+        console.warn('[FEEDBACK] EMAIL_TO not set. Skipping email notification.');
+      }
+    } catch (mailErr) {
+      console.warn('[FEEDBACK] Email send failed:', mailErr?.message || mailErr);
+    }
     
     res.json(data);
   } catch (e) {
