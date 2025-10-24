@@ -121,7 +121,7 @@ function App() {
         <FeedbackChat />
       )}
       {currentView === 'growers' && (
-        <GrowerDirectory onBack={() => setCurrentView('home')} />
+        <GrowerDirectory onNavigate={setCurrentView} onBack={() => setCurrentView('home')} />
       )}
       {currentView === 'seeds' && (
         <Seeds onBack={() => setCurrentView('home')} />

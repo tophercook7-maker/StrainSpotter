@@ -14,7 +14,7 @@ import {
 import { LocationOn, EmojiEvents } from '@mui/icons-material';
 import { FUNCTIONS_BASE } from '../config';
 
-export default function GrowerDirectory({ onBack }) {
+export default function GrowerDirectory({ onBack, onNavigate }) {
   const [growers, setGrowers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -38,7 +38,14 @@ export default function GrowerDirectory({ onBack }) {
         <Button 
           variant="contained" 
           color="primary"
-          onClick={() => window.location.href = '#/auth'}
+          onClick={() => {
+            // Navigate to grower registration component
+            if (typeof onNavigate === 'function') {
+              onNavigate('register');
+            } else {
+              window.location.hash = '#/register';
+            }
+          }}
           sx={{ textTransform: 'none', fontWeight: 600 }}
         >
           Register as Grower

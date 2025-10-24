@@ -215,10 +215,14 @@ export default function StrainBrowser({ onNavigate }) {
       });
       const response = await fetch(`${API}/strains?${params}`);
       const data = await response.json();
-      setStrains(data.strains || []);
+      // Ensure data.strains is an array to prevent .map errors
+      const strainsList = Array.isArray(data.strains) ? data.strains : 
+                          Array.isArray(data) ? data : [];
+      setStrains(strainsList);
       setTotalPages(data.pages || 1);
     } catch (e) {
       console.error('Error loading strains:', e);
+      setStrains([]); // Set empty array on error to prevent .map TypeError
     } finally {
       setLoading(false);
     }
