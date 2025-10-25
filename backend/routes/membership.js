@@ -2,11 +2,18 @@
 // POST /api/membership/master-key - Instantly upgrade to full-access with master key
 router.post('/master-key', express.json(), async (req, res, next) => {
   try {
-    const { user_id, key } = req.body;
+    // Allow user_id to come from body, header (x-session-id) or cookie fallback
+    const { user_id: bodyUserId, key } = req.body;
+    const headerUserId = req.headers['x-session-id'] || req.headers['x-ss-session-id'];
+    const cookieUserId = req.cookies ? (req.cookies['ss-session-id'] || null) : null;
+    const user_id = bodyUserId || headerUserId || cookieUserId || null;
+
     const MASTER_KEY = process.env.MASTER_KEY || 'KING123';
-    if (key !== MASTER_KEY) {
+
+    if (!key || key !== MASTER_KEY) {
       return res.status(403).json({ error: 'Invalid master key' });
     }
+
     if (!user_id) {
       return res.status(400).json({ error: 'user_id required' });
     }
@@ -58,7 +65,9 @@ router.get('/status', checkAccess, async (req, res, next) => {
   try {
     const response = {
       status: req.membershipStatus,
-  tier: req.tier || 'scan-only'
+      tier: req.tier || 'scan-only',
+      // expose user id so frontend can use it for master-key or other flows
+      user_id: req.user_id || req.user?.id || req.headers['x-session-id'] || null
     };
 
     if (req.membershipStatus === 'trial' || req.membershipStatus === 'trial_expired') {
