@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "build": "cd frontend && npm ci && npm run build"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.75.1",
     "@vercel/analytics": "^1.5.0",
