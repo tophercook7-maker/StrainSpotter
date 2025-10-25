@@ -43,18 +43,23 @@ export default function Home({ onNavigate }) {
 
   const tiles = [
     { key: 'wizard', nav: 'wizard', title: 'Scan', blurb: 'Guided scan with AI results, seeds and product near you', emoji: '📷' },
-    ...(membershipTier === 'full-access' ? [
-      { key: 'strains', nav: 'strains', title: 'Browse Strains', blurb: `Explore ${strainCount ? strainCount.toLocaleString() : '35k+'} strains with links to seeds & dispensaries`, icon: LocalFlorist },
-      { key: 'groups', nav: 'groups', title: 'Groups & Chat', blurb: 'Connect with growers and enthusiasts', emoji: '💬' },
-      { key: 'growers', nav: 'growers', title: 'Find Growers', blurb: 'Discover local cultivators and their expertise', emoji: '🧑‍🌾' },
-      { key: 'dispensaries', nav: 'dispensaries', title: 'Dispensaries', blurb: 'Find nearby shops and retailers', emoji: '🛍️' },
-      { key: 'seeds', nav: 'seeds', title: 'Seeds', blurb: 'Where to buy seed packs', emoji: '🌱' },
-      { key: 'grow-coach', nav: 'grow-coach', title: 'Grow Coach', blurb: 'Step‑by‑step from seed to harvest', emoji: '📘' },
-      { key: 'help', nav: 'help', title: 'Help & Getting Started', blurb: 'Learn how to use StrainSpotter', emoji: '📖' },
-      { key: 'feedback', nav: 'feedback', title: 'Send Feedback', blurb: 'Share your thoughts and suggestions', emoji: '✉️' },
-    ] : [
-      { key: 'membership', nav: 'membership-join', title: 'Unlock Full Access', blurb: 'Upgrade to unlock all features', emoji: '💎' }
-    ]),
+    ...(membershipTier === 'full-access'
+      ? [
+          // History tile only for full-access
+          { key: 'history', nav: 'history', title: 'Scan History', blurb: 'View your previous scans and results', icon: HistoryIcon },
+          { key: 'strains', nav: 'strains', title: 'Browse Strains', blurb: `Explore ${strainCount ? strainCount.toLocaleString() : '35k+'} strains with links to seeds & dispensaries`, icon: LocalFlorist },
+          { key: 'groups', nav: 'groups', title: 'Groups & Chat', blurb: 'Connect with growers and enthusiasts', emoji: '💬' },
+          { key: 'growers', nav: 'growers', title: 'Find Growers', blurb: 'Discover local cultivators and their expertise', emoji: '🧑‍🌾' },
+          { key: 'dispensaries', nav: 'dispensaries', title: 'Dispensaries', blurb: 'Find nearby shops and retailers', emoji: '🛍️' },
+          { key: 'seeds', nav: 'seeds', title: 'Seeds', blurb: 'Where to buy seed packs', emoji: '🌱' },
+          { key: 'grow-coach', nav: 'grow-coach', title: 'Grow Coach', blurb: 'Step‑by‑step from seed to harvest', emoji: '📘' },
+          { key: 'help', nav: 'help', title: 'Help & Getting Started', blurb: 'Learn how to use StrainSpotter', emoji: '📖' },
+          { key: 'feedback', nav: 'feedback', title: 'Send Feedback', blurb: 'Share your thoughts and suggestions', emoji: '✉️' },
+        ]
+      : [
+          { key: 'membership', nav: 'membership-join', title: 'Unlock Full Access', blurb: 'Upgrade to unlock all features', emoji: '💎' }
+        ]
+    ),
   ];
 
   const GlassTile = ({ title, emoji, icon: Icon, onClick, pro }) => (

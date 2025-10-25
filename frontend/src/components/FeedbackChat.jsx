@@ -81,18 +81,18 @@ export default function FeedbackChat({ onBack }) {
   return (
     <Box sx={{ p: 2 }}>
       {onBack && (
-        <Button 
-          onClick={onBack} 
-          size="small" 
-          variant="contained" 
-          sx={{ 
-            bgcolor: 'white', 
-            color: 'black', 
-            textTransform: 'none', 
-            fontWeight: 700, 
-            borderRadius: 999, 
+        <Button
+          onClick={onBack}
+          size="small"
+          variant="contained"
+          sx={{
+            bgcolor: 'white',
+            color: 'black',
+            textTransform: 'none',
+            fontWeight: 700,
+            borderRadius: 999,
             mb: 2,
-            '&:hover': { bgcolor: 'grey.100' } 
+            '&:hover': { bgcolor: 'grey.100' }
           }}
         >
           Home
@@ -113,11 +113,11 @@ export default function FeedbackChat({ onBack }) {
             )}
           </Stack>
           <Stack direction="row" spacing={1}>
-            <TextField 
-              fullWidth 
-              size="small" 
-              placeholder="Type feedback... (press Enter to send)" 
-              value={input} 
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Type feedback... (press Enter to send)"
+              value={input}
               onChange={e => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
             />
@@ -139,7 +139,6 @@ export default function FeedbackChat({ onBack }) {
               </Typography>
             </Box>
           )}
-          </Stack>
         </CardContent>
       </Card>
     </Box>
