@@ -59,7 +59,7 @@ export default function Home({ onNavigate }) {
       : [
           { key: 'membership', nav: 'membership-join', title: 'Unlock Full Access', blurb: 'Upgrade to unlock all features', emoji: '💎' }
         ]
-    ),
+    )
   ];
 
   const GlassTile = ({ title, emoji, icon: Icon, onClick, pro }) => (
