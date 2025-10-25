@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, isAuthConfigured } from '../supabaseClient';
+import { API_BASE } from '../config';
 import {
   Box,
   Button,
@@ -45,6 +46,21 @@ export default function Auth({ onBack }) {
       if (error) {
         setError(error.message);
       } else {
+        // Ensure user record exists immediately after password sign-in
+        try {
+          const { data } = await supabase.auth.getSession();
+          const user = data?.session?.user;
+          if (user?.id) {
+            const username = user.email ? user.email.split('@')[0] : undefined;
+            await fetch(`${API_BASE}/api/users/ensure`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_id: user.id, email: user.email, username })
+            });
+          }
+        } catch (e) {
+          console.warn('[auth] ensure user after sign-in failed:', e);
+        }
         // Successfully signed in, redirect to home
         if (onBack) {
           setTimeout(() => onBack(), 500);

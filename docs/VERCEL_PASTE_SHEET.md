@@ -1,5 +1,7 @@
 # Vercel + Supabase Paste Sheet (Step‑by‑Step)
 
+Note: A private, pre-filled copy with your actual values was generated at `docs/VERCEL_PASTE_SHEET.local.md` (git-ignored). Use that for copy/paste; this public doc keeps instructions only.
+
 This is a fill‑in guide that tells you exactly where to paste each value. Keep it open while you click around Vercel and Supabase.
 
 Tip: Values that look secret come from your local files, not this doc. I’ll show you how to view them locally without sharing them.

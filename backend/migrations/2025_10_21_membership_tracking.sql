@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS memberships (
   full_name TEXT,
   phone TEXT,
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'expired', 'cancelled')),
-  tier TEXT DEFAULT 'full' CHECK (tier IN ('trial', 'full', 'premium')),
+  tier TEXT DEFAULT 'scan-only' CHECK (tier IN ('scan-only', 'full-access')),
   joined_at TIMESTAMPTZ DEFAULT now(),
   expires_at TIMESTAMPTZ,
   payment_amount DECIMAL(10,2),

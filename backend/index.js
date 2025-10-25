@@ -217,6 +217,14 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
     }
 
     let buffer = Buffer.from(base64, 'base64');
+
+    // Allow anon uploads: if user_id is missing/null, use 'anon' for image_key and owner
+    const ownerId = (user_id && String(user_id)) || (req.headers['x-session-id'] && String(req.headers['x-session-id'])) || req.ip || 'anon';
+    const safeOwner = String(ownerId).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'anon';
+    const safeName = String(filename).replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[_\.\-]+/, '').slice(0, 100) || `file_${Date.now()}.jpg`;
+    const key = `users/${safeOwner}/${Date.now()}-${safeName}`;
+    const bucket = 'scans';
+    // ...existing code...
     
     // Auto-compress/resize if image is too large
     const MAX_SIZE = 2 * 1024 * 1024; // 2MB target

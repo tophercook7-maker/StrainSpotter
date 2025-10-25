@@ -1,4 +1,45 @@
 // Membership & Trial Management Routes
+// POST /api/membership/master-key - Instantly upgrade to full-access with master key
+router.post('/master-key', express.json(), async (req, res, next) => {
+  try {
+    const { user_id, key } = req.body;
+    const MASTER_KEY = process.env.MASTER_KEY || 'KING123';
+    if (key !== MASTER_KEY) {
+      return res.status(403).json({ error: 'Invalid master key' });
+    }
+    if (!user_id) {
+      return res.status(400).json({ error: 'user_id required' });
+    }
+    // Upsert membership to full-access
+    const { data: existing } = await db
+      .from('memberships')
+      .select('*')
+      .eq('user_id', user_id)
+      .maybeSingle();
+    let membership;
+    if (existing) {
+      const { data, error } = await db
+        .from('memberships')
+        .update({ tier: 'full-access', status: 'active' })
+        .eq('user_id', user_id)
+        .select()
+        .single();
+      if (error) return res.status(500).json({ error: error.message });
+      membership = data;
+    } else {
+      const { data, error } = await db
+        .from('memberships')
+        .insert({ user_id, tier: 'full-access', status: 'active', email: '', full_name: '' })
+        .select()
+        .single();
+      if (error) return res.status(500).json({ error: error.message });
+      membership = data;
+    }
+    res.json({ success: true, membership });
+  } catch (e) {
+    next(e);
+  }
+});
 import express from 'express';
 import { supabase } from '../supabaseClient.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
@@ -17,7 +58,7 @@ router.get('/status', checkAccess, async (req, res, next) => {
   try {
     const response = {
       status: req.membershipStatus,
-      tier: req.tier || 'trial'
+  tier: req.tier || 'scan-only'
     };
 
     if (req.membershipStatus === 'trial' || req.membershipStatus === 'trial_expired') {
@@ -152,7 +193,7 @@ router.post('/applications/:id/approve', express.json(), async (req, res, next) 
         full_name: app.full_name,
         phone: app.phone,
         status: 'active',
-        tier: tier || 'full',
+  tier: tier || 'full-access',
         payment_amount: payment_amount || null,
         payment_reference: payment_reference || null,
         expires_at: expires_at || null
@@ -189,7 +230,7 @@ router.get('/members', async (req, res, next) => {
     }
 
     if (tier) {
-      query = query.eq('tier', tier);
+      query = query.eq('tier', tier === 'scan-only' || tier === 'full-access' ? tier : (tier === 'trial' ? 'scan-only' : 'full-access'));
     }
 
     const { data, error } = await query;

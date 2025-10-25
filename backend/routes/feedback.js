@@ -42,8 +42,10 @@ import { sendMail, isEmailConfigured } from '../services/mailer.js';
 
 router.post('/messages', rejectIfProfane, async (req, res) => {
   try {
-    const { user_id = null, content } = req.body || {};
+    let { user_id = null, content } = req.body || {};
     if (!content || !String(content).trim()) return res.status(400).json({ error: 'content is required' });
+    // Validate user_id: must be null or a valid UUID
+    if (user_id && !/^[0-9a-fA-F-]{36}$/.test(user_id)) user_id = null;
     const grp = await getOrCreateFeedbackGroup();
     const { cleaned } = checkAndCleanMessage(content);
     const { data, error } = await writeClient

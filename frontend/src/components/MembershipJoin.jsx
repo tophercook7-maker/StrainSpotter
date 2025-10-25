@@ -19,6 +19,47 @@ import {
 import { API_BASE } from '../config';
 
 export default function MembershipJoin({ onBack }) {
+  const [showMasterKey, setShowMasterKey] = useState(false);
+  const [masterKey, setMasterKey] = useState('');
+  const [masterKeyError, setMasterKeyError] = useState(null);
+  const [masterKeySuccess, setMasterKeySuccess] = useState(null);
+  const handleMasterKeySubmit = async () => {
+    setMasterKeyError(null);
+    setMasterKeySuccess(null);
+    try {
+      // Get user_id from session or localStorage
+      let user_id = null;
+      try {
+        const resp = await fetch(`${API_BASE}/api/membership/status`, { credentials: 'include' });
+        if (resp.ok) {
+          const data = await resp.json();
+          user_id = data.user_id || null;
+        }
+      } catch {}
+      if (!user_id) {
+        user_id = localStorage.getItem('ss-session-id');
+      }
+      if (!user_id) {
+        setMasterKeyError('Could not determine user ID. Please sign in or reload.');
+        return;
+      }
+      const res = await fetch(`${API_BASE}/api/membership/master-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id, key: masterKey })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMasterKeyError(data.error || 'Invalid master key');
+        return;
+      }
+      setMasterKeySuccess('Full access unlocked! Enjoy all features.');
+      setShowMasterKey(false);
+      loadStatus();
+    } catch (e) {
+      setMasterKeyError('Network error. Please try again.');
+    }
+  };
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
@@ -203,12 +244,41 @@ export default function MembershipJoin({ onBack }) {
                 size="large"
                 fullWidth
                 onClick={() => setShowForm(true)}
-                sx={{ fontWeight: 700 }}
+                sx={{ fontWeight: 700, mb: 1 }}
               >
                 Apply for Membership
               </Button>
+              <Button
+                variant="outlined"
+                size="large"
+                fullWidth
+                onClick={() => setShowMasterKey(true)}
+                sx={{ fontWeight: 700 }}
+              >
+                Enter Master Key
+              </Button>
             </>
           )}
+      {/* Master Key Modal */}
+      <Dialog open={showMasterKey} onClose={() => setShowMasterKey(false)}>
+        <DialogTitle>Enter Master Key</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Master Key"
+            value={masterKey}
+            onChange={e => setMasterKey(e.target.value)}
+            fullWidth
+            autoFocus
+            sx={{ mt: 1 }}
+          />
+          {masterKeyError && <Alert severity="error" sx={{ mt: 2 }}>{masterKeyError}</Alert>}
+          {masterKeySuccess && <Alert severity="success" sx={{ mt: 2 }}>{masterKeySuccess}</Alert>}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowMasterKey(false)}>Cancel</Button>
+          <Button onClick={handleMasterKeySubmit} variant="contained">Unlock</Button>
+        </DialogActions>
+      </Dialog>
         </CardContent>
       </Card>
 

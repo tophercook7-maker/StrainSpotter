@@ -14,6 +14,10 @@ build
 env/.env.local
 .env.local
 env/google-vision-key.json
+ 
+# Private paste sheets (do not commit secrets)
+docs/*.local.md
+docs/VERCEL_PASTE_SHEET.local.md
 
 # Frontend env files (do not commit secrets)
 frontend/.env.local

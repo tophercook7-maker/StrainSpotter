@@ -14,6 +14,25 @@ export default function FeedbackChat({ onBack }) {
         setMessages(await res.json());
       }
     } catch (e) {
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  const sendTestEmail = async () => {
+    setTestingEmail(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/diagnostic/email-test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: 'strainspotter25feedback@gmail.com' })
+      });
+      const data = await res.json();
+      setTestResult(data.ok ? 'Email sent!' : `Error: ${data.error || 'Unknown'}`);
+    } catch (err) {
+      setTestResult('Network error');
+    }
+    setTestingEmail(false);
+  };
       console.error('[Feedback] Load error:', e);
     }
   };
@@ -31,7 +50,8 @@ export default function FeedbackChat({ onBack }) {
       const res = await fetch(`${API_BASE}/api/feedback/messages`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
         },
         body: JSON.stringify({ content, user_id: null })
       });
@@ -101,7 +121,24 @@ export default function FeedbackChat({ onBack }) {
               onChange={e => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
             />
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={sendTestEmail}
+              disabled={testingEmail}
+              sx={{ textTransform: 'none' }}
+            >
+              {testingEmail ? 'Sending...' : 'Send Test Email'}
+            </Button>
             <Button variant="contained" onClick={send} disabled={posting}>Send</Button>
+          </Stack>
+          {testResult && (
+            <Box sx={{ px: 2, pb: 1 }}>
+              <Typography variant="body2" color={testResult === 'Email sent!' ? 'success.main' : 'error.main'}>
+                {testResult}
+              </Typography>
+            </Box>
+          )}
           </Stack>
         </CardContent>
       </Card>
