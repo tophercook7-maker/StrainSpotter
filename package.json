@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build": "cd frontend && npm ci && npm run build"
+    "build": "cd frontend && npm ci && npm run build && rm -rf ../dist && cp -R dist ../dist"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.75.1",
