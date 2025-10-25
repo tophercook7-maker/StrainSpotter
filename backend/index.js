@@ -1,3 +1,25 @@
+import fs from 'fs';
+import path from 'path';
+
+// Simple file logger
+const LOG_PATH = path.join(process.cwd(), 'backend/logs/server.log');
+function logToFile(message) {
+  const line = `[${new Date().toISOString()}] ${message}\n`;
+  fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
+  fs.appendFileSync(LOG_PATH, line);
+}
+
+// Log every request
+app.use((req, res, next) => {
+  logToFile(`Request: ${req.method} ${req.originalUrl || req.url} | IP: ${req.ip}`);
+  next();
+});
+
+// Log errors
+app.use((err, req, res, next) => {
+  logToFile(`Error: ${err.message} | Endpoint: ${req.method} ${req.originalUrl || req.url}`);
+  next(err);
+});
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import express from 'express';
 import helmet from 'helmet';

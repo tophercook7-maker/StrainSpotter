@@ -84,7 +84,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         console.log('[Groups] Session user ID:', sessionUserId);
         setUserId(sessionUserId);
       } catch {
-        console.error('Groups: getSession failed');
+            console.error('Groups: getSession failed');
       }
     })();
     

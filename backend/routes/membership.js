@@ -1,6 +1,22 @@
 // Membership & Trial Management Routes
 // POST /api/membership/master-key - Instantly upgrade to full-access with master key
 router.post('/master-key', express.json(), async (req, res, next) => {
+  // Detailed logging for diagnostics
+  try {
+    const logPath = require('path').join(process.cwd(), 'backend/logs/server.log');
+    const fs = require('fs');
+    const logEntry = [
+      `[${new Date().toISOString()}] MASTER-KEY ATTEMPT`,
+      `Payload: ${JSON.stringify(req.body)}`,
+      `Headers: ${JSON.stringify(req.headers)}`,
+      `Cookies: ${JSON.stringify(req.cookies || {})}`,
+      `Expected key: ${process.env.MASTER_KEY || 'KING123'}`
+    ].join('\n');
+    fs.mkdirSync(require('path').dirname(logPath), { recursive: true });
+    fs.appendFileSync(logPath, logEntry + '\n');
+  } catch (logErr) {
+    console.error('[MasterKey Debug] Logging failed:', logErr);
+  }
   try {
     // Allow user_id to come from body, header (x-session-id) or cookie fallback
     const { user_id: bodyUserId, key } = req.body;

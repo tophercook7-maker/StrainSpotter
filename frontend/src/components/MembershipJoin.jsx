@@ -36,7 +36,7 @@ export default function MembershipJoin({ onBack }) {
           user_id = data.user_id || null;
         }
       } catch {
-        console.error('MembershipJoin: Failed to fetch membership status');
+          console.error('MembershipJoin: Failed to fetch membership status');
       }
       if (!user_id) {
         user_id = localStorage.getItem('ss-session-id');
