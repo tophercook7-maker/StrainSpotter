@@ -62,6 +62,16 @@ function Scanner({ onViewHistory, onBack }) {
     return () => { mounted = false; };
   }, []);
 
+  // Session helper used for anon uploads when no auth session exists
+  const getSessionId = () => {
+    let sid = localStorage.getItem('ss-session-id');
+    if (!sid) {
+      sid = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('ss-session-id', sid);
+    }
+    return sid;
+  };
+
   const handleImageCapture = (event) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
@@ -187,11 +197,13 @@ function Scanner({ onViewHistory, onBack }) {
         setLoadingStatus(`Uploading image ${index + 1} of ${images.length}...`);
         const base64 = await fileToBase64Resized(file, 1600, 0.85);
         console.log('[Scanner] Uploading to:', `${API_BASE}/api/uploads`);
-        const uploadResponse = await fetch(`${API_BASE}/api/uploads`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: file.name, contentType: file.type, base64, user_id: currentUserId })
-        });
+          const sessionId = currentUserId || getSessionId();
+          const uploadResponse = await fetch(`${API_BASE}/api/uploads`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId },
+            credentials: 'include',
+            body: JSON.stringify({ filename: file.name, contentType: file.type, base64, user_id: currentUserId || null })
+          });
         if (!uploadResponse.ok) {
           const msg = await parseErrorResponse(uploadResponse);
           console.error('[Scanner] Upload failed:', msg);
@@ -213,7 +225,8 @@ function Scanner({ onViewHistory, onBack }) {
           
           const processResponse = await fetch(`${API_BASE}/api/scans/${scanId}/process`, { 
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-session-id': getSessionId() },
+            credentials: 'include',
             signal: controller.signal
           });
           
@@ -274,8 +287,9 @@ function Scanner({ onViewHistory, onBack }) {
             console.log('[Scanner] Saving match:', lastId, matchResult.slug);
             const saveResponse = await fetch(`${API_BASE}/api/scans/${lastId}/save-match`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ matched_strain_slug: matchResult.slug, user_id: currentUserId })
+              headers: { 'Content-Type': 'application/json', 'x-session-id': getSessionId() },
+              credentials: 'include',
+              body: JSON.stringify({ matched_strain_slug: matchResult.slug, user_id: currentUserId || null })
             });
             if (saveResponse.ok) {
               console.log('[Scanner] Match saved successfully');
@@ -297,7 +311,10 @@ function Scanner({ onViewHistory, onBack }) {
         
         if (topWord) {
           try {
-            const suggestResponse = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(topWord)}&limit=5`);
+            const suggestResponse = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(topWord)}&limit=5`, {
+              headers: { 'x-session-id': getSessionId() },
+              credentials: 'include'
+            });
             const suggestions = await suggestResponse.json();
             setSuggestedStrains(Array.isArray(suggestions) ? suggestions : []);
           } catch (e) {
