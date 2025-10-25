@@ -216,20 +216,20 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
       return res.status(400).json({ error: 'unsupported contentType' });
     }
 
+
     let buffer = Buffer.from(base64, 'base64');
 
     // Allow anon uploads: if user_id is missing/null, use 'anon' for image_key and owner
-    const ownerId = (user_id && String(user_id)) || (req.headers['x-session-id'] && String(req.headers['x-session-id'])) || req.ip || 'anon';
-    const safeOwner = String(ownerId).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'anon';
-    const safeName = String(filename).replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[_\.\-]+/, '').slice(0, 100) || `file_${Date.now()}.jpg`;
-    const key = `users/${safeOwner}/${Date.now()}-${safeName}`;
-    const bucket = 'scans';
-    // ...existing code...
-    
+    const uploadOwnerId = (user_id && String(user_id)) || (req.headers['x-session-id'] && String(req.headers['x-session-id'])) || req.ip || 'anon';
+    const uploadSafeOwner = String(uploadOwnerId).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'anon';
+    const uploadSafeName = String(filename).replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[_\.\-]+/, '').slice(0, 100) || `file_${Date.now()}.jpg`;
+    const uploadKey = `users/${uploadSafeOwner}/${Date.now()}-${uploadSafeName}`;
+    const uploadBucket = 'scans';
+
     // Auto-compress/resize if image is too large
     const MAX_SIZE = 2 * 1024 * 1024; // 2MB target
     const MAX_DIMENSION = 2048; // Max width/height
-    
+
     if (buffer.length > MAX_SIZE) {
       console.log(`[upload] Compressing image from ${(buffer.length / 1024 / 1024).toFixed(2)}MB`);
       buffer = await sharp(buffer)
@@ -242,40 +242,40 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
     // Normalize storage key: users/{owner}/{timestamp-filename}
     // Prefer authenticated user id; otherwise use a session-based bucket to avoid collisions
     const rawName = String(filename || 'upload.jpg').split('/').pop();
-    const safeName = rawName
+    const normalizedSafeName = rawName
       .replace(/[^A-Za-z0-9._-]+/g, '_')
       .replace(/^[_\.\-]+/, '')
       .slice(0, 100) || `file_${Date.now()}.jpg`;
 
-    const ownerId = (user_id && String(user_id)) || (req.headers['x-session-id'] && String(req.headers['x-session-id'])) || req.ip || 'anon';
-    const safeOwner = String(ownerId).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'anon';
-    const key = `users/${safeOwner}/${Date.now()}-${safeName}`;
-    const bucket = 'scans';
+    const normalizedOwnerId = uploadOwnerId;
+    const normalizedSafeOwner = uploadSafeOwner;
+    const normalizedKey = `users/${normalizedSafeOwner}/${Date.now()}-${normalizedSafeName}`;
+    const normalizedBucket = uploadBucket;
 
   // Prefer service role for storage writes to bypass RLS
   const storageClient = supabaseAdmin ?? supabase;
-  const { error: upErr } = await storageClient.storage.from(bucket).upload(key, buffer, { contentType });
+  const { error: upErr } = await storageClient.storage.from(normalizedBucket).upload(normalizedKey, buffer, { contentType });
     if (upErr) {
       if (upErr.message?.toLowerCase().includes('bucket not found')) {
         // Try to create bucket once (best-effort)
-        const ensured = await ensureBucketExists(bucket, { public: true });
+        const ensured = await ensureBucketExists(normalizedBucket, { public: true });
         if (ensured?.ok) {
-          const retry = await storageClient.storage.from(bucket).upload(key, buffer, { contentType });
+          const retry = await storageClient.storage.from(normalizedBucket).upload(normalizedKey, buffer, { contentType });
           if (retry.error) return res.status(500).json({ error: retry.error.message });
         } else {
-          return res.status(500).json({ error: `Storage bucket '${bucket}' not found and could not be created. ${ensured?.error || ensured?.reason || ''}`.trim() });
+          return res.status(500).json({ error: `Storage bucket '${normalizedBucket}' not found and could not be created. ${ensured?.error || ensured?.reason || ''}`.trim() });
         }
       } else {
         return res.status(500).json({ error: upErr.message });
       }
     }
 
-  const { data: urlData } = storageClient.storage.from(bucket).getPublicUrl(key);
+    const { data: urlData } = storageClient.storage.from(normalizedBucket).getPublicUrl(normalizedKey);
     const publicUrl = urlData?.publicUrl || null;
 
-  // Use service role for table insert to bypass RLS
-  const dbClient = supabaseAdmin ?? supabase;
-    const insert = await dbClient.from('scans').insert({ image_url: publicUrl, image_key: key, status: 'pending', user_id: user_id || null }).select();
+    // Use service role for table insert to bypass RLS
+    const dbClient = supabaseAdmin ?? supabase;
+    const insert = await dbClient.from('scans').insert({ image_url: publicUrl, image_key: normalizedKey, status: 'pending', user_id: user_id || null }).select();
     if (insert.error) {
       const msg = insert.error.message || 'insert failed';
       const rlsHint = (!supabaseAdmin && /row-level security/i.test(msg))

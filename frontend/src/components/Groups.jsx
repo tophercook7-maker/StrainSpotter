@@ -83,8 +83,8 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         const sessionUserId = data?.session?.user?.id || null;
         console.log('[Groups] Session user ID:', sessionUserId);
         setUserId(sessionUserId);
-      } catch (e) {
-        console.debug('Groups: getSession failed', e);
+      } catch {
+        console.error('Groups: getSession failed');
       }
     })();
     
@@ -108,8 +108,8 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       try {
         const { data } = await supabase.auth.getSession();
         validUserId = data?.session?.user?.id || null;
-      } catch (e) {
-        console.debug('Groups: getSession in createGroup failed', e);
+      } catch {
+        console.error('Groups: getSession in createGroup failed');
       }
     }
     

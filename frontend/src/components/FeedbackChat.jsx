@@ -6,6 +6,8 @@ export default function FeedbackChat({ onBack }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [posting, setPosting] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
   const load = async () => {
     try {
@@ -14,8 +16,9 @@ export default function FeedbackChat({ onBack }) {
         setMessages(await res.json());
       }
     } catch (e) {
-  const [testingEmail, setTestingEmail] = useState(false);
-  const [testResult, setTestResult] = useState(null);
+      console.error('[Feedback] Load error:', e);
+    }
+  };
 
   const sendTestEmail = async () => {
     setTestingEmail(true);
@@ -28,13 +31,10 @@ export default function FeedbackChat({ onBack }) {
       });
       const data = await res.json();
       setTestResult(data.ok ? 'Email sent!' : `Error: ${data.error || 'Unknown'}`);
-    } catch (err) {
+    } catch {
       setTestResult('Network error');
     }
     setTestingEmail(false);
-  };
-      console.error('[Feedback] Load error:', e);
-    }
   };
 
   useEffect(() => {

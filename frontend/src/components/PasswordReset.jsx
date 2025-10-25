@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { useAuth } from '../contexts/AuthContext';
 import { Box, Card, CardContent, TextField, Button, Typography, Stack, Alert, CircularProgress } from '@mui/material';
 
 export default function PasswordReset({ onBack }) {
-  const { user } = useAuth();
+  // Removed unused 'user' variable
   const [newPassword, setNewPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,14 +21,15 @@ export default function PasswordReset({ onBack }) {
     timeout = setTimeout(async () => {
       try {
         // First, check if Supabase has processed the recovery hash
-        const { data, error: sessionError } = await supabase?.auth.getSession();
+        if (!supabase || !supabase.auth) {
+          setError('Supabase client not initialized. Please reload the page.');
+          return;
+        }
+        const { data, error: sessionError } = await supabase.auth.getSession();
         console.log('[PasswordReset] Session check:', data?.session?.user?.email || 'none');
-        
         if (data?.session) {
           setReady(true);
           setInfo('Enter a new password below to complete the reset.');
-          
-          // Clean up the hash after successful session establishment
           if (!cleanup && typeof window !== 'undefined') {
             setTimeout(() => {
               history.replaceState(null, '', window.location.pathname + window.location.search);

@@ -22,7 +22,9 @@ export default function Home({ onNavigate }) {
           const data = await resp.json();
           setMembershipTier(data.tier || 'scan-only');
         }
-      } catch {}
+      } catch (err) {
+        console.error('Home: Failed to fetch membership status', err);
+      }
     })();
   }, []);
 
