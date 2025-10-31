@@ -185,7 +185,24 @@ export default function ScanWizard({ onBack }) {
         if (matchResp.ok) {
           const matchData = await matchResp.json();
           if (matchData.matches && matchData.matches.length > 0) {
-            setMatch(matchData.matches[0]);
+            const topMatch = matchData.matches[0];
+            setMatch(topMatch);
+
+            // Step 4: Save the matched strain to the scan record
+            try {
+              await fetch(`${API_BASE}/api/scans/${scanId}/save-match`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  matched_strain_slug: topMatch.strain.slug,
+                  user_id: currentUser?.id || null
+                })
+              });
+            } catch (saveErr) {
+              console.error('Failed to save match:', saveErr);
+              // Don't fail the whole scan if saving the match fails
+            }
+
             setScanStatus("Scan complete!");
           } else {
             setScanStatus("No matches found");
