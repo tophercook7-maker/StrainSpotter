@@ -151,51 +151,51 @@ export default function Garden({ onNavigate, onBack }) {
         border: '2px solid rgba(124, 179, 66, 0.3)',
         borderRadius: 4
       }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Avatar sx={{ bgcolor: '#7cb342', width: 56, height: 56 }}>
-              {user?.user_metadata?.username?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?'}
-            </Avatar>
-            <Box>
-              <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>
-                Welcome to the Garden
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
-                {user?.user_metadata?.username || user?.email || 'Member'}
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600 }}>
-                ✓ Club Member
-              </Typography>
-            </Box>
-          </Stack>
-          
-          <Stack direction="row" spacing={2}>
-            {onBack && (
-              <Button
-                variant="outlined"
-                onClick={onBack}
-                sx={{
-                  color: '#fff',
-                  borderColor: 'rgba(124, 179, 66, 0.6)',
-                  '&:hover': { borderColor: 'rgba(124, 179, 66, 1)', bgcolor: 'rgba(124, 179, 66, 0.1)' }
-                }}
-              >
-                ← Home
-              </Button>
-            )}
+        {/* Buttons on top left */}
+        <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+          {onBack && (
             <Button
               variant="outlined"
-              startIcon={<ExitToAppIcon />}
-              onClick={handleLogout}
+              onClick={onBack}
               sx={{
                 color: '#fff',
-                borderColor: 'rgba(255, 82, 82, 0.6)',
-                '&:hover': { borderColor: 'rgba(255, 82, 82, 1)', bgcolor: 'rgba(255, 82, 82, 0.1)' }
+                borderColor: 'rgba(124, 179, 66, 0.6)',
+                '&:hover': { borderColor: 'rgba(124, 179, 66, 1)', bgcolor: 'rgba(124, 179, 66, 0.1)' }
               }}
             >
-              Logout
+              ← Home
             </Button>
-          </Stack>
+          )}
+          <Button
+            variant="outlined"
+            startIcon={<ExitToAppIcon />}
+            onClick={handleLogout}
+            sx={{
+              color: '#fff',
+              borderColor: 'rgba(255, 82, 82, 0.6)',
+              '&:hover': { borderColor: 'rgba(255, 82, 82, 1)', bgcolor: 'rgba(255, 82, 82, 0.1)' }
+            }}
+          >
+            Logout
+          </Button>
+        </Stack>
+
+        {/* Welcome section below buttons */}
+        <Stack direction="row" spacing={2} alignItems="center">
+          <Avatar sx={{ bgcolor: '#7cb342', width: 56, height: 56 }}>
+            {user?.user_metadata?.username?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?'}
+          </Avatar>
+          <Box>
+            <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>
+              Welcome to the Garden
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
+              {user?.user_metadata?.username || user?.email || 'Member'}
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600 }}>
+              ✓ Club Member
+            </Typography>
+          </Box>
         </Stack>
       </Paper>
 
