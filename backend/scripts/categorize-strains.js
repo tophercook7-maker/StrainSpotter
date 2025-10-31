@@ -10,7 +10,8 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
-dotenv.config();
+// Load env from ../env/.env.local (same as backend)
+dotenv.config({ path: new URL('../../env/.env.local', import.meta.url).pathname });
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -205,30 +206,32 @@ const KNOWN_STRAINS = {
 
 function categorizeStrain(name) {
   if (!name) return null;
-  
+
   const lowerName = name.toLowerCase().trim();
-  
+
   // Check known strains first
   if (KNOWN_STRAINS[lowerName]) {
-    return KNOWN_STRAINS[lowerName];
+    // Capitalize the type from known strains (they're stored lowercase)
+    const type = KNOWN_STRAINS[lowerName];
+    return type.charAt(0).toUpperCase() + type.slice(1);
   }
-  
+
   // Check patterns
   const matchesIndica = INDICA_PATTERNS.some(pattern => lowerName.includes(pattern));
   const matchesSativa = SATIVA_PATTERNS.some(pattern => lowerName.includes(pattern));
   const matchesHybrid = HYBRID_PATTERNS.some(pattern => lowerName.includes(pattern));
-  
+
   // If matches multiple, hybrid wins
   if ((matchesIndica && matchesSativa) || (matchesIndica && matchesHybrid) || (matchesSativa && matchesHybrid)) {
-    return 'hybrid';
+    return 'Hybrid';
   }
-  
-  if (matchesIndica) return 'indica';
-  if (matchesSativa) return 'sativa';
-  if (matchesHybrid) return 'hybrid';
-  
-  // Default to hybrid if uncertain
-  return 'hybrid';
+
+  if (matchesIndica) return 'Indica';
+  if (matchesSativa) return 'Sativa';
+  if (matchesHybrid) return 'Hybrid';
+
+  // Default to Hybrid if uncertain
+  return 'Hybrid';
 }
 
 async function main() {
@@ -313,12 +316,14 @@ async function main() {
       .from('strains')
       .update({ type: strain.newType })
       .eq('slug', strain.slug);
-    
+
     if (updateError) {
       console.error(`   ❌ Error updating ${strain.name}:`, updateError.message);
     } else {
       stats.updated++;
-      stats[strain.newType]++;
+      // Increment the lowercase version of the type for stats
+      const typeKey = strain.newType.toLowerCase();
+      stats[typeKey]++;
     }
   }
   
