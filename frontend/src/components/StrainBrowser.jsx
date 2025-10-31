@@ -310,33 +310,16 @@ export default function StrainBrowser({ onBack }) {
     }
   };
 
-  // Curated cannabis stock images (royalty-free from Pexels/Unsplash)
-  const CANNABIS_IMAGES = [
-    'https://images.unsplash.com/photo-1536964310528-e47dd655ecf3?w=400&h=300&fit=crop', // Purple cannabis buds
-    'https://images.unsplash.com/photo-1605440698600-1372eb28f0f4?w=400&h=300&fit=crop', // Green cannabis plant
-    'https://images.unsplash.com/photo-1587857180061-f0d22c0e8e8d?w=400&h=300&fit=crop', // Cannabis flower close-up
-    'https://images.unsplash.com/photo-1612198188060-c7c2a3b66eae?w=400&h=300&fit=crop', // Cannabis leaves
-    'https://images.unsplash.com/photo-1608797178974-15b35a64ede9?w=400&h=300&fit=crop', // Cannabis bud macro
-    'https://images.unsplash.com/photo-1610896922783-c7a180a6ae0e?w=400&h=300&fit=crop', // Cannabis plant growing
-    'https://images.unsplash.com/photo-1623278979014-8b6e2e3e8a5e?w=400&h=300&fit=crop', // Cannabis trichomes
-    'https://images.unsplash.com/photo-1628258334105-2a0b3d6efee1?w=400&h=300&fit=crop', // Cannabis jar
-    'https://images.unsplash.com/photo-1615671524827-c1fe3973b648?w=400&h=300&fit=crop', // Cannabis field
-    'https://images.unsplash.com/photo-1616244656431-9b4a5b2c6f6e?w=400&h=300&fit=crop', // Cannabis close-up
-  ];
-
-  // Generate a strain image URL
+  // Generate a strain image - using gradient with cannabis icon for now
+  // TODO: Replace with actual strain photos from a cannabis image API or database
   const getStrainImageUrl = (strain) => {
     // If strain has a valid image URL, use it
     if (strain.image_url && !strain.image_url.includes('yourdomain.com')) {
       return strain.image_url;
     }
 
-    // Use hash of strain name to consistently pick from curated cannabis images
-    const seed = strain.slug || strain.name.toLowerCase().replace(/\s+/g, '-');
-    const hash = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const imageIndex = hash % CANNABIS_IMAGES.length;
-
-    return CANNABIS_IMAGES[imageIndex];
+    // Return null to use gradient fallback with cannabis icon
+    return null;
   };
 
   // Load favorites from localStorage on mount
@@ -776,16 +759,31 @@ export default function StrainBrowser({ onBack }) {
                     onClick={() => handleStrainClick(strain)}
                     sx={{
                       height: 120,
-                      backgroundImage: `url(${getStrainImageUrl(strain)})`,
+                      background: getStrainImageUrl(strain)
+                        ? `url(${getStrainImageUrl(strain)})`
+                        : `linear-gradient(135deg, ${getTypeColor(strain.type)}88 0%, ${getTypeColor(strain.type)}dd 100%)`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
-                      backgroundColor: getTypeColor(strain.type),
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       position: 'relative',
                       cursor: 'pointer',
-                      '&::after': {
+                      overflow: 'hidden',
+                      '&::before': !getStrainImageUrl(strain) ? {
+                        content: '""',
+                        position: 'absolute',
+                        top: '-20%',
+                        right: '-20%',
+                        width: '80%',
+                        height: '80%',
+                        backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'white\'%3E%3Cpath d=\'M12 2C11.5 2 11 2.19 10.59 2.59L10 3.17L9.41 2.59C9 2.19 8.5 2 8 2C6.9 2 6 2.9 6 4C6 4.5 6.19 5 6.59 5.41L7.17 6L6.59 6.59C6.19 7 6 7.5 6 8C6 9.1 6.9 10 8 10C8.5 10 9 9.81 9.41 9.41L10 8.83L10.59 9.41C11 9.81 11.5 10 12 10C13.1 10 14 9.1 14 8C14 7.5 13.81 7 13.41 6.59L12.83 6L13.41 5.41C13.81 5 14 4.5 14 4C14 2.9 13.1 2 12 2M12 12C11.5 12 11 12.19 10.59 12.59L10 13.17L9.41 12.59C9 12.19 8.5 12 8 12C6.9 12 6 12.9 6 14C6 14.5 6.19 15 6.59 15.41L7.17 16L6.59 16.59C6.19 17 6 17.5 6 18C6 19.1 6.9 20 8 20C8.5 20 9 19.81 9.41 19.41L10 18.83L10.59 19.41C11 19.81 11.5 20 12 20C13.1 20 14 19.1 14 18C14 17.5 13.81 17 13.41 16.59L12.83 16L13.41 15.41C13.81 15 14 14.5 14 14C14 12.9 13.1 12 12 12Z\'/%3E%3C/svg%3E")',
+                        backgroundSize: 'contain',
+                        backgroundRepeat: 'no-repeat',
+                        opacity: 0.15,
+                        transform: 'rotate(-15deg)',
+                      } : {},
+                      '&::after': getStrainImageUrl(strain) ? {
                         content: '""',
                         position: 'absolute',
                         top: 0,
@@ -793,10 +791,12 @@ export default function StrainBrowser({ onBack }) {
                         right: 0,
                         bottom: 0,
                         background: `linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 100%)`,
-                      }
+                      } : {}
                     }}
                   >
-                    <SpaIcon sx={{ fontSize: 48, color: '#fff', opacity: 0.3, zIndex: 0 }} />
+                    {!getStrainImageUrl(strain) && (
+                      <SpaIcon sx={{ fontSize: 64, color: '#fff', opacity: 0.4, zIndex: 1 }} />
+                    )}
                   </Box>
 
                   <CardContent onClick={() => handleStrainClick(strain)} sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
