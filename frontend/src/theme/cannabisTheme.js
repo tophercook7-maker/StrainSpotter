@@ -83,8 +83,8 @@ export const muiThemeOverrides = {
       dark: cannabisTheme.colors.secondary.dark
     },
     background: {
-      default: 'transparent',
-      paper: 'transparent'
+      default: '#1a1a1a', // Use a valid dark color for background
+      paper: '#2c2c2c'    // Use a valid card color for paper
     },
     text: {
       primary: cannabisTheme.colors.text.primary,
@@ -95,10 +95,7 @@ export const muiThemeOverrides = {
     MuiCard: {
       styleOverrides: {
         root: {
-          // Glassmorphism: translucent background so themed background shows through
-          backgroundColor: 'rgba(32, 64, 32, 0.35)',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
+          backgroundColor: 'none',
           border: cannabisTheme.borders.subtle,
           boxShadow: cannabisTheme.shadows.card
         }
@@ -111,35 +108,37 @@ export const muiThemeOverrides = {
           textTransform: 'none'
         },
         contained: {
-          // Semi-transparent with subtle glow
-          backgroundColor: 'rgba(124, 179, 66, 0.25)',
-          border: '1px solid rgba(124, 179, 66, 0.5)',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
+          backgroundColor: 'rgba(124, 179, 66, 0.3)',
+          border: '2px solid rgba(124, 179, 66, 0.6)',
+          backdropFilter: 'blur(10px)',
           boxShadow: '0 6px 20px rgba(124, 179, 66, 0.2)',
           '&:hover': {
-            backgroundColor: 'rgba(124, 179, 66, 0.35)'
+            backgroundColor: 'rgba(124, 179, 66, 0.5)',
+            border: '2px solid rgba(124, 179, 66, 0.8)'
           }
         },
         outlined: {
-          backgroundColor: 'rgba(255, 255, 255, 0.06)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          backdropFilter: 'blur(4px)',
-          WebkitBackdropFilter: 'blur(4px)'
+          backgroundColor: 'rgba(124, 179, 66, 0.2)',
+          border: '2px solid rgba(124, 179, 66, 0.5)',
+          backdropFilter: 'blur(10px)',
+          '&:hover': {
+            backgroundColor: 'rgba(124, 179, 66, 0.3)',
+            border: '2px solid rgba(124, 179, 66, 0.7)'
+          }
         },
         text: {
-          backgroundColor: 'transparent',
-          '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.06)' }
+          backgroundColor: 'rgba(124, 179, 66, 0.15)',
+          backdropFilter: 'blur(10px)',
+          '&:hover': {
+            backgroundColor: 'rgba(124, 179, 66, 0.25)'
+          }
         }
       }
     },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          // Translucent app bar
-          backgroundColor: 'rgba(0,0,0,0.35)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
+          backgroundColor: '#1a1a1a',
           borderBottom: cannabisTheme.borders.primary
         }
       }
@@ -147,9 +146,7 @@ export const muiThemeOverrides = {
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          backgroundColor: 'rgba(0, 0, 0, 0.45)',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
+          backgroundColor: '#2c2c2c',
           borderRight: cannabisTheme.borders.subtle
         }
       }
@@ -157,9 +154,7 @@ export const muiThemeOverrides = {
     MuiDialog: {
       styleOverrides: {
         paper: {
-          backgroundColor: 'rgba(25, 25, 25, 0.6)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
+          backgroundColor: '#2c2c2c',
           border: cannabisTheme.borders.subtle,
           boxShadow: cannabisTheme.shadows.elevated
         }

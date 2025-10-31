@@ -58,7 +58,7 @@ function AgeGate({ onVerify }) {
               sx={{
                 background: 'linear-gradient(45deg, #4caf50 30%, #8bc34a 90%)',
                 WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
+                WebkitTextFillColor: 'rgba(0,0,0,0)',
               }}
             >
               StrainSpotter

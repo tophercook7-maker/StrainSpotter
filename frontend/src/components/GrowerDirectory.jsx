@@ -66,10 +66,10 @@ export default function GrowerDirectory({ onBack, onNavigate }) {
           </CardContent>
         </Card>
       ) : (
-        <Grid container spacing={3}>
+        <Grid container spacing={2}>
           {growers.map((g) => (
             <Grid item xs={12} sm={6} md={4} key={g.id}>
-              <Card sx={{ height: '100%' }}>
+              <Card sx={{ height: '100%', background: 'rgba(255,255,255,0.10)', backdropFilter: 'blur(12px)', border: '2px solid black', boxShadow: 'none' }}>
                 <CardContent>
                   <Stack spacing={2}>
                     <Stack direction="row" spacing={2} alignItems="center">

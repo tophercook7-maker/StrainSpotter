@@ -101,18 +101,11 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        {/* Global background layer */}
+        {/* Global background layer - restored, no dark filter or overlay */}
         <div style={{
           position: 'fixed', inset: 0, zIndex: 0,
           backgroundImage: 'url(/strainspotter-bg.jpg)',
-          backgroundSize: 'cover', backgroundPosition: 'center',
-          // Darken the background so UI elements stand out
-          filter: 'brightness(0.4)'
-        }} />
-        {/* Dark overlay for better contrast */}
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 0,
-          background: 'rgba(0, 0, 0, 0.3)'
+          backgroundSize: 'cover', backgroundPosition: 'center'
         }} />
         <ErrorBoundary>
           <GuidelinesGate>
@@ -122,76 +115,76 @@ function App() {
             </div>
           )}
           {/* No navigation bar - all actions are on-screen buttons */}
-          <div style={{ position: 'relative', zIndex: 1 }}>
-      {currentView === 'home' && (
-        <Home onNavigate={setCurrentView} />
-      )}
-      {currentView === 'scanner' && (
-        <Scanner onViewHistory={() => setCurrentView('history')} onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'guest-scan' && (
-        <Scanner onViewHistory={() => setCurrentView('history')} onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'wizard' && (
-        <ScanWizard onBack={() => setCurrentView('home')} />
-      )}
-        {currentView === 'history' && (
-          <ScanHistory onBack={() => setCurrentView('home')} />
-        )}
-      {currentView === 'feedback' && (
-        <FeedbackChat onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'growers' && (
-        <GrowerDirectory onNavigate={setCurrentView} onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'seeds' && (
-        <Seeds onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'dispensaries' && (
-        <Dispensaries onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'register' && (
-        <GrowerRegistration onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'groups' && (
-        <Groups onNavigate={setCurrentView} onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'grow-coach' && (
-        <GrowCoach onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'membership-join' && (
-        <MembershipJoin onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'help' && (
-        <Help onNavigate={setCurrentView} onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'login' && (
-        <Auth onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'friends' && (
-        <Friends onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'strains' && (
-        <StrainBrowser onNavigate={setCurrentView} />
-      )}
-      {currentView === 'membership-admin' && (
-        <MembershipAdmin onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'pipeline' && (
-        <PipelineStatus onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'moderation' && (
-        <ModerationDashboard onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'guidelines' && (
-        <Guidelines onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'reset' && (
-        <PasswordReset onBack={() => setCurrentView('home')} />
-      )}
-      {currentView === 'errors' && (
-        <ErrorViewer onBack={() => setCurrentView('home')} />
-      )}
+          <div style={{ position: 'relative', zIndex: 10 }}>
+            {currentView === 'home' && (
+              <Home onNavigate={setCurrentView} />
+            )}
+            {currentView === 'scanner' && (
+              <Scanner onViewHistory={() => setCurrentView('history')} onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'guest-scan' && (
+              <Scanner onViewHistory={() => setCurrentView('history')} onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'wizard' && (
+              <ScanWizard onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'history' && (
+              <ScanHistory onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'feedback' && (
+              <FeedbackChat onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'growers' && (
+              <GrowerDirectory onNavigate={setCurrentView} onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'seeds' && (
+              <Seeds onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'dispensaries' && (
+              <Dispensaries onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'register' && (
+              <GrowerRegistration onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'groups' && (
+              <Groups onNavigate={setCurrentView} onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'grow-coach' && (
+              <GrowCoach onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'membership-join' && (
+              <MembershipJoin onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'help' && (
+              <Help onNavigate={setCurrentView} onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'login' && (
+              <Auth onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'friends' && (
+              <Friends onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'strains' && (
+              <StrainBrowser onNavigate={setCurrentView} />
+            )}
+            {currentView === 'membership-admin' && (
+              <MembershipAdmin onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'pipeline' && (
+              <PipelineStatus onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'moderation' && (
+              <ModerationDashboard onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'guidelines' && (
+              <Guidelines onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'reset' && (
+              <PasswordReset onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'errors' && (
+              <ErrorViewer onBack={() => setCurrentView('home')} />
+            )}
           </div>
         </GuidelinesGate>
       </ErrorBoundary>

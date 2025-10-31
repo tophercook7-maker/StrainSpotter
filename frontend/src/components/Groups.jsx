@@ -132,7 +132,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           userName = data?.session?.user?.user_metadata?.username || 
                      userEmail?.split('@')[0] || 
                      `user_${validUserId.substring(0, 8)}`;
-        } catch (e) {
+  } catch {
           console.log('[Groups] Could not fetch session for email');
         }
       }
@@ -368,7 +368,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+  <Container maxWidth="lg" sx={{ py: 4 }}>
       {onBack && (
         <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 1, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
       )}
@@ -378,7 +378,14 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
 
       <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', md: 'row' } }}>
         {/* Groups list */}
-        <Card sx={{ flex: { xs: '1 1 auto', md: '0 0 300px' } }}>
+        <Card sx={{
+          flex: { xs: '1 1 auto', md: '0 0 300px' },
+          bgcolor: 'rgba(255,255,255,0.7)',
+          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+          backdropFilter: 'blur(12px)',
+          borderRadius: 4,
+          border: '1px solid rgba(255,255,255,0.18)'
+        }}>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 2 }}>
               Groups
@@ -455,7 +462,14 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         </Card>
 
         {/* Chat area */}
-        <Card sx={{ flex: 1 }}>
+        <Card sx={{
+          flex: 1,
+          bgcolor: 'rgba(255,255,255,0.7)',
+          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+          backdropFilter: 'blur(12px)',
+          borderRadius: 4,
+          border: '1px solid rgba(255,255,255,0.18)'
+        }}>
           <CardContent>
             {!selectedGroup ? (
               <Typography variant="body2" color="text.secondary">
@@ -546,8 +560,20 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
 
       {/* Report Dialog */}
       <Dialog open={reportDialogOpen} onClose={() => setReportDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Report Message</DialogTitle>
-        <DialogContent>
+        <DialogTitle sx={{
+          bgcolor: 'rgba(255,255,255,0.7)',
+          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+          backdropFilter: 'blur(12px)',
+          borderRadius: 4,
+          border: '1px solid rgba(255,255,255,0.18)'
+        }}>Report Message</DialogTitle>
+        <DialogContent sx={{
+          bgcolor: 'rgba(255,255,255,0.7)',
+          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+          backdropFilter: 'blur(12px)',
+          borderRadius: 4,
+          border: '1px solid rgba(255,255,255,0.18)'
+        }}>
           {reportingMessage && (
             <Box sx={{ mb: 2 }}>
               <Typography variant="subtitle2" color="text.secondary">

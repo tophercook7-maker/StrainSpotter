@@ -156,7 +156,7 @@ export default function Auth({ onBack }) {
   }
 
   return (
-    <Box sx={{ maxWidth: 420, mx: 'auto', py: 4 }}>
+  <Box sx={{ maxWidth: 420, mx: 'auto', py: 4, background: 'transparent' }}>
       {onBack && (
         <Button 
           onClick={onBack} 
@@ -175,10 +175,10 @@ export default function Auth({ onBack }) {
           Home
         </Button>
       )}
-      <Card>
+      <Card sx={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(12px)', border: '2px solid rgba(0,0,0,0.12)', boxShadow: 'none' }}>
         <CardContent>
           <Stack spacing={2}>
-            <Typography variant="h5">Account</Typography>
+            <Typography variant="h5" sx={{ color: 'black', fontSize: '2rem', fontWeight: 700 }}>Account</Typography>
             {user ? (
               <>
                 <Typography variant="body2">Signed in as {user.email}</Typography>
@@ -190,31 +190,31 @@ export default function Auth({ onBack }) {
                   <Tab label="Sign In" value="signin" />
                   <Tab label="Sign Up" value="signup" />
                 </Tabs>
-                <TextField label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} fullWidth />
+                <TextField label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} fullWidth sx={{ background: 'rgba(255,255,255,0.10)', color: 'black', fontSize: '1.15rem', borderRadius: 2, input: { color: 'black' } }} InputLabelProps={{ style: { color: 'black', fontWeight: 600 } }} />
                 {mode === 'signin' && (
                   <>
-                    <TextField label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} fullWidth />
-                    {error && <Alert severity="error">{error}</Alert>}
-                    {info && <Alert severity="info">{info}</Alert>}
+                    <TextField label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} fullWidth sx={{ background: 'rgba(255,255,255,0.10)', color: 'black', fontSize: '1.15rem', borderRadius: 2, input: { color: 'black' } }} InputLabelProps={{ style: { color: 'black', fontWeight: 600 } }} />
+                    {error && <Alert severity="error" sx={{ fontSize: '1.1rem', color: 'black', background: 'rgba(255,255,255,0.10)' }}>{error}</Alert>}
+                    {info && <Alert severity="info" sx={{ fontSize: '1.1rem', color: 'black', background: 'rgba(255,255,255,0.10)' }}>{info}</Alert>}
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                      <Button variant="contained" onClick={signIn} disabled={loading}>
+                      <Button variant="contained" onClick={signIn} disabled={loading} sx={{ fontSize: '1.1rem', color: 'black', background: 'rgba(255,255,255,0.20)', border: '1.5px solid black', boxShadow: 'none', fontWeight: 700 }}>
                         {loading ? <CircularProgress size={20} /> : 'Sign In'}
                       </Button>
-                      <Button variant="outlined" onClick={sendMagicLink} disabled={loading}>Send Magic Link</Button>
-                      <Button variant="text" onClick={forgotPassword} disabled={loading}>Forgot Password?</Button>
+                      <Button variant="outlined" onClick={sendMagicLink} disabled={loading} sx={{ fontSize: '1.1rem', color: 'black', border: '1.5px solid black', fontWeight: 700 }}>Send Magic Link</Button>
+                      <Button variant="text" onClick={forgotPassword} disabled={loading} sx={{ fontSize: '1.1rem', color: 'black', fontWeight: 700 }}>Forgot Password?</Button>
                     </Stack>
                   </>
                 )}
                 {mode === 'signup' && (
                   <>
-                    <TextField label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} fullWidth />
-                    {error && <Alert severity="error">{error}</Alert>}
-                    {info && <Alert severity="info">{info}</Alert>}
+                    <TextField label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} fullWidth sx={{ background: 'rgba(255,255,255,0.10)', color: 'black', fontSize: '1.15rem', borderRadius: 2, input: { color: 'black' } }} InputLabelProps={{ style: { color: 'black', fontWeight: 600 } }} />
+                    {error && <Alert severity="error" sx={{ fontSize: '1.1rem', color: 'black', background: 'rgba(255,255,255,0.10)' }}>{error}</Alert>}
+                    {info && <Alert severity="info" sx={{ fontSize: '1.1rem', color: 'black', background: 'rgba(255,255,255,0.10)' }}>{info}</Alert>}
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                      <Button variant="contained" onClick={signUp} disabled={loading}>
+                      <Button variant="contained" onClick={signUp} disabled={loading} sx={{ fontSize: '1.1rem', color: 'black', background: 'rgba(255,255,255,0.20)', border: '1.5px solid black', boxShadow: 'none', fontWeight: 700 }}>
                         {loading ? <CircularProgress size={20} /> : 'Create Account'}
                       </Button>
-                      <MuiLink component="button" onClick={() => setMode('signin')} sx={{ alignSelf: 'center' }}>
+                      <MuiLink component="button" onClick={() => setMode('signin')} sx={{ alignSelf: 'center', color: 'black', fontWeight: 700 }}>
                         Already registered? Sign in
                       </MuiLink>
                     </Stack>

@@ -14,10 +14,12 @@ async function checkRLS() {
       .from('scans')
       .insert({ image_url: 'test', user_id: null });
     if (error && error.message.includes('row-level security')) {
+      console.warn(JSON.stringify({ tag: 'health', warning: 'RLS blocks scan insert', details: error.message }));
       return false;
     }
     return true;
-  } catch {
+  } catch (e) {
+    console.error(JSON.stringify({ tag: 'health', error: e?.message || e }));
     return false;
   }
 }
@@ -28,8 +30,12 @@ router.get('/', async (req, res) => {
   try {
     const { error } = await supabase.from('scans').select('*').limit(1);
     supabaseConfigured = !error;
-  } catch {
+    if (error) {
+      console.warn(JSON.stringify({ tag: 'health', warning: 'Supabase error', details: error.message }));
+    }
+  } catch (e) {
     supabaseConfigured = false;
+    console.error(JSON.stringify({ tag: 'health', error: e?.message || e }));
   }
 
   // Check Google Vision credentials
@@ -41,9 +47,13 @@ router.get('/', async (req, res) => {
         ? credPath
         : path.resolve(process.cwd(), credPath);
       googleVisionConfigured = fs.existsSync(resolved);
+      if (!googleVisionConfigured) {
+        console.warn(JSON.stringify({ tag: 'health', warning: 'Google Vision credentials not found', details: resolved }));
+      }
     }
-  } catch {
+  } catch (e) {
     googleVisionConfigured = false;
+    console.error(JSON.stringify({ tag: 'health', error: e?.message || e }));
   }
 
   // Check bucket existence (scans)
@@ -52,8 +62,12 @@ router.get('/', async (req, res) => {
     const client = supabaseAdmin ?? supabase;
     const { data } = await client.storage.listBuckets();
     bucketExists = data?.some(b => b.name === 'scans');
-  } catch {
+    if (!bucketExists) {
+      console.warn(JSON.stringify({ tag: 'health', warning: 'Scans bucket not found' }));
+    }
+  } catch (e) {
     bucketExists = false;
+    console.error(JSON.stringify({ tag: 'health', error: e?.message || e }));
   }
 
   // Check RLS policy

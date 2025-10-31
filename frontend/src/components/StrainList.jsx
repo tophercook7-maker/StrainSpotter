@@ -113,10 +113,16 @@ function StrainList() {
           onClick={() => setSelectedStrain(null)}
           sx={{ mb: 2 }}
         >
-          ← Back to List
+          0 Back to List
         </Button>
         
-        <Card>
+        <Card sx={{
+          bgcolor: 'rgba(255,255,255,0.7)',
+          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+          backdropFilter: 'blur(12px)',
+          borderRadius: 4,
+          border: '1px solid rgba(255,255,255,0.18)'
+        }}>
           <CardContent>
             <Typography variant="h4" gutterBottom>
               {selectedStrain.name}
@@ -194,7 +200,7 @@ function StrainList() {
   }
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3 }}>
+  <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3 }}>
       <Typography variant="h3" gutterBottom>
         StrainSpotter
       </Typography>
@@ -204,7 +210,13 @@ function StrainList() {
       </Typography>
 
       {/* Search & Filters */}
-      <Card sx={{ mb: 3, p: 2 }}>
+      <Card sx={{ mb: 3, p: 2,
+        bgcolor: 'rgba(255,255,255,0.7)',
+        boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+        backdropFilter: 'blur(12px)',
+        borderRadius: 4,
+        border: '1px solid rgba(255,255,255,0.18)'
+      }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={4}>
             <TextField
@@ -293,7 +305,12 @@ function StrainList() {
                   sx={{ 
                     height: '100%', 
                     cursor: 'pointer',
-                    '&:hover': { boxShadow: 6 }
+                    '&:hover': { boxShadow: 6 },
+                    bgcolor: 'rgba(255,255,255,0.7)',
+                    boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+                    backdropFilter: 'blur(12px)',
+                    borderRadius: 4,
+                    border: '1px solid rgba(255,255,255,0.18)'
                   }}
                   onClick={() => handleStrainClick(strain)}
                 >

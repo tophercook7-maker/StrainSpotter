@@ -98,7 +98,13 @@ export default function FeedbackChat({ onBack }) {
           Home
         </Button>
       )}
-      <Card>
+      <Card sx={{
+        bgcolor: 'rgba(255,255,255,0.7)',
+        boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+        backdropFilter: 'blur(12px)',
+        borderRadius: 4,
+        border: '1px solid rgba(255,255,255,0.18)'
+      }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>Feedback</Typography>
           <Stack spacing={1} sx={{ mb: 2, maxHeight: 300, overflow: 'auto' }}>

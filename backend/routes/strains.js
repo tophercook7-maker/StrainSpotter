@@ -1,9 +1,171 @@
 import express from 'express';
+const router = express.Router();
+// --- Health Check Endpoint ---
+router.get('/health', (req, res) => {
+  let ok = true;
+  let strainCount = Array.isArray(strains) ? strains.length : 0;
+  let errors = [];
+  if (!strainCount) {
+    ok = false;
+    errors.push('No strains loaded');
+  }
+  res.json({ ok, strainCount, errors });
+});
+
+// --- Auto-repair for missing/corrupt strain data ---
+function autoRepairStrainData() {
+  const fs = require('fs');
+  const path = require('path');
+  const strainPath = path.resolve(__dirname, '../data/strain_library.json');
+  try {
+    const data = fs.readFileSync(strainPath, 'utf8');
+    const arr = JSON.parse(data);
+    if (!Array.isArray(arr) || arr.length === 0) {
+      throw new Error('Strain data empty or corrupt');
+    }
+    return arr;
+  } catch (err) {
+    // Attempt to rebuild from source
+    try {
+      const mergeScript = path.resolve(__dirname, '../../tools/merge_strain_datasets.mjs');
+      require('child_process').execSync(`node ${mergeScript}`);
+      const data = fs.readFileSync(strainPath, 'utf8');
+      return JSON.parse(data);
+    } catch (e) {
+  console.error(JSON.stringify({ tag: 'auto-repair', error: e?.message || e }));
+      return [];
+    }
+  }
+}
+
+// --- Global error handler for self-healing ---
+router.use((err, req, res, next) => {
+  console.error(JSON.stringify({ tag: 'error', error: err?.message || err }));
+  // Attempt auto-repair if strain data error
+  if (String(err).includes('strain')) {
+    strains = autoRepairStrainData();
+    if (strains.length) {
+      return res.status(200).json({ ok: true, repaired: true });
+    }
+  }
+  res.status(500).json({ error: err.message || 'Unknown error' });
+});
+// --- Full Automation: Periodic retry for pending scans ---
+function notifyUser(scan) {
+  // Placeholder: Integrate with email, push, or frontend notification
+  console.info(JSON.stringify({ tag: 'notify', scanId: scan.id, strain: scan.strain?.name }));
+}
+
+setInterval(() => {
+  let found = [];
+  for (const scan of pendingScans) {
+    for (const strain of strains) {
+      if (scan.image && scan.image.toLowerCase().includes(strain.slug)) {
+        scan.status = 'complete';
+        scan.strain = strain;
+        found.push(scan);
+        notifyUser(scan);
+      }
+    }
+  }
+  // Remove completed scans from pending
+  pendingScans = pendingScans.filter(s => s.status === 'pending');
+  if (found.length) {
+    console.info(JSON.stringify({ tag: 'auto-retry', matched: found.length }));
+  }
+}, 60000); // every 60 seconds
+// In-memory pending scans (for demo; use DB in production)
+let pendingScans = [];
+
+// POST /api/scans - handle new scan
+router.post('/scans', async (req, res) => {
+  const { image, user } = req.body;
+  let match = null;
+  let matchedSlug = null;
+  if (image && typeof image === 'string') {
+    supabaseAdmin
+      .from('strains')
+      .select('*')
+      .then(({ data, error }) => {
+        if (error || !data) {
+          return res.status(500).json({ error: 'Supabase error: ' + (error?.message || 'Unknown') });
+        }
+        const imageLower = image.toLowerCase();
+        for (const strain of data) {
+          if (
+            imageLower.includes(strain.slug?.toLowerCase()) ||
+            imageLower.includes(strain.name?.toLowerCase())
+          ) {
+            match = strain;
+            matchedSlug = strain.slug;
+            break;
+          }
+        }
+        if (match) {
+          return res.json({ status: 'complete', strain: match });
+        } else {
+          const scanId = Date.now() + '-' + Math.floor(Math.random()*10000);
+          pendingScans.push({ id: scanId, image, user, status: 'pending', created: new Date().toISOString() });
+          return res.json({ status: 'pending', scanId });
+        }
+      });
+  } else {
+    return res.status(400).json({ error: 'No image provided' });
+  }
+});
+
+// GET /api/scans/pending - list all pending scans
+router.get('/scans/pending', (req, res) => {
+  res.json({ pending: pendingScans });
+});
+
+// POST /api/scans/retry - retry matching for all pending scans
+router.post('/scans/retry', (req, res) => {
+  let found = [];
+  for (const scan of pendingScans) {
+    for (const strain of strains) {
+      if (scan.image && scan.image.toLowerCase().includes(strain.slug)) {
+        scan.status = 'complete';
+        scan.strain = strain;
+        found.push(scan);
+      }
+    }
+  }
+  // Remove completed scans from pending
+  pendingScans = pendingScans.filter(s => s.status === 'pending');
+  res.json({ found });
+});
+// Get reviews for a strain
+router.get('/strains/:slug/reviews', (req, res) => {
+  const strain = strains.find(s => s.slug === req.params.slug);
+  if (!strain) return res.status(404).json({ error: 'Strain not found' });
+  res.json({ reviews: strain.reviews || [] });
+});
+
+// Add a review to a strain
+router.post('/strains/:slug/reviews', async (req, res) => {
+  const strain = strains.find(s => s.slug === req.params.slug);
+  if (!strain) return res.status(404).json({ error: 'Strain not found' });
+  const { review, user } = req.body;
+  if (!review || !user) return res.status(400).json({ error: 'Missing review or user' });
+  const newReview = { review, user, date: new Date().toISOString() };
+  strain.reviews = strain.reviews || [];
+  strain.reviews.push(newReview);
+  // Persist to disk
+  const fs = require('fs');
+  try {
+    fs.writeFileSync(
+      require('path').resolve(__dirname, '../data/strain_library.json'),
+      JSON.stringify(strains, null, 2)
+    );
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to save review' });
+  }
+  res.json({ ok: true, review: newReview });
+});
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
-const router = express.Router();
 // Resolve data directory relative to this file, not process.cwd(), to avoid PM2/cwd issues
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, '..', 'data');
@@ -11,6 +173,7 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 // Load strain data
 let strains = [];
 let testMapping = {};
+let strainDataLastUpdated = null;
 
 function loadData() {
   try {
@@ -19,14 +182,22 @@ function loadData() {
 
     // Check if files exist before trying to read (Vercel serverless may not have them)
     if (!fs.existsSync(strainPath)) {
-      console.warn('[strains] strain_library.json not found, using empty array');
+    console.warn(JSON.stringify({ tag: 'strains', warning: 'strain_library.json not found, using empty array' }));
       strains = [];
       testMapping = { strains: {} };
+      strainDataLastUpdated = null;
       return;
     }
 
     const rawStrains = fs.readFileSync(strainPath, 'utf8');
     strains = JSON.parse(rawStrains);
+    // Get last updated time
+    try {
+      const stat = fs.statSync(strainPath);
+      strainDataLastUpdated = stat.mtime;
+    } catch (e) {
+      strainDataLastUpdated = null;
+    }
     
     if (fs.existsSync(mappingPath)) {
       const rawMapping = fs.readFileSync(mappingPath, 'utf8');
@@ -66,9 +237,9 @@ function loadData() {
       }
     }
 
-    console.log(`[data] Loaded ${strains.length} strains and ${Object.keys(testMapping.strains).length} test mappings`);
+  console.info(JSON.stringify({ tag: 'data', strains: strains.length, testMappings: Object.keys(testMapping.strains).length }));
   } catch (e) {
-    console.error('[data] Error loading strain data:', e);
+    console.error(JSON.stringify({ tag: 'data', error: e?.message || e }));
   }
 }
 
@@ -78,9 +249,14 @@ loadData();
 // Watch for data changes
 fs.watch(DATA_DIR, (eventType, filename) => {
   if (filename?.endsWith('.json')) {
-    console.log(`[watch] Reloading data due to changes in ${filename}`);
+    console.info(JSON.stringify({ tag: 'watch', file: filename }));
     loadData();
   }
+});
+// Endpoint for last updated timestamp
+router.get('/strains/last-updated', (req, res) => {
+  if (!strainDataLastUpdated) return res.json({ lastUpdated: null });
+  res.json({ lastUpdated: strainDataLastUpdated });
 });
 
 // Helper function to filter strains

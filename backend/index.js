@@ -1,25 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-
-// Simple file logger
-const LOG_PATH = path.join(process.cwd(), 'backend/logs/server.log');
-function logToFile(message) {
-  const line = `[${new Date().toISOString()}] ${message}\n`;
-  fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
-  fs.appendFileSync(LOG_PATH, line);
-}
-
-// Log every request
-app.use((req, res, next) => {
-  logToFile(`Request: ${req.method} ${req.originalUrl || req.url} | IP: ${req.ip}`);
-  next();
-});
-
-// Log errors
-app.use((err, req, res, next) => {
-  logToFile(`Error: ${err.message} | Endpoint: ${req.method} ${req.originalUrl || req.url}`);
-  next(err);
-});
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import express from 'express';
 import helmet from 'helmet';
@@ -27,12 +7,7 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { supabase } from './supabaseClient.js';
 import { ensureBucketExists, supabaseAdmin } from './supabaseAdmin.js';
-import fs from 'fs';
-import path from 'path';
 import sharp from 'sharp';
-
-// Import all route modules at the top (ES module requirement)
-// import stripeWebhook from './routes/stripeWebhook.js'; // Removed: not using Stripe
 import strainRoutes from './routes/strains.js';
 import healthRoutes from './routes/health.js';
 import compareRoutes from './routes/compare.js';
@@ -139,7 +114,8 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
   res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // Allow custom headers used by frontend (add more as needed)
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-session-id, x-user-id');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
@@ -361,6 +337,11 @@ app.post('/api/scans/from-url', async (req, res, next) => {
 app.get('/api/scans/:id', async (req, res, next) => {
   try {
     const id = req.params.id;
+    // Validate UUID format (v4)
+    const uuidV4Regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidV4Regex.test(id)) {
+      return res.status(400).json({ error: 'Invalid scan ID: must be a UUID v4.' });
+    }
     // Use service role for reads if available to ensure visibility of all scans
     const readClient = supabaseAdmin ?? supabase;
     const { data, error } = await readClient.from('scans').select('*').eq('id', id).maybeSingle();

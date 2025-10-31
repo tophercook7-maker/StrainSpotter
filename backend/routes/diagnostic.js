@@ -9,26 +9,24 @@ router.post('/vision-test', async (req, res) => {
   try {
     const { base64 } = req.body;
     if (!base64) {
+      console.warn(JSON.stringify({ tag: 'diagnostic', warning: 'base64 image required' }));
       return res.status(400).json({ error: 'base64 image required' });
     }
 
     // Check if Vision client is available
     let visionClient;
     try {
-      // Initialize with inline credentials if available (for Vercel/serverless)
       visionClient = process.env.GOOGLE_VISION_JSON
         ? new ImageAnnotatorClient({ credentials: JSON.parse(process.env.GOOGLE_VISION_JSON) })
         : new ImageAnnotatorClient();
     } catch (e) {
+      console.error(JSON.stringify({ tag: 'diagnostic', error: 'Google Vision not configured', details: e?.message || e }));
       return res.status(500).json({ 
         error: 'Google Vision not configured', 
         hint: 'Set GOOGLE_APPLICATION_CREDENTIALS in env/.env.local' 
       });
     }
 
-    // Create a temporary image buffer
-    const buffer = Buffer.from(base64, 'base64');
-    
     // Run Vision API annotation
     const [result] = await visionClient.annotateImage({
       image: { content: base64 },
@@ -50,7 +48,8 @@ router.post('/vision-test', async (req, res) => {
     });
 
   } catch (e) {
-    res.status(500).json({ error: String(e), stack: e.stack });
+    console.error(JSON.stringify({ tag: 'diagnostic', error: e?.message || e }));
+    res.status(500).json({ error: String(e) });
   }
 });
 
@@ -58,20 +57,20 @@ router.post('/vision-test', async (req, res) => {
 router.get('/search-test', async (req, res) => {
   const { q } = req.query;
   if (!q) {
+    console.warn(JSON.stringify({ tag: 'diagnostic', warning: 'Query parameter "q" required' }));
     return res.json({ error: 'Query parameter "q" required' });
   }
 
   try {
-    // Import strains data (assumes backend has it loaded)
     const response = await fetch(`http://localhost:${process.env.PORT || 5181}/api/search?q=${encodeURIComponent(q)}&limit=10`);
     const results = await response.json();
-    
     res.json({
       query: q,
       matchCount: results.length,
       topMatches: results.slice(0, 5).map(s => ({ name: s.name, slug: s.slug, type: s.type }))
     });
   } catch (e) {
+    console.error(JSON.stringify({ tag: 'diagnostic', error: e?.message || e }));
     res.status(500).json({ error: String(e) });
   }
 });
@@ -82,6 +81,7 @@ export default router;
 router.post('/email-test', async (req, res) => {
   try {
     if (!isEmailConfigured()) {
+      console.warn(JSON.stringify({ tag: 'diagnostic', warning: 'SMTP not configured' }));
       return res.status(501).json({
         ok: false,
         error: 'SMTP not configured',
@@ -91,6 +91,7 @@ router.post('/email-test', async (req, res) => {
 
     const to = (req.body && req.body.to) || process.env.EMAIL_TO;
     if (!to) {
+      console.warn(JSON.stringify({ tag: 'diagnostic', warning: 'Recipient missing for email test' }));
       return res.status(400).json({ ok: false, error: 'Recipient missing. Set EMAIL_TO or provide { "to": "you@example.com" }.' });
     }
 
@@ -100,10 +101,12 @@ router.post('/email-test', async (req, res) => {
 
     const result = await sendMail({ to, subject, text, html });
     if (result.skipped) {
+      console.warn(JSON.stringify({ tag: 'diagnostic', warning: 'Email send skipped: SMTP not configured' }));
       return res.status(501).json({ ok: false, error: 'Email send skipped: SMTP not configured' });
     }
     return res.json({ ok: true, messageId: result.id, to });
   } catch (e) {
+    console.error(JSON.stringify({ tag: 'diagnostic', error: e?.message || e }));
     return res.status(500).json({ ok: false, error: String(e) });
   }
 });

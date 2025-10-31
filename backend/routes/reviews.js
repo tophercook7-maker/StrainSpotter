@@ -11,12 +11,15 @@ router.get('/', async (req, res) => {
   try {
     const { strain_slug } = req.query;
     if (!strain_slug) return res.json([]);
-    const { data, error } = await readClient
+
+    // First get reviews
+    const { data: reviews, error } = await readClient
       .from('reviews')
-      .select('id, user_id, strain_slug, rating, comment, created_at, users(id, username, avatar_url)')
+      .select('*')
       .eq('strain_slug', strain_slug)
       .order('created_at', { ascending: false })
       .limit(50);
+
     if (error) {
       // Graceful fallback if the reviews table hasn't been created yet
       // Postgres undefined_table error code is 42P01
@@ -26,7 +29,34 @@ router.get('/', async (req, res) => {
       }
       return res.status(500).json({ error: error.message });
     }
-    res.json(data || []);
+
+    if (!reviews || reviews.length === 0) {
+      return res.json([]);
+    }
+
+    // Get unique user IDs
+    const userIds = [...new Set(reviews.map(r => r.user_id).filter(Boolean))];
+
+    // Fetch user data separately
+    let usersMap = {};
+    if (userIds.length > 0) {
+      const { data: users } = await readClient
+        .from('users')
+        .select('id, username, avatar_url')
+        .in('id', userIds);
+
+      if (users) {
+        usersMap = Object.fromEntries(users.map(u => [u.id, u]));
+      }
+    }
+
+    // Combine reviews with user data
+    const reviewsWithUsers = reviews.map(review => ({
+      ...review,
+      users: usersMap[review.user_id] || null
+    }));
+
+    res.json(reviewsWithUsers);
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }

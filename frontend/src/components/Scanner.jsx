@@ -548,7 +548,7 @@ function Scanner({ onViewHistory, onBack }) {
             mb: 3,
             overflow: 'hidden',
             border: '2px solid #4caf50',
-            bgcolor: 'transparent'
+            bgcolor: 'rgba(0,0,0,0)'
           }}
         >
           <Box sx={{ position: 'relative', height: 220 }}>
@@ -614,7 +614,7 @@ function Scanner({ onViewHistory, onBack }) {
                       component="img"
                       src={src}
                       alt={`Preview ${idx + 1}`}
-                      sx={{ width: '100%', maxHeight: 320, objectFit: 'cover', bgcolor: 'transparent', borderRadius: 1 }}
+                      sx={{ width: '100%', maxHeight: 320, objectFit: 'cover', bgcolor: 'rgba(0,0,0,0)', borderRadius: 1 }}
                     />
                     {showGuide && (
                       <Box
@@ -1055,18 +1055,23 @@ function Scanner({ onViewHistory, onBack }) {
                   </CardContent>
                 </Card>
 
-                {/* Recent reviews */}
+                {/* Recent reviews - upgraded visual */}
                 {reviews.slice(0, 5).map((r) => (
-                  <Card key={r.id} sx={{ mb: 1.5, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <Card key={r.id} sx={{ mb: 1.5, background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '2px solid #4caf50', boxShadow: '0 2px 12px rgba(76,175,80,0.08)' }}>
                     <CardContent sx={{ py: 1.5 }}>
-                      <Stack direction="row" alignItems="center" spacing={1}>
-                        <Rating value={r.rating || 0} readOnly size="small" />
-                        <Typography variant="caption" color="text.secondary">
-                          {new Date(r.created_at).toLocaleDateString()}
-                        </Typography>
+                      <Stack direction="row" alignItems="center" spacing={2}>
+                        <Avatar sx={{ bgcolor: 'primary.main', width: 36, height: 36, fontWeight: 700 }}>
+                          {r.user_id ? r.user_id.substring(0,2).toUpperCase() : '??'}
+                        </Avatar>
+                        <Stack>
+                          <Rating value={r.rating || 0} readOnly size="small" />
+                          <Typography variant="caption" color="text.secondary">
+                            {new Date(r.created_at).toLocaleDateString()}
+                          </Typography>
+                        </Stack>
                       </Stack>
                       {r.comment && (
-                        <Typography variant="body2" color="text.primary" sx={{ mt: 0.5 }}>
+                        <Typography variant="body2" color="text.primary" sx={{ mt: 1, fontSize: '1.08rem' }}>
                           {r.comment}
                         </Typography>
                       )}

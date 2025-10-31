@@ -67,7 +67,7 @@ function StatsDashboard() {
     .map(([name, count]) => ({ name, count }));
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3 }}>
+  <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3 }}>
       <Typography variant="h4" gutterBottom>
         Database Statistics
       </Typography>
@@ -75,7 +75,13 @@ function StatsDashboard() {
       <Grid container spacing={3}>
         {/* Overview Stats */}
         <Grid item xs={12} md={3}>
-          <Card>
+          <Card sx={{
+            bgcolor: 'rgba(255,255,255,0.7)',
+            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 4,
+            border: '1px solid rgba(255,255,255,0.18)'
+          }}>
             <CardContent>
               <Typography color="text.secondary" gutterBottom>
                 Total Strains
@@ -88,7 +94,13 @@ function StatsDashboard() {
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card>
+          <Card sx={{
+            bgcolor: 'rgba(255,255,255,0.7)',
+            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 4,
+            border: '1px solid rgba(255,255,255,0.18)'
+          }}>
             <CardContent>
               <Typography color="text.secondary" gutterBottom>
                 Avg THC
@@ -104,7 +116,13 @@ function StatsDashboard() {
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card>
+          <Card sx={{
+            bgcolor: 'rgba(255,255,255,0.7)',
+            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 4,
+            border: '1px solid rgba(255,255,255,0.18)'
+          }}>
             <CardContent>
               <Typography color="text.secondary" gutterBottom>
                 Avg CBD
@@ -134,7 +152,13 @@ function StatsDashboard() {
 
         {/* Strain Types Pie Chart */}
         <Grid item xs={12} md={6}>
-          <Card>
+          <Card sx={{
+            bgcolor: 'rgba(255,255,255,0.7)',
+            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 4,
+            border: '1px solid rgba(255,255,255,0.18)'
+          }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Strain Types Distribution
@@ -165,7 +189,13 @@ function StatsDashboard() {
 
         {/* Top Effects Bar Chart */}
         <Grid item xs={12} md={6}>
-          <Card>
+          <Card sx={{
+            bgcolor: 'rgba(255,255,255,0.7)',
+            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 4,
+            border: '1px solid rgba(255,255,255,0.18)'
+          }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Top 10 Effects
@@ -185,7 +215,13 @@ function StatsDashboard() {
 
         {/* Top Flavors Bar Chart */}
         <Grid item xs={12}>
-          <Card>
+          <Card sx={{
+            bgcolor: 'rgba(255,255,255,0.7)',
+            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 4,
+            border: '1px solid rgba(255,255,255,0.18)'
+          }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Top 10 Terpenes/Flavors

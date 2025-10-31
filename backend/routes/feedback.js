@@ -7,19 +7,24 @@ const readClient = supabase;
 const writeClient = supabaseAdmin ?? supabase;
 
 async function getOrCreateFeedbackGroup() {
-  // Try fetch existing 'Feedback' group
-  let { data: grp, error } = await readClient
+  // Try to select the existing 'Feedback' group
+  let { data: groups, error } = await readClient
     .from('groups')
     .select('*')
-    .eq('name', 'Feedback')
-    .maybeSingle();
+    .eq('name', 'Feedback');
   if (error) throw new Error(error.message);
-  if (!grp) {
-    const ins = await writeClient.from('groups').insert({ name: 'Feedback' }).select().single();
-    if (ins.error) throw new Error(ins.error.message);
-    grp = ins.data;
+  if (!groups || groups.length === 0) {
+    // Auto-create the Feedback group using service role
+    const { data: created, error: createErr } = await writeClient
+      .from('groups')
+      .insert({ name: 'Feedback' })
+      .select()
+      .single();
+    if (createErr) throw new Error("Failed to auto-create 'Feedback' group: " + createErr.message);
+    return created;
   }
-  return grp;
+  // If multiple, use the first
+  return groups[0];
 }
 
 router.get('/messages', async (req, res) => {

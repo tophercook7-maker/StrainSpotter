@@ -17,51 +17,34 @@ import {
   DialogActions
 } from '@mui/material';
 import { API_BASE } from '../config';
+import { supabase } from '../supabaseClient';
 
-export default function MembershipJoin({ onBack }) {
-  const [showMasterKey, setShowMasterKey] = useState(false);
-  const [masterKey, setMasterKey] = useState('');
-  const [masterKeyError, setMasterKeyError] = useState(null);
-  const [masterKeySuccess, setMasterKeySuccess] = useState(null);
-  const handleMasterKeySubmit = async () => {
-    setMasterKeyError(null);
-    setMasterKeySuccess(null);
-    try {
-      // Get user_id from session or localStorage
-      let user_id = null;
+export default function MembershipJoin() {
+  // Strain count and last updated
+  const [strainStats, setStrainStats] = useState({ count: null, lastUpdated: null });
+  useEffect(() => {
+    (async () => {
       try {
-        const resp = await fetch(`${API_BASE}/api/membership/status`, { credentials: 'include' });
-        if (resp.ok) {
-          const data = await resp.json();
-          user_id = data.user_id || null;
-        }
-      } catch {
-          console.error('MembershipJoin: Failed to fetch membership status');
-      }
-      if (!user_id) {
-        user_id = localStorage.getItem('ss-session-id');
-      }
-      if (!user_id) {
-        setMasterKeyError('Could not determine user ID. Please sign in or reload.');
-        return;
-      }
-      const res = await fetch(`${API_BASE}/api/membership/master-key`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, key: masterKey })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setMasterKeyError(data.error || 'Invalid master key');
-        return;
-      }
-      setMasterKeySuccess('Full access unlocked! Enjoy all features.');
-      setShowMasterKey(false);
-      loadStatus();
-    } catch (e) {
-      setMasterKeyError('Network error. Please try again.');
-    }
-  };
+        const [countRes, updatedRes] = await Promise.all([
+          fetch(`${API_BASE}/api/strains/count`),
+          fetch(`${API_BASE}/api/strains/last-updated`)
+        ]);
+        const countData = await countRes.json();
+        const updatedData = await updatedRes.json();
+        setStrainStats({
+          count: countData.count,
+          lastUpdated: updatedData.lastUpdated ? new Date(updatedData.lastUpdated) : null
+        });
+  } catch { /* ignore errors */ }
+    })();
+  }, []);
+
+  // All hooks at top level
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState(null);
+  const [user, setUser] = useState(null);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
@@ -103,26 +86,77 @@ export default function MembershipJoin({ onBack }) {
     loadStatus();
   }, [loadStatus]);
 
+  // Login handler (Supabase Auth)
+  const handleLogin = async () => {
+    setLoginError(null);
+    if (!loginEmail || !loginPassword) {
+      setLoginError('Please enter both email and password.');
+      return;
+    }
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
+      if (error) {
+        setLoginError(error.message);
+        return;
+      }
+      setShowLogin(false);
+    } catch (e) {
+      setLoginError('Login failed. Please try again.');
+    }
+  };
+
+  // Supabase Auth: get current user
+  useEffect(() => {
+    let listener;
+    const getSession = async () => {
+      const sessionObj = await supabase.auth.getSession?.();
+      if (sessionObj?.data?.session?.user) setUser(sessionObj.data.session.user);
+    };
+    getSession();
+    listener = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+    return () => { listener?.data?.unsubscribe && listener.data.unsubscribe(); };
+  }, []);
+
+  // Render full-access welcome if logged in
+  if (user) {
+    return (
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Button
+          onClick={() => window.location.href = '/'}
+          variant="contained"
+          sx={{ position: 'absolute', top: 16, left: 16, bgcolor: '#388e3c', color: 'white', fontWeight: 700, borderRadius: 999, boxShadow: '0 2px 8px 0 rgba(46,125,50,0.18)', zIndex: 10, textTransform: 'none', px: 3, py: 1 }}
+        >
+          Home
+        </Button>
+        <Box sx={{ mt: 8, textAlign: 'center' }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#2e7d32', mb: 2 }}>Welcome, {user.email}!</Typography>
+          <Typography variant="body1" sx={{ color: '#388e3c', mb: 2 }}>You are now logged in and have full access to all features.</Typography>
+          <Button variant="contained" color="error" sx={{ borderRadius: 999, px: 4, py: 1, fontWeight: 600 }} onClick={async () => { await supabase.auth.signOut(); setUser(null); }}>
+            Logout
+          </Button>
+        </Box>
+      </Container>
+    );
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
     setApplying(true);
-
     try {
       const res = await fetch(`${API_BASE}/api/membership/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
-
       const data = await res.json();
-
       if (!res.ok) {
         setError(data.error || 'Application failed');
         return;
       }
-
       setSuccess('Application submitted! We will review and be in touch via email within 24-48 hours. Thank you!');
       setShowForm(false);
       setFormData({ email: '', full_name: '', phone: '', message: '' });
@@ -142,210 +176,207 @@ export default function MembershipJoin({ onBack }) {
     );
   }
 
-  const isTrial = status?.status === 'trial';
-  const isExpired = status?.status === 'trial_expired';
-  const isActive = status?.status === 'active';
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      {onBack && (
-        <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 1, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
-      )}
-      <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
-        Join the Club
+
+    <Container maxWidth="md" sx={{ py: 4, position: 'relative' }}>
+      <Button
+        onClick={() => window.location.href = '/'}
+        variant="contained"
+        sx={{
+          position: 'absolute',
+          top: 16,
+          left: 16,
+          bgcolor: '#388e3c',
+          color: 'white',
+          fontWeight: 700,
+          borderRadius: 999,
+          boxShadow: '0 2px 8px 0 rgba(46,125,50,0.18)',
+          zIndex: 10,
+          textTransform: 'none',
+          px: 3,
+          py: 1
+        }}
+      >
+        Home
+      </Button>
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', opacity: 0.95 }}>
+        {strainStats.count !== null && (
+          <Typography variant="body2" sx={{ fontWeight: 600, color: '#388e3c', textAlign: 'center', fontSize: '1rem', mb: 0.5 }}>
+            Over <span style={{ fontWeight: 800 }}>{strainStats.count.toLocaleString()}</span> strains in our database
+          </Typography>
+        )}
+        {strainStats.lastUpdated && (
+          <Typography variant="caption" sx={{ color: '#388e3c', textAlign: 'center' }}>
+            Updated {strainStats.lastUpdated.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+          </Typography>
+        )}
+      </Box>
+      <Typography variant="h4" sx={{ mb: 3, fontWeight: 700, color: '#2e7d32', textShadow: '0 2px 12px rgba(46,125,50,0.2)' }}>
+        Welcome to StrainSpotter Membership
       </Typography>
-
-      {isActive && (
-        <Alert severity="success" sx={{ mb: 3 }}>
+      {status?.isMember ? (
+        <Box sx={{
+          mt: 3,
+          p: 4,
+          borderRadius: 4,
+          background: 'rgba(255,255,255,0.15)',
+          boxShadow: '0 8px 32px 0 rgba(46,125,50,0.25)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(56,142,60,0.25)',
+          color: '#2e7d32',
+          fontWeight: 600,
+        }}>
           You're an active member! Enjoy unlimited access to all features.
-        </Alert>
-      )}
-
-      {isTrial && status.trial && (
-        <Card sx={{ mb: 3, bgcolor: 'primary.light', color: 'primary.contrastText' }}>
+        </Box>
+      ) : (
+        <Card sx={{
+          mb: 3,
+          borderRadius: 4,
+          background: 'rgba(255,255,255,0.10)',
+          boxShadow: '0 8px 32px 0 rgba(46,125,50,0.18)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(56,142,60,0.18)',
+          color: '#388e3c',
+        }}>
           <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              Try Me Mode Active
+            <Typography variant="h6" sx={{ mb: 2, color: '#388e3c' }}>
+              Basic Access
             </Typography>
-            <Stack spacing={2}>
-              <Box>
-                <Typography variant="body2">Scans</Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={(status.trial.scanCount / status.trial.scanLimit) * 100}
-                  sx={{ height: 8, borderRadius: 1, mb: 0.5 }}
-                />
-                <Typography variant="caption">
-                  {status.trial.scansRemaining} of {status.trial.scanLimit} remaining
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="body2">Searches</Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={(status.trial.searchCount / status.trial.searchLimit) * 100}
-                  sx={{ height: 8, borderRadius: 1, mb: 0.5 }}
-                />
-                <Typography variant="caption">
-                  {status.trial.searchesRemaining} of {status.trial.searchLimit} remaining
-                </Typography>
-              </Box>
-              <Alert severity="info">
-                Trial expires: {new Date(status.trial.expiresAt).toLocaleDateString()}
-              </Alert>
-            </Stack>
+            <Box sx={{
+              background: 'rgba(255,255,255,0.10)',
+              borderRadius: 2,
+              p: 2,
+              color: '#388e3c',
+              fontWeight: 500,
+              boxShadow: '0 2px 8px 0 rgba(46,125,50,0.10)',
+              border: '1px solid rgba(56,142,60,0.10)',
+            }}>
+              You have access to the scanner and results.<br />
+              <strong>Unlock Full Access:</strong> <br />
+              <ul style={{ margin: '8px 0 0 16px', color: '#388e3c' }}>
+                <li>Sign up for membership to enjoy exclusive strain data, grow guides, chat/groups, dispensary/grower access, and more.</li>
+              </ul>
+              <Button variant="contained" sx={{ mt: 2, bgcolor: '#388e3c', color: 'white', fontWeight: 700, borderRadius: 2, boxShadow: '0 2px 8px 0 rgba(46,125,50,0.18)' }} onClick={() => setShowForm(true)}>
+                Join Now
+              </Button>
+              <Button variant="outlined" sx={{ mt: 2, ml: 2, borderRadius: 2, fontWeight: 700 }} onClick={() => setShowLogin(true)}>
+                Login to Unlock Full Access
+              </Button>
+            </Box>
           </CardContent>
         </Card>
       )}
 
-      {isExpired && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          Your trial has expired. Join the club to continue using StrainSpotter!
-        </Alert>
-      )}
-
-      <Card>
-        <CardContent>
-          <Typography variant="h5" sx={{ mb: 2 }}>
-            Membership Benefits
-          </Typography>
-          <Stack spacing={2} sx={{ mb: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip label="✓" color="success" size="small" />
-              <Typography>Unlimited strain scans with AI identification</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip label="✓" color="success" size="small" />
-              <Typography>Full access to 35,000+ strain database</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip label="✓" color="success" size="small" />
-              <Typography>Advanced search and filtering tools</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip label="✓" color="success" size="small" />
-              <Typography>Grower directory and community access</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip label="✓" color="success" size="small" />
-              <Typography>Grow logs and journal tracking</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip label="✓" color="success" size="small" />
-              <Typography>Private groups and messaging</Typography>
-            </Box>
-          </Stack>
-
-          {!isActive && (
-            <>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Ready to Join?
-              </Typography>
-              <Button
-                variant="contained"
-                size="large"
-                fullWidth
-                onClick={() => setShowForm(true)}
-                sx={{ fontWeight: 700, mb: 1 }}
-              >
-                Apply for Membership
-              </Button>
-              <Button
-                variant="outlined"
-                size="large"
-                fullWidth
-                onClick={() => setShowMasterKey(true)}
-                sx={{ fontWeight: 700 }}
-              >
-                Enter Master Key
-              </Button>
-            </>
-          )}
-      {/* Master Key Modal */}
-      <Dialog open={showMasterKey} onClose={() => setShowMasterKey(false)}>
-        <DialogTitle>Enter Master Key</DialogTitle>
-        <DialogContent>
-          <TextField
-            label="Master Key"
-            value={masterKey}
-            onChange={e => setMasterKey(e.target.value)}
-            fullWidth
-            autoFocus
-            sx={{ mt: 1 }}
-          />
-          {masterKeyError && <Alert severity="error" sx={{ mt: 2 }}>{masterKeyError}</Alert>}
-          {masterKeySuccess && <Alert severity="success" sx={{ mt: 2 }}>{masterKeySuccess}</Alert>}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowMasterKey(false)}>Cancel</Button>
-          <Button onClick={handleMasterKeySubmit} variant="contained">Unlock</Button>
-        </DialogActions>
-      </Dialog>
-        </CardContent>
-      </Card>
-
-      {error && (
-        <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert severity="success" sx={{ mt: 2 }} onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
-      )}
-
-      <Dialog open={showForm} onClose={() => setShowForm(false)} maxWidth="sm" fullWidth>
-        <form onSubmit={handleSubmit}>
-          <DialogTitle>Membership Application</DialogTitle>
+        {/* Login Modal with Supabase Auth options */}
+        <Dialog open={showLogin} onClose={() => setShowLogin(false)}>
+          <DialogTitle>Login</DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
-              <TextField
-                label="Email"
-                type="email"
-                required
-                fullWidth
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
-              <TextField
-                label="Full Name"
-                required
-                fullWidth
-                value={formData.full_name}
-                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-              />
-              <TextField
-                label="Phone (optional)"
-                fullWidth
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              />
-              <TextField
-                label="Message (optional)"
-                multiline
-                rows={3}
-                fullWidth
-                value={formData.message}
-                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                placeholder="Tell us why you want to join..."
-              />
-              <Alert severity="info">
-                After submitting, our team will review your application and contact you with payment instructions.
-              </Alert>
+              <Button variant="contained" color="primary" sx={{ borderRadius: 999, px: 4, py: 1, fontWeight: 600 }} onClick={async () => {
+                const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+                if (error) setLoginError('Google login failed: ' + error.message);
+              }}>
+                Login with Google
+              </Button>
+              <Button variant="contained" color="secondary" sx={{ borderRadius: 999, px: 4, py: 1, fontWeight: 600 }} onClick={async () => {
+                const { error } = await supabase.auth.signInWithOAuth({ provider: 'apple' });
+                if (error) setLoginError('Apple login failed: ' + error.message);
+              }}>
+                Login with Apple
+              </Button>
+              <form onSubmit={e => { e.preventDefault(); handleLogin(); }}>
+                <TextField
+                  label="Email"
+                  type="email"
+                  value={loginEmail}
+                  onChange={e => setLoginEmail(e.target.value)}
+                  fullWidth
+                  autoFocus
+                  sx={{ mt: 1 }}
+                  required
+                />
+                <TextField
+                  label="Password"
+                  type="password"
+                  value={loginPassword}
+                  onChange={e => setLoginPassword(e.target.value)}
+                  fullWidth
+                  sx={{ mt: 2 }}
+                  required
+                />
+                <Button type="submit" variant="outlined" sx={{ mt: 2, borderRadius: 999, px: 3, py: 1, fontWeight: 600 }}>Login with Email</Button>
+              </form>
+              {loginError && <Alert severity="error" sx={{ mt: 2 }}>{loginError}</Alert>}
             </Stack>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setShowForm(false)} disabled={applying}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="contained" disabled={applying}>
-              {applying ? 'Submitting...' : 'Submit Application'}
-            </Button>
+            <Button onClick={() => setShowLogin(false)}>Cancel</Button>
           </DialogActions>
-        </form>
-      </Dialog>
+        </Dialog>
+
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+
+        {success && (
+          <Alert severity="success" sx={{ mt: 2 }} onClose={() => setSuccess(null)}>
+            {success}
+          </Alert>
+        )}
+
+        <Dialog open={showForm} onClose={() => setShowForm(false)} maxWidth="sm" fullWidth>
+          <form onSubmit={handleSubmit}>
+            <DialogTitle>Membership Application</DialogTitle>
+            <DialogContent>
+              <Stack spacing={2} sx={{ pt: 1 }}>
+                <TextField
+                  label="Email"
+                  type="email"
+                  required
+                  fullWidth
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+                <TextField
+                  label="Full Name"
+                  required
+                  fullWidth
+                  value={formData.full_name}
+                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                />
+                <TextField
+                  label="Phone (optional)"
+                  fullWidth
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                />
+                <TextField
+                  label="Message (optional)"
+                  multiline
+                  rows={3}
+                  fullWidth
+                  value={formData.message}
+                  onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                  placeholder="Tell us why you want to join..."
+                />
+                <Alert severity="info">
+                  After submitting, our team will review your application and contact you with payment instructions.
+                </Alert>
+              </Stack>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setShowForm(false)} disabled={applying}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="contained" disabled={applying}>
+                {applying ? 'Submitting...' : 'Submit Application'}
+              </Button>
+            </DialogActions>
+          </form>
+        </Dialog>
     </Container>
   );
 }

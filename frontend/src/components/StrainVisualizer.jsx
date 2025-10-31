@@ -53,7 +53,13 @@ const StrainVisualizer = ({ strain }) => {
 
   return (
     <Box sx={{ p: 2 }}>
-      <Card sx={{ mb: 3, p: 2 }}>
+      <Card sx={{ mb: 3, p: 2,
+        bgcolor: 'rgba(255,255,255,0.7)',
+        boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+        backdropFilter: 'blur(12px)',
+        borderRadius: 4,
+        border: '1px solid rgba(255,255,255,0.18)'
+      }}>
         <Typography variant="h4" gutterBottom>
           {strain.name}
         </Typography>
@@ -133,7 +139,13 @@ const StrainVisualizer = ({ strain }) => {
           <Grid container spacing={2}>
             {similar.map(s => (
               <Grid item xs={12} sm={6} md={4} key={s.slug}>
-                <Card sx={{ p: 2 }}>
+                <Card sx={{ p: 2,
+                  bgcolor: 'rgba(255,255,255,0.7)',
+                  boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+                  backdropFilter: 'blur(12px)',
+                  borderRadius: 4,
+                  border: '1px solid rgba(255,255,255,0.18)'
+                }}>
                   <Typography variant="h6">{s.name}</Typography>
                   <Typography variant="body2" color="text.secondary">
                     Similarity: {Math.round(s.similarity * 100)}%
@@ -152,7 +164,13 @@ const StrainVisualizer = ({ strain }) => {
           </Typography>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
-              <Card sx={{ p: 2 }}>
+              <Card sx={{ p: 2,
+                bgcolor: 'rgba(255,255,255,0.7)',
+                boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+                backdropFilter: 'blur(12px)',
+                borderRadius: 4,
+                border: '1px solid rgba(255,255,255,0.18)'
+              }}>
                 <Typography variant="h6">User Rating</Typography>
                 <Typography variant="h3">
                   {analytics.stats[0]?.effectiveness.toFixed(1)}/5.0

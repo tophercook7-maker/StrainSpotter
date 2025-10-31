@@ -20,11 +20,11 @@ export default function GrowCoach({ onBack }) {
   return (
     <Container maxWidth="md" sx={{ 
       py: 3,
-      bgcolor: 'rgba(255, 255, 255, 0.72)',
-      backdropFilter: 'blur(10px)',
-      WebkitBackdropFilter: 'blur(10px)',
-      border: '1px solid rgba(255,255,255,0.25)',
-      boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+      background: 'rgba(255,255,255,0.10)',
+      backdropFilter: 'blur(12px)',
+      WebkitBackdropFilter: 'blur(12px)',
+      border: '2px solid black',
+      boxShadow: 'none',
       minHeight: '100vh',
       position: 'relative',
       zIndex: 2

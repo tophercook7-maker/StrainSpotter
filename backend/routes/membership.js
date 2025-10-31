@@ -1,10 +1,24 @@
+import express from 'express';
+import { supabase } from '../supabaseClient.js';
+import { supabaseAdmin } from '../supabaseAdmin.js';
+import { checkAccess } from '../middleware/membershipCheck.js';
+import fs from 'fs';
+import path from 'path';
+
+const router = express.Router();
+const db = supabaseAdmin ?? supabase;
+
 // Membership & Trial Management Routes
+
+// Constants for trial enforcement
+const TRIAL_SCAN_LIMIT = 2;
+const TRIAL_SEARCH_LIMIT = 2;
+const TRIAL_DURATION_DAYS = 7;
 // POST /api/membership/master-key - Instantly upgrade to full-access with master key
 router.post('/master-key', express.json(), async (req, res, next) => {
   // Detailed logging for diagnostics
   try {
-    const logPath = require('path').join(process.cwd(), 'backend/logs/server.log');
-    const fs = require('fs');
+    const logPath = path.join(process.cwd(), 'backend/logs/server.log');
     const logEntry = [
       `[${new Date().toISOString()}] MASTER-KEY ATTEMPT`,
       `Payload: ${JSON.stringify(req.body)}`,
@@ -12,17 +26,17 @@ router.post('/master-key', express.json(), async (req, res, next) => {
       `Cookies: ${JSON.stringify(req.cookies || {})}`,
       `Expected key: ${process.env.MASTER_KEY || 'KING123'}`
     ].join('\n');
-    fs.mkdirSync(require('path').dirname(logPath), { recursive: true });
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
     fs.appendFileSync(logPath, logEntry + '\n');
   } catch (logErr) {
     console.error('[MasterKey Debug] Logging failed:', logErr);
   }
   try {
-    // Allow user_id to come from body, header (x-session-id) or cookie fallback
-    const { user_id: bodyUserId, key } = req.body;
+    // Accept either user_id+key or email+key
+    const { user_id: bodyUserId, email, key } = req.body;
     const headerUserId = req.headers['x-session-id'] || req.headers['x-ss-session-id'];
     const cookieUserId = req.cookies ? (req.cookies['ss-session-id'] || null) : null;
-    const user_id = bodyUserId || headerUserId || cookieUserId || null;
+    let user_id = bodyUserId || headerUserId || cookieUserId || null;
 
     const MASTER_KEY = process.env.MASTER_KEY || 'KING123';
 
@@ -30,8 +44,42 @@ router.post('/master-key', express.json(), async (req, res, next) => {
       return res.status(403).json({ error: 'Invalid master key' });
     }
 
+    // If user_id not provided, look up by email
+    if (!user_id && email) {
+      const { data: userRow, error: userErr } = await db
+        .from('memberships')
+        .select('user_id')
+        .eq('email', email)
+        .maybeSingle();
+      if (userErr) return res.status(500).json({ error: userErr.message });
+      if (userRow && userRow.user_id) {
+        user_id = userRow.user_id;
+      }
+    }
+    // If still no user_id, auto-create membership for this email
+    if (!user_id && email) {
+      const membershipInsert = {
+        email,
+        tier: 'full-access', // force string value
+        status: 'active',
+        full_name: '',
+        phone: ''
+      };
+      const { data, error } = await db
+        .from('memberships')
+        .insert(membershipInsert)
+        .select('user_id')
+        .single();
+      if (error) {
+        if (error.message && error.message.includes('memberships_tier_check')) {
+          return res.status(400).json({ error: 'Tier value must be scan-only or full-access. Backend attempted invalid value.' });
+        }
+        return res.status(500).json({ error: error.message });
+      }
+      user_id = data.user_id;
+    }
     if (!user_id) {
-      return res.status(400).json({ error: 'user_id required' });
+      return res.status(400).json({ error: 'user_id or valid email required' });
     }
     // Upsert membership to full-access
     const { data: existing } = await db
@@ -50,9 +98,16 @@ router.post('/master-key', express.json(), async (req, res, next) => {
       if (error) return res.status(500).json({ error: error.message });
       membership = data;
     } else {
+      const membershipInsert = {
+        user_id,
+        tier: 'full-access',
+        status: 'active',
+        email: email || '',
+        full_name: ''
+      };
       const { data, error } = await db
         .from('memberships')
-        .insert({ user_id, tier: 'full-access', status: 'active', email: '', full_name: '' })
+        .insert(membershipInsert)
         .select()
         .single();
       if (error) return res.status(500).json({ error: error.message });
@@ -63,18 +118,7 @@ router.post('/master-key', express.json(), async (req, res, next) => {
     next(e);
   }
 });
-import express from 'express';
-import { supabase } from '../supabaseClient.js';
-import { supabaseAdmin } from '../supabaseAdmin.js';
-import { checkAccess } from '../middleware/membershipCheck.js';
-
-const router = express.Router();
-const db = supabaseAdmin ?? supabase;
-
-// Constants
-const TRIAL_SCAN_LIMIT = 2;
-const TRIAL_SEARCH_LIMIT = 2;
-const TRIAL_DURATION_DAYS = 7;
+// ...existing code...
 
 // GET /api/membership/status - Check current membership/trial status
 router.get('/status', checkAccess, async (req, res, next) => {

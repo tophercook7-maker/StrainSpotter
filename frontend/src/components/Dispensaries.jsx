@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from "react-router-dom";
+import CannabisLeafIcon from "./CannabisLeafIcon";
 import { API_BASE } from '../config';
 import { 
   Card, 
@@ -19,6 +21,7 @@ import DirectionsIcon from '@mui/icons-material/Directions';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 export default function Dispensaries({ onBack }) {
+  const navigate = useNavigate();
   const [dispensaries, setDispensaries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -108,6 +111,29 @@ export default function Dispensaries({ onBack }) {
 
   return (
     <Box sx={{ p: 3 }}>
+      <button
+        style={{
+          position: "absolute",
+          top: 16,
+          left: 16,
+          zIndex: 100,
+          background: "rgba(34, 139, 34, 0.25)",
+          border: "1px solid #228B22",
+          borderRadius: 12,
+          boxShadow: "0 2px 12px rgba(34,139,34,0.15)",
+          backdropFilter: "blur(8px)",
+          color: "#228B22",
+          padding: "8px 16px",
+          display: "flex",
+          alignItems: "center",
+          fontWeight: 600,
+          fontSize: 18,
+        }}
+        onClick={() => navigate("/")}
+      >
+        <CannabisLeafIcon style={{ marginRight: 8, height: 24 }} />
+        Home
+      </button>
       {onBack && (
         <Box sx={{ mb: 2 }}>
           <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
@@ -126,7 +152,25 @@ export default function Dispensaries({ onBack }) {
           />
         )}
       </Stack>
-      
+
+      {/* Google Maps Results Section (Button only, no embed) */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" sx={{ mb: 1 }}>
+          Google Maps Results
+        </Typography>
+        <Button
+          variant="outlined"
+          color="primary"
+          startIcon={<OpenInNewIcon />}
+          href={userLocation ? `https://www.google.com/maps/search/dispensary/@${userLocation.lat},${userLocation.lng},13z` : `https://www.google.com/maps/search/dispensary/`}
+          target="_blank"
+          rel="noopener noreferrer"
+          sx={{ mb: 2 }}
+        >
+          View Dispensaries on Google Maps
+        </Button>
+      </Box>
+
       {locationError && (
         <Alert severity="info" sx={{ mb: 2 }}>
           {locationError}
@@ -141,7 +185,7 @@ export default function Dispensaries({ onBack }) {
         <Grid container spacing={3}>
             {dispensaries.map((d, idx) => (
               <Grid item size={{ xs: 12, sm: 6, md: 4 }} key={`${d.id}-${idx}`}>
-              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Card sx={{ mb: 2, background: 'rgba(255,255,255,0.10)', backdropFilter: 'blur(12px)', border: '2px solid black', boxShadow: 'none' }}>
                 <CardContent sx={{ flex: 1 }}>
                   <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                     {d.name}
@@ -157,8 +201,8 @@ export default function Dispensaries({ onBack }) {
                   )}
                   
                   <Stack spacing={0.5} sx={{ mt: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {d.address}
+            <Typography variant="body2" sx={{ color: 'black', fontSize: '1.08rem' }}>
+              {d.address}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       {d.city}, {d.state} {d.zip || ''}

@@ -53,6 +53,7 @@ async function runScanDiagnostic(req, res) {
     } catch (e) {
       healthCheck.error = String(e);
       healthCheck.duration = Date.now() - healthStart;
+      console.error(JSON.stringify({ tag: 'scanDiagnostic', step: 'health', error: e?.message || e }));
       diagnostics.summary.errors.push(`Health: ${e.message || e}`);
     }
     diagnostics.steps.health = healthCheck;
@@ -94,6 +95,7 @@ async function runScanDiagnostic(req, res) {
     } catch (e) {
       createStep.error = String(e);
       createStep.duration = Date.now() - createStart;
+      console.error(JSON.stringify({ tag: 'scanDiagnostic', step: 'create', error: e?.message || e }));
       diagnostics.summary.errors.push(`Create: ${e.message || e}`);
     }
     diagnostics.steps.create = createStep;
@@ -190,6 +192,7 @@ async function runScanDiagnostic(req, res) {
     } catch (e) {
       processStep.error = String(e);
       processStep.duration = Date.now() - processStart;
+      console.error(JSON.stringify({ tag: 'scanDiagnostic', step: 'process', error: e?.message || e }));
       diagnostics.summary.errors.push(`Process: ${e.message || e}`);
     }
     diagnostics.steps.process = processStep;
@@ -239,6 +242,7 @@ async function runScanDiagnostic(req, res) {
     } catch (e) {
       matchStep.error = String(e);
       matchStep.duration = Date.now() - matchStart;
+      console.error(JSON.stringify({ tag: 'scanDiagnostic', step: 'match', error: e?.message || e }));
       diagnostics.summary.errors.push(`Match: ${e.message || e}`);
     }
     diagnostics.steps.match = matchStep;
@@ -255,6 +259,7 @@ async function runScanDiagnostic(req, res) {
   } catch (e) {
     diagnostics.summary.errors.push(`Fatal: ${e.message || e}`);
     diagnostics.summary.totalDuration = Date.now() - startTime;
+    console.error(JSON.stringify({ tag: 'scanDiagnostic', step: 'fatal', error: e?.message || e }));
     res.status(500).json(diagnostics);
   }
 }
