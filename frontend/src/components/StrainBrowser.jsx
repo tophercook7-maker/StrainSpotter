@@ -310,22 +310,33 @@ export default function StrainBrowser({ onBack }) {
     }
   };
 
-  // Generate a strain image URL using Unsplash cannabis images
+  // Curated cannabis stock images (royalty-free from Pexels/Unsplash)
+  const CANNABIS_IMAGES = [
+    'https://images.unsplash.com/photo-1536964310528-e47dd655ecf3?w=400&h=300&fit=crop', // Purple cannabis buds
+    'https://images.unsplash.com/photo-1605440698600-1372eb28f0f4?w=400&h=300&fit=crop', // Green cannabis plant
+    'https://images.unsplash.com/photo-1587857180061-f0d22c0e8e8d?w=400&h=300&fit=crop', // Cannabis flower close-up
+    'https://images.unsplash.com/photo-1612198188060-c7c2a3b66eae?w=400&h=300&fit=crop', // Cannabis leaves
+    'https://images.unsplash.com/photo-1608797178974-15b35a64ede9?w=400&h=300&fit=crop', // Cannabis bud macro
+    'https://images.unsplash.com/photo-1610896922783-c7a180a6ae0e?w=400&h=300&fit=crop', // Cannabis plant growing
+    'https://images.unsplash.com/photo-1623278979014-8b6e2e3e8a5e?w=400&h=300&fit=crop', // Cannabis trichomes
+    'https://images.unsplash.com/photo-1628258334105-2a0b3d6efee1?w=400&h=300&fit=crop', // Cannabis jar
+    'https://images.unsplash.com/photo-1615671524827-c1fe3973b648?w=400&h=300&fit=crop', // Cannabis field
+    'https://images.unsplash.com/photo-1616244656431-9b4a5b2c6f6e?w=400&h=300&fit=crop', // Cannabis close-up
+  ];
+
+  // Generate a strain image URL
   const getStrainImageUrl = (strain) => {
     // If strain has a valid image URL, use it
     if (strain.image_url && !strain.image_url.includes('yourdomain.com')) {
       return strain.image_url;
     }
 
-    // Use Unsplash Source API with cannabis-related keywords
-    // This will return actual cannabis/marijuana plant photos
+    // Use hash of strain name to consistently pick from curated cannabis images
     const seed = strain.slug || strain.name.toLowerCase().replace(/\s+/g, '-');
     const hash = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const imageIndex = hash % 100; // Rotate through 100 different images
+    const imageIndex = hash % CANNABIS_IMAGES.length;
 
-    // Use Unsplash with cannabis/marijuana keywords
-    // Format: https://source.unsplash.com/400x300/?cannabis,marijuana,weed
-    return `https://source.unsplash.com/400x300/?cannabis,marijuana,weed,${imageIndex}`;
+    return CANNABIS_IMAGES[imageIndex];
   };
 
   // Load favorites from localStorage on mount
