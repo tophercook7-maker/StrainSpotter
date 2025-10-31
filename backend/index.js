@@ -297,21 +297,21 @@ app.get('/api/scans', async (req, res, next) => {
     const { user_id } = req.query; // Optional: filter to user's own + friends' scans
     // Use service role for reads if available to ensure visibility of all scans
     const readClient = supabaseAdmin ?? supabase;
-    
+
     if (user_id) {
-      // Fetch user's own scans only
+      // Fetch user's own scans only with joined strain data
       const { data, error } = await readClient
         .from('scans')
-        .select('*')
+        .select('*, strain:strains!matched_strain_slug(*)')
         .eq('user_id', user_id)
         .order('created_at', { ascending: false })
         .limit(100);
-      
+
       if (error) return res.status(500).json({ error: error.message });
       return res.json({ scans: data || [] });
     } else {
-      // No user_id: return all scans (permissive for dev; tighten in prod)
-      const q = readClient.from('scans').select('*').order('created_at', { ascending: false }).limit(100);
+      // No user_id: return all scans (permissive for dev; tighten in prod) with joined strain data
+      const q = readClient.from('scans').select('*, strain:strains!matched_strain_slug(*)').order('created_at', { ascending: false }).limit(100);
       const { data, error } = await q;
       if (error) return res.status(500).json({ error: error.message });
       res.json({ scans: data || [] });
@@ -346,7 +346,7 @@ app.get('/api/scans/:id', async (req, res, next) => {
     }
     // Use service role for reads if available to ensure visibility of all scans
     const readClient = supabaseAdmin ?? supabase;
-    const { data, error } = await readClient.from('scans').select('*').eq('id', id).maybeSingle();
+    const { data, error } = await readClient.from('scans').select('*, strain:strains!matched_strain_slug(*)').eq('id', id).maybeSingle();
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'scan not found' });
     res.json(data);
