@@ -310,44 +310,18 @@ export default function StrainBrowser({ onBack }) {
     }
   };
 
-  // Curated collection of VERIFIED real cannabis bud/flower photos from Pexels
-  // All photo IDs verified from Pexels "marijuana bud" and "cannabis" searches
-  const CANNABIS_BUD_IMAGES = [
-    'https://images.pexels.com/photos/606506/pexels-photo-606506.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',      // Cannabis plant close-up
-    'https://images.pexels.com/photos/2178565/pexels-photo-2178565.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis leaves
-    'https://images.pexels.com/photos/1466335/pexels-photo-1466335.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Kush in jar
-    'https://images.pexels.com/photos/2731663/pexels-photo-2731663.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Dark green cannabis plant
-    'https://images.pexels.com/photos/3676962/pexels-photo-3676962.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Kush in hands
-    'https://images.pexels.com/photos/2731667/pexels-photo-2731667.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis with purple LED
-    'https://images.pexels.com/photos/3536257/pexels-photo-3536257.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Green cannabis plant
-    'https://images.pexels.com/photos/7667928/pexels-photo-7667928.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Hand rolling joint with bud
-    'https://images.pexels.com/photos/7852547/pexels-photo-7852547.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis leaves with CBD oil
-    'https://images.pexels.com/photos/7667920/pexels-photo-7667920.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Grinding weed
-    'https://images.pexels.com/photos/9259998/pexels-photo-9259998.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Marijuana bud on white
-    'https://images.pexels.com/photos/9259876/pexels-photo-9259876.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis buds being prepared
-    'https://images.pexels.com/photos/7262775/pexels-photo-7262775.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis flower
-    'https://images.pexels.com/photos/7262776/pexels-photo-7262776.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis bud
-    'https://images.pexels.com/photos/7262774/pexels-photo-7262774.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis plant
-    'https://images.pexels.com/photos/7262773/pexels-photo-7262773.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis leaves
-    'https://images.pexels.com/photos/7262772/pexels-photo-7262772.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis bud close-up
-    'https://images.pexels.com/photos/7262771/pexels-photo-7262771.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis flower
-    'https://images.pexels.com/photos/7262770/pexels-photo-7262770.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis plant
-    'https://images.pexels.com/photos/7262769/pexels-photo-7262769.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis bud
-  ];
-
-  // Generate a strain image URL - uses real cannabis bud photos
-  const getStrainImageUrl = (strain) => {
-    // If strain has a valid image URL, use it
-    if (strain.image_url && !strain.image_url.includes('yourdomain.com')) {
-      return strain.image_url;
+  // Get gradient background based on strain type - NO EXTERNAL IMAGES
+  const getStrainGradient = (type) => {
+    switch (type?.toLowerCase()) {
+      case 'indica':
+        return 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'; // Purple gradient
+      case 'sativa':
+        return 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'; // Pink-red gradient
+      case 'hybrid':
+        return 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'; // Blue gradient
+      default:
+        return 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)'; // Green gradient
     }
-
-    // Use hash of strain name to consistently pick from real cannabis bud images
-    const seed = strain.slug || strain.name.toLowerCase().replace(/\s+/g, '-');
-    const hash = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const imageIndex = hash % CANNABIS_BUD_IMAGES.length;
-
-    return CANNABIS_BUD_IMAGES[imageIndex];
   };
 
   // Load favorites from localStorage on mount
@@ -787,26 +761,17 @@ export default function StrainBrowser({ onBack }) {
                     onClick={() => handleStrainClick(strain)}
                     sx={{
                       height: 120,
-                      backgroundImage: `url(${getStrainImageUrl(strain)})`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
+                      background: getStrainGradient(strain.type),
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       position: 'relative',
                       cursor: 'pointer',
                       overflow: 'hidden',
-                      '&::after': {
-                        content: '""',
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: `linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.6) 100%)`,
-                      }
                     }}
-                  />
+                  >
+                    <LocalFloristIcon sx={{ fontSize: 64, color: 'rgba(255,255,255,0.3)' }} />
+                  </Box>
 
                   <CardContent onClick={() => handleStrainClick(strain)} sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                     <Typography variant="body2" sx={{ color: '#fff', fontWeight: 600, mb: 0.5, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
