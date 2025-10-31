@@ -310,16 +310,22 @@ export default function StrainBrowser({ onBack }) {
     }
   };
 
-  // Generate a strain image URL using a hash of the strain name for consistency
+  // Generate a strain image URL using Unsplash cannabis images
   const getStrainImageUrl = (strain) => {
     // If strain has a valid image URL, use it
     if (strain.image_url && !strain.image_url.includes('yourdomain.com')) {
       return strain.image_url;
     }
 
-    // Use Picsum Photos with strain name as seed for consistent, deterministic images
+    // Use Unsplash Source API with cannabis-related keywords
+    // This will return actual cannabis/marijuana plant photos
     const seed = strain.slug || strain.name.toLowerCase().replace(/\s+/g, '-');
-    return `https://picsum.photos/seed/${seed}/400/300`;
+    const hash = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const imageIndex = hash % 100; // Rotate through 100 different images
+
+    // Use Unsplash with cannabis/marijuana keywords
+    // Format: https://source.unsplash.com/400x300/?cannabis,marijuana,weed
+    return `https://source.unsplash.com/400x300/?cannabis,marijuana,weed,${imageIndex}`;
   };
 
   // Load favorites from localStorage on mount
