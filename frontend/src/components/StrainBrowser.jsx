@@ -776,13 +776,15 @@ export default function StrainBrowser({ onBack }) {
                     onClick={() => handleStrainClick(strain)}
                     sx={{
                       height: 120,
-                      background: `url(${getStrainImageUrl(strain)})`,
+                      backgroundImage: `url(${getStrainImageUrl(strain)})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
+                      backgroundColor: getTypeColor(strain.type),
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       position: 'relative',
+                      cursor: 'pointer',
                       '&::after': {
                         content: '""',
                         position: 'absolute',
@@ -793,7 +795,9 @@ export default function StrainBrowser({ onBack }) {
                         background: `linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 100%)`,
                       }
                     }}
-                  />
+                  >
+                    <SpaIcon sx={{ fontSize: 48, color: '#fff', opacity: 0.3, zIndex: 0 }} />
+                  </Box>
 
                   <CardContent onClick={() => handleStrainClick(strain)} sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                     <Typography variant="body2" sx={{ color: '#fff', fontWeight: 600, mb: 0.5, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
