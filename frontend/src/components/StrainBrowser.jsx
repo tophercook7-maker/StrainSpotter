@@ -398,6 +398,7 @@ export default function StrainBrowser({ onBack }) {
                           ${d.price_per_eighth}/eighth • ${d.price_per_ounce}/oz
                         </Typography>
                         <Typography variant="caption" sx={{ color: '#aaa' }}>Rating: {d.dispensaries?.rating}/5</Typography>
+                        {d.dispensaries?.website && <Button size="small" href={d.dispensaries.website} target="_blank" sx={{ mt: 1, color: '#7cb342' }}>Visit Website →</Button>}
                       </Stack>
                     }
                   />
