@@ -309,6 +309,7 @@ export default function ScanWizard({ onBack }) {
             justifyContent: 'center',
           }}
         >
+          {/* Back button - left side */}
           <Box sx={{ position: 'absolute', top: 24, left: 24, zIndex: 100 }}>
             <Button
               variant="contained"
@@ -326,7 +327,50 @@ export default function ScanWizard({ onBack }) {
                 textTransform: 'none'
               }}
             >
-              ← Back to Garden
+              ← Back
+            </Button>
+          </Box>
+
+          {/* Logout button - right side */}
+          <Box sx={{ position: 'absolute', top: 24, right: 24, zIndex: 100 }}>
+            <Button
+              variant="contained"
+              onClick={async () => {
+                try {
+                  await supabase.auth.signOut();
+                  setCurrentUser(null);
+                  setAlertMsg('Logged out successfully');
+                  setAlertOpen(true);
+                  // Optionally redirect to home or login page
+                  setTimeout(() => {
+                    if (onBack) {
+                      onBack();
+                    } else {
+                      window.location.href = '/';
+                    }
+                  }, 1000);
+                } catch (err) {
+                  console.error('Logout error:', err);
+                  setAlertMsg('Logout failed');
+                  setAlertOpen(true);
+                }
+              }}
+              sx={{
+                fontWeight: 700,
+                borderRadius: 999,
+                px: 4,
+                py: 1,
+                fontSize: 18,
+                boxShadow: 'none',
+                bgcolor: '#d32f2f',
+                color: '#fff',
+                textTransform: 'none',
+                '&:hover': {
+                  bgcolor: '#b71c1c'
+                }
+              }}
+            >
+              Logout
             </Button>
           </Box>
 
