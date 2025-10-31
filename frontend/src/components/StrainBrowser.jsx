@@ -263,7 +263,7 @@ export default function StrainBrowser({ onBack }) {
 
       const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5181';
       const response = await fetch(
-        `${API_BASE}/api/dispensaries-live?lat=${userLocation.lat}&lng=${userLocation.lng}&radius=50&limit=20`
+        `${API_BASE}/api/dispensaries-live?lat=${userLocation.lat}&lng=${userLocation.lng}&radius=100&limit=20`
       );
       const data = await response.json();
 
@@ -308,6 +308,18 @@ export default function StrainBrowser({ onBack }) {
       case 'hybrid': return '#4caf50';
       default: return '#757575';
     }
+  };
+
+  // Generate a strain image URL using a hash of the strain name for consistency
+  const getStrainImageUrl = (strain) => {
+    // If strain has a valid image URL, use it
+    if (strain.image_url && !strain.image_url.includes('yourdomain.com')) {
+      return strain.image_url;
+    }
+
+    // Use Picsum Photos with strain name as seed for consistent, deterministic images
+    const seed = strain.slug || strain.name.toLowerCase().replace(/\s+/g, '-');
+    return `https://picsum.photos/seed/${seed}/400/300`;
   };
 
   // Load favorites from localStorage on mount
@@ -477,10 +489,15 @@ export default function StrainBrowser({ onBack }) {
       );
       case 2: return (
         <Box>
+          <Alert severity="info" sx={{ mb: 2, bgcolor: 'rgba(33, 150, 243, 0.1)', color: '#90caf9', border: '1px solid rgba(33, 150, 243, 0.3)' }}>
+            <Typography variant="body2">
+              Showing dispensaries within 100 miles of your location. Call ahead to confirm {selectedStrain?.name} is in stock.
+            </Typography>
+          </Alert>
           {dispensaries.length === 0 ? (
             <Stack spacing={2} sx={{ textAlign: 'center', py: 4 }}>
               <Typography sx={{ color: '#e0e0e0' }}>
-                {loadingLocation ? 'Detecting your location...' : 'No dispensaries found within 50 miles with this strain in stock'}
+                {loadingLocation ? 'Detecting your location...' : 'No dispensaries found within 100 miles'}
               </Typography>
               {userLocation && (
                 <Typography variant="caption" sx={{ color: '#aaa' }}>
@@ -742,30 +759,25 @@ export default function StrainBrowser({ onBack }) {
                     onClick={() => handleStrainClick(strain)}
                     sx={{
                       height: 120,
-                      background: strain.image_url && !strain.image_url.includes('yourdomain.com')
-                        ? `url(${strain.image_url})`
-                        : `linear-gradient(135deg, ${getTypeColor(strain.type)}55 0%, ${getTypeColor(strain.type)}88 100%)`,
+                      background: `url(${getStrainImageUrl(strain)})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       position: 'relative',
-                      '&::after': strain.image_url && !strain.image_url.includes('yourdomain.com') ? {
+                      '&::after': {
                         content: '""',
                         position: 'absolute',
                         top: 0,
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        background: `linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.3) 100%)`,
-                      } : {}
+                        background: `linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 100%)`,
+                      }
                     }}
-                  >
-                    {(!strain.image_url || strain.image_url.includes('yourdomain.com')) && (
-                      <SpaIcon sx={{ fontSize: 48, color: '#fff', opacity: 0.8 }} />
-                    )}
-                  </Box>
+                  />
+
                   <CardContent onClick={() => handleStrainClick(strain)} sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                     <Typography variant="body2" sx={{ color: '#fff', fontWeight: 600, mb: 0.5, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {strain.name}
