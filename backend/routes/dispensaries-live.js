@@ -34,19 +34,41 @@ async function searchGooglePlaces(lat, lng, radius) {
     // Convert radius from miles to meters
     const radiusMeters = Math.min(radius * 1609.34, 50000); // Max 50km
 
-    // Google Places Nearby Search
-    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusMeters}&keyword=cannabis+dispensary+marijuana&key=${GOOGLE_PLACES_API_KEY}`;
-    
-    const response = await fetch(url);
-    const data = await response.json();
+    // Try multiple search keywords to catch different dispensary types
+    const keywords = [
+      'cannabis dispensary',
+      'marijuana dispensary',
+      'medical marijuana',
+      'cannabis pharmacy'
+    ];
 
-    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-      console.error('[dispensaries-live] Google Places API error:', data.status, data.error_message);
-      return [];
+    let allResults = [];
+    const seenPlaceIds = new Set();
+
+    // Search with each keyword and combine results
+    for (const keyword of keywords) {
+      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusMeters}&keyword=${encodeURIComponent(keyword)}&key=${GOOGLE_PLACES_API_KEY}`;
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.status === 'OK' && data.results) {
+        // Add unique results only
+        for (const place of data.results) {
+          if (!seenPlaceIds.has(place.place_id)) {
+            seenPlaceIds.add(place.place_id);
+            allResults.push(place);
+          }
+        }
+      } else if (data.status !== 'ZERO_RESULTS') {
+        console.error('[dispensaries-live] Google Places API error:', data.status, data.error_message);
+      }
     }
 
+    console.log(`[dispensaries-live] Found ${allResults.length} unique dispensaries from Google Places`);
+
     // Transform Google Places results to our format
-    return (data.results || []).map(place => ({
+    return allResults.map(place => ({
       id: `google-${place.place_id}`,
       name: place.name,
       address: place.vicinity,
