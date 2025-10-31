@@ -3,7 +3,7 @@ import {
   Box, TextField, Grid, Card, CardContent, Typography, Chip, Stack, Button,
   InputAdornment, Select, MenuItem, FormControl, InputLabel, CircularProgress,
   Dialog, DialogTitle, DialogContent, IconButton, Tabs, Tab, Paper, List,
-  ListItem, ListItemText, ListItemIcon
+  ListItem, ListItemText, ListItemIcon, Slider, Tooltip, Snackbar, Alert
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
@@ -13,6 +13,10 @@ import SpaIcon from '@mui/icons-material/Spa';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import VerifiedIcon from '@mui/icons-material/Verified';
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
+import SortIcon from '@mui/icons-material/Sort';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import { supabase } from '../supabaseClient';
 
 const STRAINS_PER_PAGE = 100; // Display 100 strains at a time
@@ -36,6 +40,13 @@ export default function StrainBrowser({ onBack }) {
   const [totalStrains, setTotalStrains] = useState(0);
   const [allStrainsLoaded, setAllStrainsLoaded] = useState(false);
 
+  // New state for enhancements
+  const [sortBy, setSortBy] = useState('name'); // name, thc, rating
+  const [thcRange, setThcRange] = useState([0, 35]); // THC% range filter
+  const [favorites, setFavorites] = useState([]); // Array of favorite strain slugs
+  const [showFilters, setShowFilters] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
   const observerTarget = useRef(null);
 
   // Fetch ALL strains on mount
@@ -44,11 +55,11 @@ export default function StrainBrowser({ onBack }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Filter strains when search/type changes
+  // Filter strains when search/type/sort/thc changes
   useEffect(() => {
     filterStrains();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, typeFilter, strains]);
+  }, [searchQuery, typeFilter, strains, sortBy, thcRange]);
 
   // Reset displayed strains when filtered strains change
   useEffect(() => {
@@ -147,6 +158,8 @@ export default function StrainBrowser({ onBack }) {
 
   const filterStrains = () => {
     let filtered = [...strains];
+
+    // Search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(s =>
@@ -156,9 +169,20 @@ export default function StrainBrowser({ onBack }) {
         s.flavors?.some(f => f.toLowerCase().includes(query))
       );
     }
+
+    // Type filter
     if (typeFilter !== 'all') {
       filtered = filtered.filter(s => s.type?.toLowerCase() === typeFilter);
     }
+
+    // THC range filter (only if filters are shown)
+    if (showFilters) {
+      filtered = applyThcFilter(filtered);
+    }
+
+    // Sort
+    filtered = sortStrains(filtered);
+
     setFilteredStrains(filtered);
   };
 
@@ -211,6 +235,61 @@ export default function StrainBrowser({ onBack }) {
       case 'hybrid': return '#4caf50';
       default: return '#757575';
     }
+  };
+
+  // Load favorites from localStorage on mount
+  useEffect(() => {
+    const savedFavorites = localStorage.getItem('strainFavorites');
+    if (savedFavorites) {
+      try {
+        setFavorites(JSON.parse(savedFavorites));
+      } catch (e) {
+        console.error('Error loading favorites:', e);
+      }
+    }
+  }, []);
+
+  // Save favorites to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('strainFavorites', JSON.stringify(favorites));
+  }, [favorites]);
+
+  // Toggle favorite
+  const toggleFavorite = (strainSlug) => {
+    setFavorites(prev => {
+      const isFavorite = prev.includes(strainSlug);
+      if (isFavorite) {
+        setSnackbar({ open: true, message: 'Removed from favorites', severity: 'info' });
+        return prev.filter(s => s !== strainSlug);
+      } else {
+        setSnackbar({ open: true, message: 'Added to favorites! ⭐', severity: 'success' });
+        return [...prev, strainSlug];
+      }
+    });
+  };
+
+  // Sort strains
+  const sortStrains = (strainsToSort) => {
+    const sorted = [...strainsToSort];
+    switch (sortBy) {
+      case 'name':
+        return sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      case 'thc':
+        return sorted.sort((a, b) => (parseFloat(b.thc) || 0) - (parseFloat(a.thc) || 0));
+      case 'rating':
+        // For now, sort by name if no rating field exists
+        return sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      default:
+        return sorted;
+    }
+  };
+
+  // Apply THC filter
+  const applyThcFilter = (strainsToFilter) => {
+    return strainsToFilter.filter(strain => {
+      const thc = parseFloat(strain.thc) || 0;
+      return thc >= thcRange[0] && thc <= thcRange[1];
+    });
   };
 
   const renderDetailsTab = () => {
@@ -364,15 +443,17 @@ export default function StrainBrowser({ onBack }) {
 
       <Paper sx={{ p: 3, mb: 3, background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '2px solid rgba(124, 179, 66, 0.3)', borderRadius: 4 }}>
         <Grid container spacing={2}>
-          <Grid item xs={12} md={8}>
+          <Grid item xs={12} md={6}>
             <TextField fullWidth placeholder="Search strains by name, effects, flavors..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-              InputProps={{
-                startAdornment: (<InputAdornment position="start"><SearchIcon sx={{ color: '#7cb342' }} /></InputAdornment>),
-                sx: { color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.5)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.8)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#7cb342' } }
+              slotProps={{
+                input: {
+                  startAdornment: (<InputAdornment position="start"><SearchIcon sx={{ color: '#7cb342' }} /></InputAdornment>),
+                  sx: { color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.5)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.8)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#7cb342' } }
+                }
               }}
             />
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} sm={6} md={2}>
             <FormControl fullWidth>
               <InputLabel sx={{ color: '#fff' }}>Type</InputLabel>
               <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} label="Type" sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.5)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.8)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#7cb342' } }}>
@@ -383,18 +464,106 @@ export default function StrainBrowser({ onBack }) {
               </Select>
             </FormControl>
           </Grid>
+          <Grid item xs={12} sm={6} md={2}>
+            <FormControl fullWidth>
+              <InputLabel sx={{ color: '#fff' }}>Sort By</InputLabel>
+              <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} label="Sort By" sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.5)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.8)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#7cb342' } }}>
+                <MenuItem value="name"><SortIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />Name</MenuItem>
+                <MenuItem value="thc">THC % (High to Low)</MenuItem>
+                <MenuItem value="rating">Rating</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={12} md={2}>
+            <Button
+              fullWidth
+              variant={showFilters ? "contained" : "outlined"}
+              onClick={() => setShowFilters(!showFilters)}
+              startIcon={<FilterListIcon />}
+              sx={{
+                height: '56px',
+                color: showFilters ? '#000' : '#fff',
+                bgcolor: showFilters ? '#7cb342' : 'transparent',
+                borderColor: 'rgba(124, 179, 66, 0.6)',
+                '&:hover': {
+                  borderColor: 'rgba(124, 179, 66, 1)',
+                  bgcolor: showFilters ? '#7cb342' : 'rgba(124, 179, 66, 0.1)'
+                }
+              }}
+            >
+              Filters
+            </Button>
+          </Grid>
         </Grid>
-        <Typography variant="body2" sx={{ color: '#e0e0e0', mt: 2 }}>
-          {loading ? (
-            'Loading strains...'
-          ) : (
-            <>
-              Showing {displayedStrains.length} of {filteredStrains.length} strains
-              {filteredStrains.length < strains.length && ` (filtered from ${strains.length} total)`}
-              {!allStrainsLoaded && ' - Loading all strains...'}
-            </>
+
+        {/* Advanced Filters */}
+        {showFilters && (
+          <Box sx={{ mt: 3, p: 2, background: 'rgba(124, 179, 66, 0.1)', borderRadius: 2, border: '1px solid rgba(124, 179, 66, 0.3)' }}>
+            <Typography variant="subtitle2" sx={{ color: '#7cb342', fontWeight: 700, mb: 2 }}>
+              Advanced Filters
+            </Typography>
+            <Box sx={{ px: 2 }}>
+              <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
+                THC Range: {thcRange[0]}% - {thcRange[1]}%
+              </Typography>
+              <Slider
+                value={thcRange}
+                onChange={(e, newValue) => setThcRange(newValue)}
+                valueLabelDisplay="auto"
+                min={0}
+                max={35}
+                sx={{
+                  color: '#7cb342',
+                  '& .MuiSlider-thumb': {
+                    bgcolor: '#7cb342',
+                  },
+                  '& .MuiSlider-track': {
+                    bgcolor: '#7cb342',
+                  },
+                  '& .MuiSlider-rail': {
+                    bgcolor: 'rgba(124, 179, 66, 0.3)',
+                  },
+                }}
+              />
+            </Box>
+          </Box>
+        )}
+
+        <Stack direction="row" justifyContent="space-between" alignItems="center" mt={2}>
+          <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
+            {loading ? (
+              'Loading strains...'
+            ) : (
+              <>
+                Showing {displayedStrains.length} of {filteredStrains.length} strains
+                {filteredStrains.length < strains.length && ` (filtered from ${strains.length} total)`}
+                {!allStrainsLoaded && ' - Loading all strains...'}
+              </>
+            )}
+          </Typography>
+          {favorites.length > 0 && (
+            <Tooltip title="View favorites">
+              <Chip
+                icon={<FavoriteIcon />}
+                label={`${favorites.length} Favorites`}
+                onClick={() => {
+                  // Filter to show only favorites
+                  setSearchQuery('');
+                  setTypeFilter('all');
+                  const favStrains = strains.filter(s => favorites.includes(s.slug));
+                  setFilteredStrains(favStrains);
+                  setSnackbar({ open: true, message: 'Showing favorites only', severity: 'info' });
+                }}
+                sx={{
+                  bgcolor: 'rgba(255, 64, 129, 0.2)',
+                  color: '#ff4081',
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: 'rgba(255, 64, 129, 0.3)' }
+                }}
+              />
+            </Tooltip>
           )}
-        </Typography>
+        </Stack>
       </Paper>
 
       {loading ? (
@@ -404,11 +573,33 @@ export default function StrainBrowser({ onBack }) {
           <Grid container spacing={3}>
             {displayedStrains.map((strain) => (
               <Grid item xs={12} sm={6} md={4} lg={3} key={strain.slug}>
-                <Card onClick={() => handleStrainClick(strain)} sx={{ cursor: 'pointer', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '2px solid rgba(124, 179, 66, 0.3)', borderRadius: 4, transition: 'all 0.3s ease', '&:hover': { transform: 'translateY(-8px)', border: '2px solid rgba(124, 179, 66, 0.8)', boxShadow: '0 12px 32px rgba(124, 179, 66, 0.4)' } }}>
-                  <Box sx={{ height: 160, background: `linear-gradient(135deg, ${getTypeColor(strain.type)}55 0%, ${getTypeColor(strain.type)}88 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Card sx={{ position: 'relative', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '2px solid rgba(124, 179, 66, 0.3)', borderRadius: 4, transition: 'all 0.3s ease', '&:hover': { transform: 'translateY(-8px)', border: '2px solid rgba(124, 179, 66, 0.8)', boxShadow: '0 12px 32px rgba(124, 179, 66, 0.4)' } }}>
+                  {/* Favorite Button */}
+                  <IconButton
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(strain.slug);
+                    }}
+                    sx={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      zIndex: 10,
+                      bgcolor: 'rgba(0,0,0,0.5)',
+                      color: favorites.includes(strain.slug) ? '#ff4081' : '#fff',
+                      '&:hover': {
+                        bgcolor: 'rgba(0,0,0,0.7)',
+                        transform: 'scale(1.1)',
+                      },
+                    }}
+                  >
+                    {favorites.includes(strain.slug) ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+                  </IconButton>
+
+                  <Box onClick={() => handleStrainClick(strain)} sx={{ height: 160, background: `linear-gradient(135deg, ${getTypeColor(strain.type)}55 0%, ${getTypeColor(strain.type)}88 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <SpaIcon sx={{ fontSize: 64, color: '#fff', opacity: 0.8 }} />
                   </Box>
-                  <CardContent>
+                  <CardContent onClick={() => handleStrainClick(strain)}>
                     <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: 1 }}>{strain.name}</Typography>
                     <Chip label={strain.type || 'Unknown'} size="small" sx={{ bgcolor: getTypeColor(strain.type), color: '#fff', fontWeight: 600, mb: 1 }} />
                     <Typography variant="body2" sx={{ color: '#e0e0e0', mb: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
@@ -435,7 +626,7 @@ export default function StrainBrowser({ onBack }) {
         </>
       )}
 
-      <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { background: 'linear-gradient(135deg, rgba(30, 30, 30, 0.98) 0%, rgba(20, 20, 20, 0.98) 100%)', backdropFilter: 'blur(20px)', border: '2px solid rgba(124, 179, 66, 0.3)', borderRadius: 4 } }}>
+      <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} maxWidth="md" fullWidth slotProps={{ paper: { sx: { background: 'linear-gradient(135deg, rgba(30, 30, 30, 0.98) 0%, rgba(20, 20, 20, 0.98) 100%)', backdropFilter: 'blur(20px)', border: '2px solid rgba(124, 179, 66, 0.3)', borderRadius: 4 } } }}>
         <DialogTitle sx={{ color: '#fff', fontWeight: 700, borderBottom: '1px solid rgba(124, 179, 66, 0.3)' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
             <Box>
@@ -455,6 +646,22 @@ export default function StrainBrowser({ onBack }) {
           {renderDetailsTab()}
         </DialogContent>
       </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
