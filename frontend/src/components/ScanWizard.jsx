@@ -309,8 +309,8 @@ export default function ScanWizard({ onBack }) {
             justifyContent: 'center',
           }}
         >
-          {/* Back button - left side */}
-          <Box sx={{ position: 'absolute', top: 24, left: 24, zIndex: 100 }}>
+          {/* Back and Logout buttons - left side */}
+          <Box sx={{ position: 'absolute', top: 24, left: 24, zIndex: 100, display: 'flex', gap: 2 }}>
             <Button
               variant="contained"
               color="primary"
@@ -327,12 +327,9 @@ export default function ScanWizard({ onBack }) {
                 textTransform: 'none'
               }}
             >
-              ← Back
+              ← Back to Garden
             </Button>
-          </Box>
 
-          {/* Logout button - right side */}
-          <Box sx={{ position: 'absolute', top: 24, right: 24, zIndex: 100 }}>
             <Button
               variant="contained"
               onClick={async () => {
