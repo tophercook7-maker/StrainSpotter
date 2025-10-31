@@ -5,6 +5,8 @@ import { useMembershipGuard } from '../hooks/useMembershipGuard';
 import ScanWizard from './ScanWizard';
 import StrainBrowser from './StrainBrowser';
 import ReviewsHub from './ReviewsHub';
+import DispensaryFinder from './DispensaryFinder';
+import SeedVendorFinder from './SeedVendorFinder';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import SpaIcon from '@mui/icons-material/Spa';
@@ -24,6 +26,8 @@ export default function Garden({ onNavigate, onBack }) {
   const [showScan, setShowScan] = useState(false);
   const [showStrainBrowser, setShowStrainBrowser] = useState(false);
   const [showReviews, setShowReviews] = useState(false);
+  const [showDispensaryFinder, setShowDispensaryFinder] = useState(false);
+  const [showSeedFinder, setShowSeedFinder] = useState(false);
 
   const handleLogout = async () => {
     if (!canLogout) {
@@ -55,6 +59,18 @@ export default function Garden({ onNavigate, onBack }) {
     // Special case for Reviews Hub
     if (nav === 'reviews') {
       setShowReviews(true);
+      return;
+    }
+
+    // Special case for Dispensary Finder
+    if (nav === 'dispensaries') {
+      setShowDispensaryFinder(true);
+      return;
+    }
+
+    // Special case for Seed Vendor Finder
+    if (nav === 'seeds') {
+      setShowSeedFinder(true);
       return;
     }
 
@@ -96,6 +112,16 @@ export default function Garden({ onNavigate, onBack }) {
   // Show ReviewsHub if user clicked Reviews Hub
   if (showReviews) {
     return <ReviewsHub onBack={() => setShowReviews(false)} currentUser={user} />;
+  }
+
+  // Show DispensaryFinder if user clicked Dispensaries
+  if (showDispensaryFinder) {
+    return <DispensaryFinder onBack={() => setShowDispensaryFinder(false)} />;
+  }
+
+  // Show SeedVendorFinder if user clicked Seed Vendors
+  if (showSeedFinder) {
+    return <SeedVendorFinder onBack={() => setShowSeedFinder(false)} />;
   }
 
   return (
