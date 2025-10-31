@@ -432,60 +432,66 @@ export default function StrainBrowser({ onBack }) {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', p: 3, background: 'none' }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={3}>
-        <Typography variant="h4" sx={{ color: '#fff', fontWeight: 700 }}>🌿 Strain Browser</Typography>
+    <Box sx={{ minHeight: '100vh', p: 2, background: 'none' }}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
+        <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>🌿 Strain Browser</Typography>
         {onBack && (
-          <Button variant="outlined" onClick={onBack} sx={{ color: '#fff', borderColor: 'rgba(124, 179, 66, 0.6)', '&:hover': { borderColor: 'rgba(124, 179, 66, 1)', bgcolor: 'rgba(124, 179, 66, 0.1)' } }}>
-            ← Back to Garden
+          <Button size="small" variant="outlined" onClick={onBack} sx={{ color: '#fff', borderColor: 'rgba(124, 179, 66, 0.6)', fontSize: '0.875rem', '&:hover': { borderColor: 'rgba(124, 179, 66, 1)', bgcolor: 'rgba(124, 179, 66, 0.1)' } }}>
+            ← Back
           </Button>
         )}
       </Stack>
 
-      <Paper sx={{ p: 3, mb: 3, background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '2px solid rgba(124, 179, 66, 0.3)', borderRadius: 4 }}>
-        <Grid container spacing={2}>
+      <Paper sx={{ p: 2, mb: 2, background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '1px solid rgba(124, 179, 66, 0.3)', borderRadius: 2 }}>
+        <Grid container spacing={1.5}>
           <Grid item xs={12} md={6}>
-            <TextField fullWidth placeholder="Search strains by name, effects, flavors..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search strains..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               slotProps={{
                 input: {
-                  startAdornment: (<InputAdornment position="start"><SearchIcon sx={{ color: '#7cb342' }} /></InputAdornment>),
-                  sx: { color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.5)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.8)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#7cb342' } }
+                  startAdornment: (<InputAdornment position="start"><SearchIcon sx={{ color: '#7cb342', fontSize: 20 }} /></InputAdornment>),
+                  sx: { color: '#fff', fontSize: '0.875rem', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.5)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.8)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#7cb342' } }
                 }
               }}
             />
           </Grid>
-          <Grid item xs={12} sm={6} md={2}>
-            <FormControl fullWidth>
-              <InputLabel sx={{ color: '#fff' }}>Type</InputLabel>
-              <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} label="Type" sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.5)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.8)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#7cb342' } }}>
-                <MenuItem value="all">All Types</MenuItem>
+          <Grid item xs={6} sm={4} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel sx={{ color: '#fff', fontSize: '0.875rem' }}>Type</InputLabel>
+              <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} label="Type" sx={{ color: '#fff', fontSize: '0.875rem', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.5)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.8)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#7cb342' } }}>
+                <MenuItem value="all">All</MenuItem>
                 <MenuItem value="indica">Indica</MenuItem>
                 <MenuItem value="sativa">Sativa</MenuItem>
                 <MenuItem value="hybrid">Hybrid</MenuItem>
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={6} md={2}>
-            <FormControl fullWidth>
-              <InputLabel sx={{ color: '#fff' }}>Sort By</InputLabel>
-              <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} label="Sort By" sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.5)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.8)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#7cb342' } }}>
-                <MenuItem value="name"><SortIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />Name</MenuItem>
-                <MenuItem value="thc">THC % (High to Low)</MenuItem>
+          <Grid item xs={6} sm={4} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel sx={{ color: '#fff', fontSize: '0.875rem' }}>Sort</InputLabel>
+              <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} label="Sort" sx={{ color: '#fff', fontSize: '0.875rem', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.5)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.8)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#7cb342' } }}>
+                <MenuItem value="name">Name</MenuItem>
+                <MenuItem value="thc">THC %</MenuItem>
                 <MenuItem value="rating">Rating</MenuItem>
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={12} md={2}>
+          <Grid item xs={12} sm={4} md={2}>
             <Button
               fullWidth
+              size="small"
               variant={showFilters ? "contained" : "outlined"}
               onClick={() => setShowFilters(!showFilters)}
-              startIcon={<FilterListIcon />}
+              startIcon={<FilterListIcon fontSize="small" />}
               sx={{
-                height: '56px',
                 color: showFilters ? '#000' : '#fff',
                 bgcolor: showFilters ? '#7cb342' : 'transparent',
                 borderColor: 'rgba(124, 179, 66, 0.6)',
+                fontSize: '0.875rem',
                 '&:hover': {
                   borderColor: 'rgba(124, 179, 66, 1)',
                   bgcolor: showFilters ? '#7cb342' : 'rgba(124, 179, 66, 0.1)'
@@ -531,7 +537,7 @@ export default function StrainBrowser({ onBack }) {
         )}
 
         <Stack direction="row" justifyContent="space-between" alignItems="center" mt={2}>
-          <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
+          <Typography variant="caption" sx={{ color: '#e0e0e0', fontSize: '0.8rem' }}>
             {loading ? (
               'Loading strains...'
             ) : (
@@ -545,8 +551,9 @@ export default function StrainBrowser({ onBack }) {
           {favorites.length > 0 && (
             <Tooltip title="View favorites">
               <Chip
-                icon={<FavoriteIcon />}
-                label={`${favorites.length} Favorites`}
+                size="small"
+                icon={<FavoriteIcon sx={{ fontSize: 16 }} />}
+                label={`${favorites.length}`}
                 onClick={() => {
                   // Filter to show only favorites
                   setSearchQuery('');
@@ -559,6 +566,8 @@ export default function StrainBrowser({ onBack }) {
                   bgcolor: 'rgba(255, 64, 129, 0.2)',
                   color: '#ff4081',
                   cursor: 'pointer',
+                  fontSize: '0.75rem',
+                  height: 24,
                   '&:hover': { bgcolor: 'rgba(255, 64, 129, 0.3)' }
                 }}
               />
@@ -571,42 +580,72 @@ export default function StrainBrowser({ onBack }) {
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress sx={{ color: '#7cb342' }} /></Box>
       ) : (
         <>
-          <Grid container spacing={3}>
+          <Grid container spacing={2}>
             {displayedStrains.map((strain) => (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={strain.slug}>
-                <Card sx={{ position: 'relative', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '2px solid rgba(124, 179, 66, 0.3)', borderRadius: 4, transition: 'all 0.3s ease', '&:hover': { transform: 'translateY(-8px)', border: '2px solid rgba(124, 179, 66, 0.8)', boxShadow: '0 12px 32px rgba(124, 179, 66, 0.4)' } }}>
+              <Grid item xs={6} sm={4} md={3} lg={2} key={strain.slug}>
+                <Card sx={{ position: 'relative', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '1px solid rgba(124, 179, 66, 0.3)', borderRadius: 2, transition: 'all 0.3s ease', '&:hover': { transform: 'translateY(-4px)', border: '1px solid rgba(124, 179, 66, 0.8)', boxShadow: '0 8px 24px rgba(124, 179, 66, 0.3)' } }}>
                   {/* Favorite Button */}
                   <IconButton
+                    size="small"
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleFavorite(strain.slug);
                     }}
                     sx={{
                       position: 'absolute',
-                      top: 8,
-                      right: 8,
+                      top: 4,
+                      right: 4,
                       zIndex: 10,
-                      bgcolor: 'rgba(0,0,0,0.5)',
+                      bgcolor: 'rgba(0,0,0,0.6)',
                       color: favorites.includes(strain.slug) ? '#ff4081' : '#fff',
+                      padding: '4px',
                       '&:hover': {
-                        bgcolor: 'rgba(0,0,0,0.7)',
+                        bgcolor: 'rgba(0,0,0,0.8)',
                         transform: 'scale(1.1)',
                       },
                     }}
                   >
-                    {favorites.includes(strain.slug) ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+                    {favorites.includes(strain.slug) ? <FavoriteIcon fontSize="small" /> : <FavoriteBorderIcon fontSize="small" />}
                   </IconButton>
 
-                  <Box onClick={() => handleStrainClick(strain)} sx={{ height: 160, background: `linear-gradient(135deg, ${getTypeColor(strain.type)}55 0%, ${getTypeColor(strain.type)}88 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <SpaIcon sx={{ fontSize: 64, color: '#fff', opacity: 0.8 }} />
+                  <Box
+                    onClick={() => handleStrainClick(strain)}
+                    sx={{
+                      height: 120,
+                      background: strain.image_url && !strain.image_url.includes('yourdomain.com')
+                        ? `url(${strain.image_url})`
+                        : `linear-gradient(135deg, ${getTypeColor(strain.type)}55 0%, ${getTypeColor(strain.type)}88 100%)`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative',
+                      '&::after': strain.image_url && !strain.image_url.includes('yourdomain.com') ? {
+                        content: '""',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: `linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.3) 100%)`,
+                      } : {}
+                    }}
+                  >
+                    {(!strain.image_url || strain.image_url.includes('yourdomain.com')) && (
+                      <SpaIcon sx={{ fontSize: 48, color: '#fff', opacity: 0.8 }} />
+                    )}
                   </Box>
-                  <CardContent onClick={() => handleStrainClick(strain)}>
-                    <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: 1 }}>{strain.name}</Typography>
-                    <Chip label={strain.type || 'Unknown'} size="small" sx={{ bgcolor: getTypeColor(strain.type), color: '#fff', fontWeight: 600, mb: 1 }} />
-                    <Typography variant="body2" sx={{ color: '#e0e0e0', mb: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                      {strain.description || 'No description available'}
+                  <CardContent onClick={() => handleStrainClick(strain)} sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Typography variant="body2" sx={{ color: '#fff', fontWeight: 600, mb: 0.5, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {strain.name}
                     </Typography>
-                    {strain.thc && <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600 }}>THC: {strain.thc}%</Typography>}
+                    <Chip label={strain.type || 'Unknown'} size="small" sx={{ bgcolor: getTypeColor(strain.type), color: '#fff', fontWeight: 600, fontSize: '0.65rem', height: 18, mb: 0.5 }} />
+                    {strain.thc && (
+                      <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, display: 'block', fontSize: '0.7rem' }}>
+                        THC: {strain.thc}%
+                      </Typography>
+                    )}
                   </CardContent>
                 </Card>
               </Grid>
