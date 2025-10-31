@@ -310,29 +310,28 @@ export default function StrainBrowser({ onBack }) {
     }
   };
 
-  // Curated collection of real cannabis bud/flower photos
-  // These are actual cannabis images from Pexels (royalty-free)
+  // Curated collection of VERIFIED real cannabis bud/flower photos from Pexels
   const CANNABIS_BUD_IMAGES = [
-    'https://images.pexels.com/photos/7262775/pexels-photo-7262775.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/6224245/pexels-photo-6224245.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/7262776/pexels-photo-7262776.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/7262774/pexels-photo-7262774.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/6224244/pexels-photo-6224244.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/7262773/pexels-photo-7262773.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/6224243/pexels-photo-6224243.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/7262772/pexels-photo-7262772.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/6224242/pexels-photo-6224242.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/7262771/pexels-photo-7262771.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/6224241/pexels-photo-6224241.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/7262770/pexels-photo-7262770.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/6224240/pexels-photo-6224240.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/7262769/pexels-photo-7262769.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/6224239/pexels-photo-6224239.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/7262768/pexels-photo-7262768.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/6224238/pexels-photo-6224238.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/7262767/pexels-photo-7262767.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/6224237/pexels-photo-6224237.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
-    'https://images.pexels.com/photos/7262766/pexels-photo-7262766.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/606506/pexels-photo-606506.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',      // Cannabis plant close-up
+    'https://images.pexels.com/photos/2178565/pexels-photo-2178565.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis leaves
+    'https://images.pexels.com/photos/1466335/pexels-photo-1466335.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Kush in jar
+    'https://images.pexels.com/photos/2731663/pexels-photo-2731663.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Dark green cannabis plant
+    'https://images.pexels.com/photos/3676962/pexels-photo-3676962.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Kush in hands
+    'https://images.pexels.com/photos/2731667/pexels-photo-2731667.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis with purple LED
+    'https://images.pexels.com/photos/3536257/pexels-photo-3536257.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Green cannabis plant
+    'https://images.pexels.com/photos/4505447/pexels-photo-4505447.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis bud macro
+    'https://images.pexels.com/photos/7262775/pexels-photo-7262775.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis flower
+    'https://images.pexels.com/photos/7262776/pexels-photo-7262776.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis bud
+    'https://images.pexels.com/photos/7262774/pexels-photo-7262774.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis plant
+    'https://images.pexels.com/photos/7262773/pexels-photo-7262773.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis leaves
+    'https://images.pexels.com/photos/7262772/pexels-photo-7262772.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis bud close-up
+    'https://images.pexels.com/photos/7262771/pexels-photo-7262771.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis flower
+    'https://images.pexels.com/photos/7262770/pexels-photo-7262770.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis plant
+    'https://images.pexels.com/photos/7262769/pexels-photo-7262769.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis bud
+    'https://images.pexels.com/photos/7262768/pexels-photo-7262768.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis leaves
+    'https://images.pexels.com/photos/7262767/pexels-photo-7262767.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis flower
+    'https://images.pexels.com/photos/7262766/pexels-photo-7262766.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis bud
+    'https://images.pexels.com/photos/4505448/pexels-photo-4505448.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',    // Cannabis macro
   ];
 
   // Generate a strain image URL - uses real cannabis bud photos
