@@ -15,14 +15,14 @@ import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import { supabase } from '../supabaseClient';
 
-const STRAINS_PER_PAGE = 100; // Load 100 strains at a time
+const STRAINS_PER_PAGE = 100; // Display 100 strains at a time
+const FETCH_BATCH_SIZE = 1000; // Fetch 1000 strains per database query
 
 export default function StrainBrowser({ onBack }) {
   const [strains, setStrains] = useState([]);
   const [filteredStrains, setFilteredStrains] = useState([]);
   const [displayedStrains, setDisplayedStrains] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [selectedStrain, setSelectedStrain] = useState(null);
@@ -33,12 +33,14 @@ export default function StrainBrowser({ onBack }) {
   const [reviews, setReviews] = useState([]);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [totalStrains, setTotalStrains] = useState(0);
+  const [allStrainsLoaded, setAllStrainsLoaded] = useState(false);
 
   const observerTarget = useRef(null);
 
-  // Fetch initial strains on mount
+  // Fetch ALL strains on mount
   useEffect(() => {
-    fetchStrains(0);
+    fetchAllStrains();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -54,7 +56,7 @@ export default function StrainBrowser({ onBack }) {
     setPage(0);
   }, [filteredStrains]);
 
-  // Infinite scroll observer
+  // Infinite scroll observer - load more displayed strains from filtered list
   useEffect(() => {
     const loadMoreDisplayedStrains = () => {
       const nextPage = page + 1;
@@ -67,19 +69,15 @@ export default function StrainBrowser({ onBack }) {
         setPage(nextPage);
       }
 
-      // Check if we need to fetch more from database
-      if (end >= strains.length && hasMore) {
-        fetchMoreStrains();
-      }
-
-      // Update hasMore based on filtered strains
-      setHasMore(end < filteredStrains.length || hasMore);
+      // Check if we've displayed all filtered strains
+      const hasMoreToDisplay = end < filteredStrains.length;
+      setHasMore(hasMoreToDisplay);
     };
 
     const currentTarget = observerTarget.current;
     const observer = new IntersectionObserver(
       entries => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+        if (entries[0].isIntersecting && hasMore && !loading) {
           loadMoreDisplayedStrains();
         }
       },
@@ -95,56 +93,55 @@ export default function StrainBrowser({ onBack }) {
         observer.unobserve(currentTarget);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasMore, loadingMore, loading, page, filteredStrains, strains]);
+  }, [hasMore, loading, page, filteredStrains]);
 
-  const fetchStrains = async (pageNum = 0) => {
+  const fetchAllStrains = async () => {
     try {
       setLoading(true);
-      const from = pageNum * STRAINS_PER_PAGE;
-      const to = from + STRAINS_PER_PAGE - 1;
+      console.log('🔍 Fetching ALL strains from database...');
 
-      const { data, error } = await supabase
-        .from('strains')
-        .select('*')
-        .order('name')
-        .range(from, to);
+      let allData = [];
+      let from = 0;
+      const batchSize = FETCH_BATCH_SIZE;
+      let hasMoreData = true;
 
-      if (error) throw error;
-      setStrains(data || []);
-      setHasMore(data && data.length === STRAINS_PER_PAGE);
+      // Fetch in batches until we have all strains
+      while (hasMoreData) {
+        const to = from + batchSize - 1;
+
+        const { data, error, count } = await supabase
+          .from('strains')
+          .select('*', { count: 'exact' })
+          .order('name')
+          .range(from, to);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          console.log(`   Loaded ${allData.length} strains...`);
+
+          // Check if we have more data
+          if (count && allData.length < count) {
+            from += batchSize;
+          } else {
+            hasMoreData = false;
+          }
+        } else {
+          hasMoreData = false;
+        }
+      }
+
+      console.log(`✅ Loaded ${allData.length} total strains!`);
+      setStrains(allData);
+      setTotalStrains(allData.length);
+      setAllStrainsLoaded(true);
+      setHasMore(false); // All strains loaded, no more to fetch
+
     } catch (error) {
-      console.error('Error fetching strains:', error);
+      console.error('❌ Error fetching strains:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchMoreStrains = async () => {
-    try {
-      setLoadingMore(true);
-      const nextBatch = Math.floor(strains.length / STRAINS_PER_PAGE);
-      const from = nextBatch * STRAINS_PER_PAGE;
-      const to = from + STRAINS_PER_PAGE - 1;
-
-      const { data, error } = await supabase
-        .from('strains')
-        .select('*')
-        .order('name')
-        .range(from, to);
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        setStrains(prev => [...prev, ...data]);
-        setHasMore(data.length === STRAINS_PER_PAGE);
-      } else {
-        setHasMore(false);
-      }
-    } catch (error) {
-      console.error('Error fetching more strains:', error);
-    } finally {
-      setLoadingMore(false);
     }
   };
 
@@ -388,8 +385,15 @@ export default function StrainBrowser({ onBack }) {
           </Grid>
         </Grid>
         <Typography variant="body2" sx={{ color: '#e0e0e0', mt: 2 }}>
-          Showing {displayedStrains.length} of {filteredStrains.length} strains
-          {filteredStrains.length < strains.length && ` (${strains.length} total loaded)`}
+          {loading ? (
+            'Loading strains...'
+          ) : (
+            <>
+              Showing {displayedStrains.length} of {filteredStrains.length} strains
+              {filteredStrains.length < strains.length && ` (filtered from ${strains.length} total)`}
+              {!allStrainsLoaded && ' - Loading all strains...'}
+            </>
+          )}
         </Typography>
       </Paper>
 
@@ -419,12 +423,13 @@ export default function StrainBrowser({ onBack }) {
 
           {/* Infinite scroll trigger */}
           <Box ref={observerTarget} sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
-            {loadingMore && <CircularProgress sx={{ color: '#7cb342' }} size={32} />}
-            {!loadingMore && hasMore && displayedStrains.length > 0 && (
+            {hasMore && displayedStrains.length > 0 && (
               <Typography variant="body2" sx={{ color: '#7cb342' }}>Scroll for more...</Typography>
             )}
-            {!hasMore && displayedStrains.length > 0 && (
-              <Typography variant="body2" sx={{ color: '#e0e0e0' }}>All strains loaded! 🌿</Typography>
+            {!hasMore && displayedStrains.length > 0 && displayedStrains.length === filteredStrains.length && (
+              <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
+                All {filteredStrains.length} strains displayed! 🌿
+              </Typography>
             )}
           </Box>
         </>
