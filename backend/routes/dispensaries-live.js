@@ -2,11 +2,17 @@ import express from 'express';
 import { supabase } from '../supabaseClient.js';
 const router = express.Router();
 
+// Blacklist of known closed dispensaries (to filter from Google Places results)
+const CLOSED_DISPENSARIES = [
+  'Green Springs Medical Marijuana Dispensary',
+  'Green Springs Medical'
+];
+
 /**
  * Live Dispensary Finder
  * Combines database results with Google Places API for real-time dispensary search
- * 
- * GET /api/dispensaries-live?lat=37.7749&lng=-122.4194&radius=10&strain=blue-dream
+ *
+ * GET /api/dispensaries-live?lat=37.7749&lng=-122.4194&radius=10
  */
 
 // Helper: Calculate distance between two coordinates (Haversine formula)
@@ -53,9 +59,12 @@ async function searchGooglePlaces(lat, lng, radius) {
       const data = await response.json();
 
       if (data.status === 'OK' && data.results) {
-        // Add unique results only
+        // Add unique results only, filter out permanently closed places and blacklisted dispensaries
         for (const place of data.results) {
-          if (!seenPlaceIds.has(place.place_id)) {
+          const isClosed = place.business_status?.includes('CLOSED');
+          const isBlacklisted = CLOSED_DISPENSARIES.some(closed => place.name.includes(closed));
+
+          if (!seenPlaceIds.has(place.place_id) && !isClosed && !isBlacklisted) {
             seenPlaceIds.add(place.place_id);
             allResults.push(place);
           }
@@ -143,7 +152,7 @@ async function getPlaceDetails(placeId) {
 // Main route: Search dispensaries
 router.get('/', async (req, res) => {
   try {
-    const { lat, lng, radius = 10, strain, limit = 20 } = req.query;
+    const { lat, lng, radius = 10, limit = 20 } = req.query;
 
     if (!lat || !lng) {
       return res.status(400).json({ error: 'lat and lng parameters required' });
@@ -180,25 +189,7 @@ router.get('/', async (req, res) => {
     // 2. Search Google Places for dispensaries
     const googleResults = await searchGooglePlaces(userLat, userLng, searchRadius);
 
-    // 3. If strain is specified, filter database results
-    if (strain) {
-      try {
-        const { data: strainDispensaries, error } = await supabase
-          .from('dispensary_strains')
-          .select('dispensary_id, dispensaries(*)')
-          .eq('strain_slug', strain)
-          .eq('in_stock', true);
-
-        if (!error && strainDispensaries) {
-          const strainDispIds = new Set(strainDispensaries.map(sd => sd.dispensary_id));
-          dbResults = dbResults.filter(d => strainDispIds.has(d.id));
-        }
-      } catch (strainError) {
-        console.error('[dispensaries-live] Strain filter failed:', strainError);
-      }
-    }
-
-    // 4. Combine and deduplicate results
+    // 3. Combine and deduplicate results
     const combined = [...dbResults, ...googleResults];
     
     // Sort by distance

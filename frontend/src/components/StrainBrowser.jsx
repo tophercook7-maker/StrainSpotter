@@ -260,7 +260,7 @@ export default function StrainBrowser({ onBack }) {
 
       const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5181';
       const response = await fetch(
-        `${API_BASE}/api/dispensaries-live?lat=${userLocation.lat}&lng=${userLocation.lng}&radius=50&strain=${strainSlug}&limit=20`
+        `${API_BASE}/api/dispensaries-live?lat=${userLocation.lat}&lng=${userLocation.lng}&radius=50&limit=20`
       );
       const data = await response.json();
 
