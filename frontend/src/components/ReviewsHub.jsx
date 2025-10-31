@@ -184,32 +184,31 @@ export default function ReviewsHub({ onBack, currentUser }) {
   return (
     <Box sx={{ minHeight: '100vh', p: 2, background: 'none' }}>
       {/* Header */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
-        <Stack direction="row" alignItems="center" spacing={2}>
-          <RateReviewIcon sx={{ fontSize: 32, color: '#7cb342' }} />
-          <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>
-            Reviews Hub
-          </Typography>
-        </Stack>
-        {onBack && (
-          <Button 
-            size="small" 
-            variant="outlined" 
-            onClick={onBack} 
-            startIcon={<ArrowBackIcon />}
-            sx={{ 
-              color: '#fff', 
-              borderColor: 'rgba(124, 179, 66, 0.6)', 
-              fontSize: '0.875rem',
-              '&:hover': { 
-                borderColor: 'rgba(124, 179, 66, 1)', 
-                bgcolor: 'rgba(124, 179, 66, 0.1)' 
-              } 
-            }}
-          >
-            Back
-          </Button>
-        )}
+      {onBack && (
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={onBack}
+          startIcon={<ArrowBackIcon />}
+          sx={{
+            color: '#fff',
+            borderColor: 'rgba(124, 179, 66, 0.6)',
+            fontSize: '0.875rem',
+            mb: 2,
+            '&:hover': {
+              borderColor: 'rgba(124, 179, 66, 1)',
+              bgcolor: 'rgba(124, 179, 66, 0.1)'
+            }
+          }}
+        >
+          Back
+        </Button>
+      )}
+      <Stack direction="row" alignItems="center" spacing={2} mb={2}>
+        <RateReviewIcon sx={{ fontSize: 32, color: '#7cb342' }} />
+        <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>
+          Reviews Hub
+        </Typography>
       </Stack>
 
       {/* Tabs */}

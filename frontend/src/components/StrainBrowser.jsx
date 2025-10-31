@@ -582,14 +582,12 @@ export default function StrainBrowser({ onBack }) {
 
   return (
     <Box sx={{ minHeight: '100vh', p: 2, background: 'none' }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
-        <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>🌿 Strain Browser</Typography>
-        {onBack && (
-          <Button size="small" variant="outlined" onClick={onBack} sx={{ color: '#fff', borderColor: 'rgba(124, 179, 66, 0.6)', fontSize: '0.875rem', '&:hover': { borderColor: 'rgba(124, 179, 66, 1)', bgcolor: 'rgba(124, 179, 66, 0.1)' } }}>
-            ← Back
-          </Button>
-        )}
-      </Stack>
+      {onBack && (
+        <Button size="small" variant="outlined" onClick={onBack} sx={{ color: '#fff', borderColor: 'rgba(124, 179, 66, 0.6)', fontSize: '0.875rem', mb: 2, '&:hover': { borderColor: 'rgba(124, 179, 66, 1)', bgcolor: 'rgba(124, 179, 66, 0.1)' } }}>
+          ← Back
+        </Button>
+      )}
+      <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700, mb: 2 }}>🌿 Strain Browser</Typography>
 
       <Paper sx={{ p: 2, mb: 2, background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '1px solid rgba(124, 179, 66, 0.3)', borderRadius: 2 }}>
         <Grid container spacing={1.5}>
