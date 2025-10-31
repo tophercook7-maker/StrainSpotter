@@ -35,6 +35,8 @@ export default function StrainBrowser({ onBack }) {
   const [vendors, setVendors] = useState([]);
   const [dispensaries, setDispensaries] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [userLocation, setUserLocation] = useState(null);
+  const [loadingLocation, setLoadingLocation] = useState(true);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [totalStrains, setTotalStrains] = useState(0);
@@ -48,6 +50,30 @@ export default function StrainBrowser({ onBack }) {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const observerTarget = useRef(null);
+
+  // Detect user location on mount
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+          setLoadingLocation(false);
+        },
+        () => {
+          // Fallback to San Francisco if location denied
+          setUserLocation({ lat: 37.7749, lng: -122.4194 });
+          setLoadingLocation(false);
+        }
+      );
+    } else {
+      // Fallback if geolocation not supported
+      setUserLocation({ lat: 37.7749, lng: -122.4194 });
+      setLoadingLocation(false);
+    }
+  }, []);
 
   // Fetch ALL strains on mount
   useEffect(() => {
@@ -190,16 +216,34 @@ export default function StrainBrowser({ onBack }) {
     setSelectedStrain(strain);
     setDetailsOpen(true);
     setDetailsTab(0);
-    fetchVendorsForStrain(strain.slug);
+    fetchVendorsForStrain(strain.slug, strain.name);
     fetchDispensariesForStrain(strain.slug);
     fetchReviewsForStrain(strain.slug);
   };
 
-  const fetchVendorsForStrain = async (strainSlug) => {
+  const fetchVendorsForStrain = async (strainSlug, strainName) => {
     try {
-      const { data, error } = await supabase.from('vendor_strains').select('*, seed_vendors (*)').eq('strain_slug', strainSlug).eq('in_stock', true);
-      if (error) throw error;
-      setVendors(data || []);
+      // Use live seed vendor search API
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5181';
+      const response = await fetch(`${API_BASE}/api/seeds-live?strain=${encodeURIComponent(strainName)}&limit=20`);
+      const data = await response.json();
+
+      // Transform results to match expected format
+      const transformedVendors = (data.results || []).map(vendor => ({
+        seed_vendors: {
+          name: vendor.name,
+          website: vendor.website,
+          country: vendor.country,
+          rating: vendor.rating || 0,
+          verified: vendor.verified || false
+        },
+        price: vendor.price || 'N/A',
+        seed_count: vendor.seed_count || 10,
+        url: vendor.website,
+        in_stock: vendor.in_stock !== false
+      }));
+
+      setVendors(transformedVendors);
     } catch (error) {
       console.error('Error fetching vendors:', error);
       setVendors([]);
@@ -208,9 +252,35 @@ export default function StrainBrowser({ onBack }) {
 
   const fetchDispensariesForStrain = async (strainSlug) => {
     try {
-      const { data, error } = await supabase.from('dispensary_strains').select('*, dispensaries (*)').eq('strain_slug', strainSlug).eq('in_stock', true);
-      if (error) throw error;
-      setDispensaries(data || []);
+      // Use live dispensary search API with user location
+      if (!userLocation) {
+        setDispensaries([]);
+        return;
+      }
+
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5181';
+      const response = await fetch(
+        `${API_BASE}/api/dispensaries-live?lat=${userLocation.lat}&lng=${userLocation.lng}&radius=50&strain=${strainSlug}&limit=20`
+      );
+      const data = await response.json();
+
+      // Transform results to match expected format
+      const transformedDispensaries = (data.results || []).map(disp => ({
+        dispensaries: {
+          name: disp.name,
+          city: disp.city || disp.address?.split(',')[1]?.trim() || 'Unknown',
+          state: disp.state || disp.address?.split(',')[2]?.trim() || '',
+          rating: disp.rating || 0,
+          verified: disp.verified || false,
+          website: disp.website || null
+        },
+        price_per_eighth: disp.price_per_eighth || 'N/A',
+        price_per_ounce: disp.price_per_ounce || 'N/A',
+        distance: disp.distance,
+        in_stock: true
+      }));
+
+      setDispensaries(transformedDispensaries);
     } catch (error) {
       console.error('Error fetching dispensaries:', error);
       setDispensaries([]);
@@ -341,7 +411,14 @@ export default function StrainBrowser({ onBack }) {
       case 1: return (
         <Box>
           {vendors.length === 0 ? (
-            <Typography sx={{ color: '#e0e0e0', textAlign: 'center', py: 4 }}>No seed vendors found for this strain</Typography>
+            <Stack spacing={2} sx={{ textAlign: 'center', py: 4 }}>
+              <Typography sx={{ color: '#e0e0e0' }}>
+                No seed vendors found for this strain
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#aaa' }}>
+                Try searching popular seed banks or check back later
+              </Typography>
+            </Stack>
           ) : (
             <List>
               {vendors.map((v, idx) => (
@@ -374,7 +451,16 @@ export default function StrainBrowser({ onBack }) {
       case 2: return (
         <Box>
           {dispensaries.length === 0 ? (
-            <Typography sx={{ color: '#e0e0e0', textAlign: 'center', py: 4 }}>No dispensaries found for this strain</Typography>
+            <Stack spacing={2} sx={{ textAlign: 'center', py: 4 }}>
+              <Typography sx={{ color: '#e0e0e0' }}>
+                {loadingLocation ? 'Detecting your location...' : 'No dispensaries found within 50 miles with this strain in stock'}
+              </Typography>
+              {userLocation && (
+                <Typography variant="caption" sx={{ color: '#aaa' }}>
+                  Searching near: {userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}
+                </Typography>
+              )}
+            </Stack>
           ) : (
             <List>
               {dispensaries.map((d, idx) => (
@@ -392,10 +478,12 @@ export default function StrainBrowser({ onBack }) {
                         <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
                           <LocationOnIcon sx={{ fontSize: 14, verticalAlign: 'middle', mr: 0.5 }} />
                           {d.dispensaries?.city}, {d.dispensaries?.state}
+                          {d.distance && <Chip label={`${d.distance.toFixed(1)} mi`} size="small" sx={{ ml: 1, height: 18, fontSize: '0.65rem', bgcolor: 'rgba(124, 179, 66, 0.2)', color: '#7cb342' }} />}
                         </Typography>
                         <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
                           <AttachMoneyIcon sx={{ fontSize: 14, verticalAlign: 'middle', mr: 0.5 }} />
-                          ${d.price_per_eighth}/eighth • ${d.price_per_ounce}/oz
+                          {d.price_per_eighth !== 'N/A' ? `$${d.price_per_eighth}/eighth` : 'Price varies'}
+                          {d.price_per_ounce !== 'N/A' && ` • $${d.price_per_ounce}/oz`}
                         </Typography>
                         <Typography variant="caption" sx={{ color: '#aaa' }}>Rating: {d.dispensaries?.rating}/5</Typography>
                         {d.dispensaries?.website && <Button size="small" href={d.dispensaries.website} target="_blank" sx={{ mt: 1, color: '#7cb342' }}>Visit Website →</Button>}
