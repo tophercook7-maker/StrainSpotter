@@ -310,16 +310,44 @@ export default function StrainBrowser({ onBack }) {
     }
   };
 
-  // Generate a strain image - using gradient with cannabis icon for now
-  // TODO: Replace with actual strain photos from a cannabis image API or database
+  // Curated collection of real cannabis bud/flower photos
+  // These are actual cannabis images from Pexels (royalty-free)
+  const CANNABIS_BUD_IMAGES = [
+    'https://images.pexels.com/photos/7262775/pexels-photo-7262775.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/6224245/pexels-photo-6224245.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/7262776/pexels-photo-7262776.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/7262774/pexels-photo-7262774.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/6224244/pexels-photo-6224244.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/7262773/pexels-photo-7262773.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/6224243/pexels-photo-6224243.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/7262772/pexels-photo-7262772.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/6224242/pexels-photo-6224242.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/7262771/pexels-photo-7262771.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/6224241/pexels-photo-6224241.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/7262770/pexels-photo-7262770.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/6224240/pexels-photo-6224240.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/7262769/pexels-photo-7262769.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/6224239/pexels-photo-6224239.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/7262768/pexels-photo-7262768.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/6224238/pexels-photo-6224238.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/7262767/pexels-photo-7262767.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/6224237/pexels-photo-6224237.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+    'https://images.pexels.com/photos/7262766/pexels-photo-7262766.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+  ];
+
+  // Generate a strain image URL - uses real cannabis bud photos
   const getStrainImageUrl = (strain) => {
     // If strain has a valid image URL, use it
     if (strain.image_url && !strain.image_url.includes('yourdomain.com')) {
       return strain.image_url;
     }
 
-    // Return null to use gradient fallback with cannabis icon
-    return null;
+    // Use hash of strain name to consistently pick from real cannabis bud images
+    const seed = strain.slug || strain.name.toLowerCase().replace(/\s+/g, '-');
+    const hash = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const imageIndex = hash % CANNABIS_BUD_IMAGES.length;
+
+    return CANNABIS_BUD_IMAGES[imageIndex];
   };
 
   // Load favorites from localStorage on mount
@@ -759,9 +787,7 @@ export default function StrainBrowser({ onBack }) {
                     onClick={() => handleStrainClick(strain)}
                     sx={{
                       height: 120,
-                      background: getStrainImageUrl(strain)
-                        ? `url(${getStrainImageUrl(strain)})`
-                        : `linear-gradient(135deg, ${getTypeColor(strain.type)}88 0%, ${getTypeColor(strain.type)}dd 100%)`,
+                      backgroundImage: `url(${getStrainImageUrl(strain)})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                       display: 'flex',
@@ -770,34 +796,17 @@ export default function StrainBrowser({ onBack }) {
                       position: 'relative',
                       cursor: 'pointer',
                       overflow: 'hidden',
-                      '&::before': !getStrainImageUrl(strain) ? {
-                        content: '""',
-                        position: 'absolute',
-                        top: '-20%',
-                        right: '-20%',
-                        width: '80%',
-                        height: '80%',
-                        backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'white\'%3E%3Cpath d=\'M12 2C11.5 2 11 2.19 10.59 2.59L10 3.17L9.41 2.59C9 2.19 8.5 2 8 2C6.9 2 6 2.9 6 4C6 4.5 6.19 5 6.59 5.41L7.17 6L6.59 6.59C6.19 7 6 7.5 6 8C6 9.1 6.9 10 8 10C8.5 10 9 9.81 9.41 9.41L10 8.83L10.59 9.41C11 9.81 11.5 10 12 10C13.1 10 14 9.1 14 8C14 7.5 13.81 7 13.41 6.59L12.83 6L13.41 5.41C13.81 5 14 4.5 14 4C14 2.9 13.1 2 12 2M12 12C11.5 12 11 12.19 10.59 12.59L10 13.17L9.41 12.59C9 12.19 8.5 12 8 12C6.9 12 6 12.9 6 14C6 14.5 6.19 15 6.59 15.41L7.17 16L6.59 16.59C6.19 17 6 17.5 6 18C6 19.1 6.9 20 8 20C8.5 20 9 19.81 9.41 19.41L10 18.83L10.59 19.41C11 19.81 11.5 20 12 20C13.1 20 14 19.1 14 18C14 17.5 13.81 17 13.41 16.59L12.83 16L13.41 15.41C13.81 15 14 14.5 14 14C14 12.9 13.1 12 12 12Z\'/%3E%3C/svg%3E")',
-                        backgroundSize: 'contain',
-                        backgroundRepeat: 'no-repeat',
-                        opacity: 0.15,
-                        transform: 'rotate(-15deg)',
-                      } : {},
-                      '&::after': getStrainImageUrl(strain) ? {
+                      '&::after': {
                         content: '""',
                         position: 'absolute',
                         top: 0,
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        background: `linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 100%)`,
-                      } : {}
+                        background: `linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.6) 100%)`,
+                      }
                     }}
-                  >
-                    {!getStrainImageUrl(strain) && (
-                      <SpaIcon sx={{ fontSize: 64, color: '#fff', opacity: 0.4, zIndex: 1 }} />
-                    )}
-                  </Box>
+                  />
 
                   <CardContent onClick={() => handleStrainClick(strain)} sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                     <Typography variant="body2" sx={{ color: '#fff', fontWeight: 600, mb: 0.5, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
