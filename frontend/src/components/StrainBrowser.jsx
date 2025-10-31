@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box, TextField, Grid, Card, CardContent, Typography, Chip, Stack, Button,
   InputAdornment, Select, MenuItem, FormControl, InputLabel, CircularProgress,
@@ -15,10 +15,14 @@ import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import { supabase } from '../supabaseClient';
 
+const STRAINS_PER_PAGE = 100; // Load 100 strains at a time
+
 export default function StrainBrowser({ onBack }) {
   const [strains, setStrains] = useState([]);
   const [filteredStrains, setFilteredStrains] = useState([]);
+  const [displayedStrains, setDisplayedStrains] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [selectedStrain, setSelectedStrain] = useState(null);
@@ -27,20 +31,120 @@ export default function StrainBrowser({ onBack }) {
   const [vendors, setVendors] = useState([]);
   const [dispensaries, setDispensaries] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
 
-  useEffect(() => { fetchStrains(); }, []);
-  useEffect(() => { filterStrains(); }, [searchQuery, typeFilter, strains]);
+  const observerTarget = useRef(null);
 
-  const fetchStrains = async () => {
+  // Fetch initial strains on mount
+  useEffect(() => {
+    fetchStrains(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Filter strains when search/type changes
+  useEffect(() => {
+    filterStrains();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, typeFilter, strains]);
+
+  // Reset displayed strains when filtered strains change
+  useEffect(() => {
+    setDisplayedStrains(filteredStrains.slice(0, STRAINS_PER_PAGE));
+    setPage(0);
+  }, [filteredStrains]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const loadMoreDisplayedStrains = () => {
+      const nextPage = page + 1;
+      const start = nextPage * STRAINS_PER_PAGE;
+      const end = start + STRAINS_PER_PAGE;
+      const moreStrains = filteredStrains.slice(start, end);
+
+      if (moreStrains.length > 0) {
+        setDisplayedStrains(prev => [...prev, ...moreStrains]);
+        setPage(nextPage);
+      }
+
+      // Check if we need to fetch more from database
+      if (end >= strains.length && hasMore) {
+        fetchMoreStrains();
+      }
+
+      // Update hasMore based on filtered strains
+      setHasMore(end < filteredStrains.length || hasMore);
+    };
+
+    const currentTarget = observerTarget.current;
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          loadMoreDisplayedStrains();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, loadingMore, loading, page, filteredStrains, strains]);
+
+  const fetchStrains = async (pageNum = 0) => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.from('strains').select('*').order('name');
+      const from = pageNum * STRAINS_PER_PAGE;
+      const to = from + STRAINS_PER_PAGE - 1;
+
+      const { data, error } = await supabase
+        .from('strains')
+        .select('*')
+        .order('name')
+        .range(from, to);
+
       if (error) throw error;
       setStrains(data || []);
+      setHasMore(data && data.length === STRAINS_PER_PAGE);
     } catch (error) {
       console.error('Error fetching strains:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMoreStrains = async () => {
+    try {
+      setLoadingMore(true);
+      const nextBatch = Math.floor(strains.length / STRAINS_PER_PAGE);
+      const from = nextBatch * STRAINS_PER_PAGE;
+      const to = from + STRAINS_PER_PAGE - 1;
+
+      const { data, error } = await supabase
+        .from('strains')
+        .select('*')
+        .order('name')
+        .range(from, to);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        setStrains(prev => [...prev, ...data]);
+        setHasMore(data.length === STRAINS_PER_PAGE);
+      } else {
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error('Error fetching more strains:', error);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -283,31 +387,47 @@ export default function StrainBrowser({ onBack }) {
             </FormControl>
           </Grid>
         </Grid>
-        <Typography variant="body2" sx={{ color: '#e0e0e0', mt: 2 }}>Showing {filteredStrains.length} of {strains.length} strains</Typography>
+        <Typography variant="body2" sx={{ color: '#e0e0e0', mt: 2 }}>
+          Showing {displayedStrains.length} of {filteredStrains.length} strains
+          {filteredStrains.length < strains.length && ` (${strains.length} total loaded)`}
+        </Typography>
       </Paper>
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress sx={{ color: '#7cb342' }} /></Box>
       ) : (
-        <Grid container spacing={3}>
-          {filteredStrains.map((strain) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={strain.slug}>
-              <Card onClick={() => handleStrainClick(strain)} sx={{ cursor: 'pointer', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '2px solid rgba(124, 179, 66, 0.3)', borderRadius: 4, transition: 'all 0.3s ease', '&:hover': { transform: 'translateY(-8px)', border: '2px solid rgba(124, 179, 66, 0.8)', boxShadow: '0 12px 32px rgba(124, 179, 66, 0.4)' } }}>
-                <Box sx={{ height: 160, background: `linear-gradient(135deg, ${getTypeColor(strain.type)}55 0%, ${getTypeColor(strain.type)}88 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <SpaIcon sx={{ fontSize: 64, color: '#fff', opacity: 0.8 }} />
-                </Box>
-                <CardContent>
-                  <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: 1 }}>{strain.name}</Typography>
-                  <Chip label={strain.type || 'Unknown'} size="small" sx={{ bgcolor: getTypeColor(strain.type), color: '#fff', fontWeight: 600, mb: 1 }} />
-                  <Typography variant="body2" sx={{ color: '#e0e0e0', mb: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                    {strain.description || 'No description available'}
-                  </Typography>
-                  {strain.thc && <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600 }}>THC: {strain.thc}%</Typography>}
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+        <>
+          <Grid container spacing={3}>
+            {displayedStrains.map((strain) => (
+              <Grid item xs={12} sm={6} md={4} lg={3} key={strain.slug}>
+                <Card onClick={() => handleStrainClick(strain)} sx={{ cursor: 'pointer', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '2px solid rgba(124, 179, 66, 0.3)', borderRadius: 4, transition: 'all 0.3s ease', '&:hover': { transform: 'translateY(-8px)', border: '2px solid rgba(124, 179, 66, 0.8)', boxShadow: '0 12px 32px rgba(124, 179, 66, 0.4)' } }}>
+                  <Box sx={{ height: 160, background: `linear-gradient(135deg, ${getTypeColor(strain.type)}55 0%, ${getTypeColor(strain.type)}88 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <SpaIcon sx={{ fontSize: 64, color: '#fff', opacity: 0.8 }} />
+                  </Box>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: 1 }}>{strain.name}</Typography>
+                    <Chip label={strain.type || 'Unknown'} size="small" sx={{ bgcolor: getTypeColor(strain.type), color: '#fff', fontWeight: 600, mb: 1 }} />
+                    <Typography variant="body2" sx={{ color: '#e0e0e0', mb: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                      {strain.description || 'No description available'}
+                    </Typography>
+                    {strain.thc && <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600 }}>THC: {strain.thc}%</Typography>}
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* Infinite scroll trigger */}
+          <Box ref={observerTarget} sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
+            {loadingMore && <CircularProgress sx={{ color: '#7cb342' }} size={32} />}
+            {!loadingMore && hasMore && displayedStrains.length > 0 && (
+              <Typography variant="body2" sx={{ color: '#7cb342' }}>Scroll for more...</Typography>
+            )}
+            {!hasMore && displayedStrains.length > 0 && (
+              <Typography variant="body2" sx={{ color: '#e0e0e0' }}>All strains loaded! 🌿</Typography>
+            )}
+          </Box>
+        </>
       )}
 
       <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { background: 'linear-gradient(135deg, rgba(30, 30, 30, 0.98) 0%, rgba(20, 20, 20, 0.98) 100%)', backdropFilter: 'blur(20px)', border: '2px solid rgba(124, 179, 66, 0.3)', borderRadius: 4 } }}>
