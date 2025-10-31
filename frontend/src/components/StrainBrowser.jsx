@@ -18,6 +18,7 @@ import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import SortIcon from '@mui/icons-material/Sort';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import { supabase } from '../supabaseClient';
+import SeedVendorFinder from './SeedVendorFinder';
 
 const STRAINS_PER_PAGE = 100; // Display 100 strains at a time
 const FETCH_BATCH_SIZE = 1000; // Fetch 1000 strains per database query
@@ -48,6 +49,8 @@ export default function StrainBrowser({ onBack }) {
   const [favorites, setFavorites] = useState([]); // Array of favorite strain slugs
   const [showFilters, setShowFilters] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [showSeedFinder, setShowSeedFinder] = useState(false);
+  const [seedFinderStrain, setSeedFinderStrain] = useState(null);
 
   const observerTarget = useRef(null);
 
@@ -410,13 +413,37 @@ export default function StrainBrowser({ onBack }) {
       );
       case 1: return (
         <Box>
+          <Stack spacing={2} sx={{ mb: 3 }}>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<SearchIcon />}
+              onClick={() => {
+                setSeedFinderStrain({ name: selectedStrain.name, slug: selectedStrain.slug });
+                setShowSeedFinder(true);
+                setDetailsOpen(false);
+              }}
+              sx={{
+                bgcolor: 'rgba(124, 179, 66, 0.3)',
+                color: '#fff',
+                border: '1px solid rgba(124, 179, 66, 0.6)',
+                backdropFilter: 'blur(10px)',
+                '&:hover': {
+                  bgcolor: 'rgba(124, 179, 66, 0.5)',
+                  border: '1px solid rgba(124, 179, 66, 0.8)',
+                }
+              }}
+            >
+              Search All Seed Banks for {selectedStrain?.name}
+            </Button>
+          </Stack>
           {vendors.length === 0 ? (
             <Stack spacing={2} sx={{ textAlign: 'center', py: 4 }}>
               <Typography sx={{ color: '#e0e0e0' }}>
                 No seed vendors found for this strain
               </Typography>
               <Typography variant="caption" sx={{ color: '#aaa' }}>
-                Try searching popular seed banks or check back later
+                Click the button above to search all seed banks
               </Typography>
             </Stack>
           ) : (
@@ -518,6 +545,21 @@ export default function StrainBrowser({ onBack }) {
       default: return null;
     }
   };
+
+  // Show SeedVendorFinder if requested
+  if (showSeedFinder && seedFinderStrain) {
+    return (
+      <SeedVendorFinder
+        onBack={() => {
+          setShowSeedFinder(false);
+          setSeedFinderStrain(null);
+          setDetailsOpen(true);
+        }}
+        strainName={seedFinderStrain.name}
+        strainSlug={seedFinderStrain.slug}
+      />
+    );
+  }
 
   return (
     <Box sx={{ minHeight: '100vh', p: 2, background: 'none' }}>
