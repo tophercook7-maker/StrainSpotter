@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useMembershipGuard } from '../hooks/useMembershipGuard';
 import ScanWizard from './ScanWizard';
 import StrainBrowser from './StrainBrowser';
+import ReviewsHub from './ReviewsHub';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import SpaIcon from '@mui/icons-material/Spa';
@@ -13,6 +14,7 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 import StoreIcon from '@mui/icons-material/Store';
 import PeopleIcon from '@mui/icons-material/People';
 import WarningIcon from '@mui/icons-material/Warning';
+import RateReviewIcon from '@mui/icons-material/RateReview';
 
 export default function Garden({ onNavigate, onBack }) {
   const { user, isMember, isExpired, canLogout, loading } = useMembershipGuard();
@@ -21,6 +23,7 @@ export default function Garden({ onNavigate, onBack }) {
   const [selectedFeature, setSelectedFeature] = useState('');
   const [showScan, setShowScan] = useState(false);
   const [showStrainBrowser, setShowStrainBrowser] = useState(false);
+  const [showReviews, setShowReviews] = useState(false);
 
   const handleLogout = async () => {
     if (!canLogout) {
@@ -49,6 +52,12 @@ export default function Garden({ onNavigate, onBack }) {
       return;
     }
 
+    // Special case for Reviews Hub
+    if (nav === 'reviews') {
+      setShowReviews(true);
+      return;
+    }
+
     // For other features, show "coming soon"
     setSelectedFeature(featureName);
     setShowComingSoon(true);
@@ -58,6 +67,7 @@ export default function Garden({ onNavigate, onBack }) {
   const tiles = [
     { title: 'AI Strain Scan', icon: <CameraAltIcon />, nav: 'scan', color: '#00e676' },
     { title: 'Strain Browser', icon: <SpaIcon />, nav: 'strains', color: '#7cb342' },
+    { title: 'Reviews Hub', icon: <RateReviewIcon />, nav: 'reviews', color: '#ffd600' },
     { title: 'Community Groups', icon: <GroupsIcon />, nav: 'groups', color: '#66bb6a' },
     { title: 'Grow Coach', icon: <LocalFloristIcon />, nav: 'grow-coach', color: '#9ccc65' },
     { title: 'Grower Directory', icon: <PeopleIcon />, nav: 'growers', color: '#8bc34a' },
@@ -81,6 +91,11 @@ export default function Garden({ onNavigate, onBack }) {
   // Show StrainBrowser if user clicked Strain Browser
   if (showStrainBrowser) {
     return <StrainBrowser onBack={() => setShowStrainBrowser(false)} />;
+  }
+
+  // Show ReviewsHub if user clicked Reviews Hub
+  if (showReviews) {
+    return <ReviewsHub onBack={() => setShowReviews(false)} currentUser={user} />;
   }
 
   return (
