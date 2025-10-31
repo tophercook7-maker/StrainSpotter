@@ -236,19 +236,44 @@ function categorizeStrain(name) {
 
 async function main() {
   console.log('🔍 Fetching all strains from database...\n');
-  
-  // Fetch all strains
-  const { data: allStrains, error: fetchError } = await supabase
+
+  // First, get the total count
+  const { count: totalCount, error: countError } = await supabase
     .from('strains')
-    .select('slug, name, type')
-    .order('name');
-  
-  if (fetchError) {
-    console.error('❌ Error fetching strains:', fetchError);
+    .select('*', { count: 'exact', head: true });
+
+  if (countError) {
+    console.error('❌ Error getting count:', countError);
     process.exit(1);
   }
-  
-  console.log(`📊 Total strains in database: ${allStrains.length}\n`);
+
+  console.log(`📊 Total strains in database: ${totalCount}`);
+  console.log('📥 Fetching all strains in batches...\n');
+
+  // Fetch all strains in batches of 1000
+  const allStrains = [];
+  const batchSize = 1000;
+  let offset = 0;
+
+  while (offset < totalCount) {
+    console.log(`   Fetching batch ${Math.floor(offset / batchSize) + 1}/${Math.ceil(totalCount / batchSize)}...`);
+
+    const { data: batch, error: fetchError } = await supabase
+      .from('strains')
+      .select('slug, name, type')
+      .order('name')
+      .range(offset, offset + batchSize - 1);
+
+    if (fetchError) {
+      console.error('❌ Error fetching strains:', fetchError);
+      process.exit(1);
+    }
+
+    allStrains.push(...batch);
+    offset += batchSize;
+  }
+
+  console.log(`✅ Fetched ${allStrains.length} strains\n`);
   
   // Categorize strains
   const stats = {
