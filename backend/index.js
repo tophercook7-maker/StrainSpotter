@@ -37,6 +37,7 @@ import pipelineRoutes from './routes/pipeline.js';
 import moderationRoutes from './routes/moderation.js';
 import moderatorActionsRoutes from './routes/moderator-actions.js';
 import messagesRoutes from './routes/messages.js';
+import profileGeneratorRoutes from './routes/profile-generator.js';
 import usersRoutes from './routes/users.js';
 import { matchStrainByVisuals } from './services/visualMatcher.js';
 import { checkAccess, enforceTrialLimit } from './middleware/membershipCheck.js';
@@ -580,6 +581,7 @@ app.use('/api/pipeline', pipelineRoutes);
 app.use('/api/moderation', moderationRoutes);
 app.use('/api/moderator-actions', moderatorActionsRoutes);
 app.use('/api/messages', messagesRoutes);
+app.use('/api/profile-generator', profileGeneratorRoutes);
 app.use('/api/users', usersRoutes);
 
 // Error logs viewer endpoint (only accessible in development)

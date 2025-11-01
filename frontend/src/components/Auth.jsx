@@ -51,12 +51,35 @@ export default function Auth({ onBack }) {
           const { data } = await supabase.auth.getSession();
           const user = data?.session?.user;
           if (user?.id) {
-            const username = user.email ? user.email.split('@')[0] : undefined;
-            await fetch(`${API_BASE}/api/users/ensure`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user_id: user.id, email: user.email, username })
-            });
+            // Check if user has a profile
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('username, avatar_url')
+              .eq('user_id', user.id)
+              .single();
+
+            // If no username or avatar, generate cannabis-themed profile
+            if (!profile?.username || !profile?.avatar_url) {
+              try {
+                await fetch(`${API_BASE}/api/profile-generator/generate`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    email: user.email,
+                    userId: user.id
+                  })
+                });
+              } catch (e) {
+                console.warn('[auth] Failed to generate profile:', e);
+              }
+            } else {
+              // Ensure user record exists with existing username
+              await fetch(`${API_BASE}/api/users/ensure`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: user.id, email: user.email, username: profile.username })
+              });
+            }
           }
         } catch (e) {
           console.warn('[auth] ensure user after sign-in failed:', e);
@@ -78,13 +101,13 @@ export default function Auth({ onBack }) {
     setError(null);
     setInfo(null);
     const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
-    const { data, error } = await supabase.auth.signUp({ 
-      email, 
-      password, 
-      options: { 
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
         emailRedirectTo: redirectTo,
         data: { email_confirmed: true } // Auto-confirm for dev
-      } 
+      }
     });
     setLoading(false);
     if (error) {
@@ -92,8 +115,22 @@ export default function Auth({ onBack }) {
     } else if (data?.user?.identities?.length === 0) {
       setError('This email is already registered. Please sign in, or use "Forgot password" to reset.');
     } else {
+      // Generate cannabis-themed profile automatically
+      try {
+        await fetch(`${API_BASE}/api/profile-generator/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email,
+            userId: data.user.id
+          })
+        });
+      } catch (e) {
+        console.warn('[auth] Failed to generate profile:', e);
+      }
+
       setError(null);
-      setInfo('Account created! You can now sign in with your email and password.');
+      setInfo('🌿 Account created with a cannabis-themed profile! You can now sign in.');
     }
   }
 
