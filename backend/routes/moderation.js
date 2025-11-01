@@ -6,6 +6,20 @@ const router = express.Router();
 const readClient = supabase;
 const writeClient = supabaseAdmin ?? supabase;
 
+// ============================================
+// HELPER: Check if user is moderator
+// ============================================
+async function isModerator(userId) {
+  const { data, error } = await readClient
+    .from('moderators')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .single();
+
+  return !error && data;
+}
+
 // POST /api/moderation/report - Report a message
 router.post('/report', express.json(), async (req, res, next) => {
   try {
@@ -160,6 +174,170 @@ router.get('/stats', async (req, res, next) => {
       resolvedReports: resolved || 0,
       totalMessages: totalMessages || 0
     });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ============================================
+// GROWER DIRECTORY MODERATION
+// ============================================
+
+/**
+ * GET /api/moderation/flagged-messages
+ * Get all flagged messages (moderators only)
+ */
+router.get('/flagged-messages', async (req, res, next) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    // Check if user is moderator
+    const moderator = await isModerator(userId);
+    if (!moderator) {
+      return res.status(403).json({ error: 'Not authorized. Moderators only.' });
+    }
+
+    const { data, error } = await readClient
+      .from('messages')
+      .select('*, sender:profiles!sender_id(*), conversation:conversations(*)')
+      .eq('is_flagged', true)
+      .eq('is_moderated', false)
+      .order('flagged_at', { ascending: false })
+      .limit(100);
+
+    if (error) {
+      console.error('Error fetching flagged messages:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ flaggedMessages: data || [] });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * GET /api/moderation/pending-images
+ * Get pending grower profile images (moderators only)
+ */
+router.get('/pending-images', async (req, res, next) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    // Check if user is moderator
+    const moderator = await isModerator(userId);
+    if (!moderator) {
+      return res.status(403).json({ error: 'Not authorized. Moderators only.' });
+    }
+
+    const { data, error } = await readClient
+      .from('profiles')
+      .select('*')
+      .eq('is_grower', true)
+      .eq('grower_image_approved', false)
+      .not('grower_profile_image_url', 'is', null)
+      .order('updated_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.error('Error fetching pending images:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ pendingImages: data || [] });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * POST /api/moderation/approve-image/:targetUserId
+ * Approve a grower profile image (moderators only)
+ */
+router.post('/approve-image/:targetUserId', express.json(), async (req, res, next) => {
+  try {
+    const { targetUserId } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    // Check if user is moderator
+    const moderator = await isModerator(userId);
+    if (!moderator) {
+      return res.status(403).json({ error: 'Not authorized. Moderators only.' });
+    }
+
+    const { data, error } = await writeClient
+      .from('profiles')
+      .update({
+        grower_image_approved: true,
+        grower_image_moderated_by: userId,
+        grower_image_moderated_at: new Date().toISOString()
+      })
+      .eq('user_id', targetUserId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error approving image:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ success: true, profile: data });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * POST /api/moderation/reject-image/:targetUserId
+ * Reject a grower profile image (moderators only)
+ */
+router.post('/reject-image/:targetUserId', express.json(), async (req, res, next) => {
+  try {
+    const { targetUserId } = req.params;
+    const { userId, reason } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    // Check if user is moderator
+    const moderator = await isModerator(userId);
+    if (!moderator) {
+      return res.status(403).json({ error: 'Not authorized. Moderators only.' });
+    }
+
+    const { data, error } = await writeClient
+      .from('profiles')
+      .update({
+        grower_profile_image_url: null,
+        grower_image_approved: false,
+        grower_image_moderated_by: userId,
+        grower_image_moderated_at: new Date().toISOString()
+      })
+      .eq('user_id', targetUserId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error rejecting image:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    // TODO: Send notification to user with rejection reason
+
+    res.json({ success: true, profile: data, reason });
   } catch (e) {
     next(e);
   }
