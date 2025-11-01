@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS messages (
   is_deleted BOOLEAN DEFAULT false,
   deleted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now(),
-  
+
   -- Moderation fields
   is_flagged BOOLEAN DEFAULT false,
   flagged_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -99,6 +99,28 @@ CREATE TABLE IF NOT EXISTS messages (
   moderated_at TIMESTAMPTZ,
   moderation_action TEXT CHECK (moderation_action IN ('approved', 'removed', 'warning'))
 );
+
+-- Add moderation columns if table already exists (for partial migrations)
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_flagged BOOLEAN DEFAULT false;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS flagged_by UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS flagged_at TIMESTAMPTZ;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS flag_reason TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS moderated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS moderated_at TIMESTAMPTZ;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS moderation_action TEXT;
+
+-- Add constraint for moderation_action if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'messages_moderation_action_check'
+  ) THEN
+    ALTER TABLE messages ADD CONSTRAINT messages_moderation_action_check
+      CHECK (moderation_action IN ('approved', 'removed', 'warning'));
+  END IF;
+END $$;
 
 -- Message read receipts
 CREATE TABLE IF NOT EXISTS message_read_receipts (
