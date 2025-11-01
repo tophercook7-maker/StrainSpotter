@@ -20,15 +20,33 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_listed_in_directory BOOLEAN
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_directory_consent_date TIMESTAMPTZ;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_bio TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_specialties TEXT[]; -- e.g., ['indoor', 'outdoor', 'organic', 'hydroponics']
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_experience_years INTEGER;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_experience_years INTEGER CHECK (grower_experience_years >= 3); -- Minimum 3 years required
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_city TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_state TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_country TEXT DEFAULT 'USA';
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_accepts_messages BOOLEAN DEFAULT true;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_profile_image_url TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_farm_name TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_last_active TIMESTAMPTZ DEFAULT now();
 
--- Create index for directory queries
-CREATE INDEX IF NOT EXISTS idx_profiles_grower_directory ON profiles(grower_listed_in_directory, grower_state, grower_city) WHERE grower_listed_in_directory = true;
+-- OPTIONAL contact info (with risk disclosure required)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_phone TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_address TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_contact_risk_acknowledged BOOLEAN DEFAULT false;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_contact_risk_acknowledged_date TIMESTAMPTZ;
+
+-- Profile image moderation
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_image_approved BOOLEAN DEFAULT false;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_image_moderated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grower_image_moderated_at TIMESTAMPTZ;
+
+-- Create index for directory queries (only show growers with 3+ years experience)
+CREATE INDEX IF NOT EXISTS idx_profiles_grower_directory ON profiles(grower_listed_in_directory, grower_state, grower_city)
+  WHERE grower_listed_in_directory = true AND grower_experience_years >= 3;
+
+-- Index for last active timestamp
+CREATE INDEX IF NOT EXISTS idx_profiles_grower_last_active ON profiles(grower_last_active DESC)
+  WHERE grower_listed_in_directory = true;
 
 -- =====================================================
 -- 2. MESSAGING SYSTEM
@@ -101,6 +119,43 @@ CREATE TABLE IF NOT EXISTS blocked_users (
   UNIQUE(blocker_id, blocked_id)
 );
 
+-- User moderation actions (warnings, suspensions, bans)
+CREATE TABLE IF NOT EXISTS user_moderation_actions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  action_type TEXT NOT NULL CHECK (action_type IN ('warning', 'suspension', 'ban')),
+  reason TEXT NOT NULL,
+  moderator_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  expires_at TIMESTAMPTZ, -- For temporary suspensions
+  is_active BOOLEAN DEFAULT true,
+  appeal_status TEXT CHECK (appeal_status IN ('none', 'pending', 'approved', 'denied')),
+  appeal_text TEXT,
+  appeal_date TIMESTAMPTZ,
+  appeal_resolved_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  appeal_resolved_at TIMESTAMPTZ
+);
+
+-- Message rate limiting tracking
+CREATE TABLE IF NOT EXISTS message_rate_limits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  new_conversation_count INTEGER DEFAULT 0,
+  total_message_count INTEGER DEFAULT 0,
+  UNIQUE(user_id, date)
+);
+
+-- Moderators table (who can moderate)
+CREATE TABLE IF NOT EXISTS moderators (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  assigned_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  assigned_at TIMESTAMPTZ DEFAULT now(),
+  is_active BOOLEAN DEFAULT true,
+  permissions TEXT[] DEFAULT ARRAY['moderate_messages', 'moderate_images', 'warn_users']
+);
+
 -- =====================================================
 -- 3. INDEXES FOR PERFORMANCE
 -- =====================================================
@@ -112,6 +167,10 @@ CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id, created_at
 CREATE INDEX IF NOT EXISTS idx_messages_flagged ON messages(is_flagged, is_moderated) WHERE is_flagged = true;
 CREATE INDEX IF NOT EXISTS idx_blocked_users_blocker ON blocked_users(blocker_id);
 CREATE INDEX IF NOT EXISTS idx_blocked_users_blocked ON blocked_users(blocked_id);
+CREATE INDEX IF NOT EXISTS idx_user_moderation_actions_user ON user_moderation_actions(user_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_user_moderation_actions_active ON user_moderation_actions(is_active, expires_at) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_message_rate_limits_user_date ON message_rate_limits(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_moderators_active ON moderators(is_active) WHERE is_active = true;
 
 -- =====================================================
 -- 4. ROW LEVEL SECURITY (RLS) POLICIES
@@ -123,6 +182,9 @@ ALTER TABLE conversation_participants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE message_read_receipts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE blocked_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_moderation_actions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE message_rate_limits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE moderators ENABLE ROW LEVEL SECURITY;
 
 -- Conversations: Users can see conversations they're part of
 CREATE POLICY "Users can view their own conversations"
@@ -226,6 +288,45 @@ CREATE POLICY "Users can unblock users"
   ON blocked_users FOR DELETE
   USING (blocker_id = auth.uid());
 
+-- User Moderation Actions: Users can view their own moderation history
+CREATE POLICY "Users can view their own moderation actions"
+  ON user_moderation_actions FOR SELECT
+  USING (user_id = auth.uid());
+
+-- User Moderation Actions: Moderators can view all actions
+CREATE POLICY "Moderators can view all moderation actions"
+  ON user_moderation_actions FOR SELECT
+  USING (
+    auth.uid() IN (SELECT user_id FROM moderators WHERE is_active = true)
+  );
+
+-- User Moderation Actions: Moderators can create actions
+CREATE POLICY "Moderators can create moderation actions"
+  ON user_moderation_actions FOR INSERT
+  WITH CHECK (
+    auth.uid() IN (SELECT user_id FROM moderators WHERE is_active = true)
+  );
+
+-- User Moderation Actions: Users can appeal
+CREATE POLICY "Users can appeal their moderation actions"
+  ON user_moderation_actions FOR UPDATE
+  USING (user_id = auth.uid());
+
+-- Message Rate Limits: Users can view their own rate limits
+CREATE POLICY "Users can view their own rate limits"
+  ON message_rate_limits FOR SELECT
+  USING (user_id = auth.uid());
+
+-- Message Rate Limits: System can update rate limits
+CREATE POLICY "System can manage rate limits"
+  ON message_rate_limits FOR ALL
+  USING (true);
+
+-- Moderators: Users can view active moderators
+CREATE POLICY "Users can view active moderators"
+  ON moderators FOR SELECT
+  USING (is_active = true);
+
 -- =====================================================
 -- 5. HELPER FUNCTIONS
 -- =====================================================
@@ -288,7 +389,7 @@ SECURITY DEFINER
 AS $$
 BEGIN
   RETURN QUERY
-  SELECT 
+  SELECT
     m.conversation_id,
     COUNT(*)::BIGINT as unread_count
   FROM messages m
@@ -302,6 +403,134 @@ BEGIN
   GROUP BY m.conversation_id;
 END;
 $$;
+
+-- Function to check if user can send message (rate limiting)
+CREATE OR REPLACE FUNCTION can_send_message(
+  p_conversation_id UUID
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_is_new_conversation BOOLEAN;
+  v_today_new_conversations INTEGER;
+  v_today_total_messages INTEGER;
+  v_max_new_conversations INTEGER := 25; -- Max new conversations per day
+  v_max_total_messages INTEGER := 100; -- Max total messages per day
+  v_is_suspended BOOLEAN;
+BEGIN
+  -- Check if user is suspended or banned
+  SELECT EXISTS(
+    SELECT 1 FROM user_moderation_actions
+    WHERE user_id = auth.uid()
+      AND is_active = true
+      AND action_type IN ('suspension', 'ban')
+      AND (expires_at IS NULL OR expires_at > now())
+  ) INTO v_is_suspended;
+
+  IF v_is_suspended THEN
+    RETURN false;
+  END IF;
+
+  -- Check if this is a new conversation (user hasn't sent messages here before)
+  SELECT NOT EXISTS(
+    SELECT 1 FROM messages
+    WHERE conversation_id = p_conversation_id
+      AND sender_id = auth.uid()
+  ) INTO v_is_new_conversation;
+
+  -- Get today's counts
+  SELECT
+    COALESCE(new_conversation_count, 0),
+    COALESCE(total_message_count, 0)
+  INTO v_today_new_conversations, v_today_total_messages
+  FROM message_rate_limits
+  WHERE user_id = auth.uid()
+    AND date = CURRENT_DATE;
+
+  -- Check limits
+  IF v_is_new_conversation AND v_today_new_conversations >= v_max_new_conversations THEN
+    RETURN false;
+  END IF;
+
+  IF v_today_total_messages >= v_max_total_messages THEN
+    RETURN false;
+  END IF;
+
+  RETURN true;
+END;
+$$;
+
+-- Function to increment message rate limit counters
+CREATE OR REPLACE FUNCTION increment_message_count(
+  p_conversation_id UUID
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_is_new_conversation BOOLEAN;
+BEGIN
+  -- Check if this is a new conversation
+  SELECT NOT EXISTS(
+    SELECT 1 FROM messages
+    WHERE conversation_id = p_conversation_id
+      AND sender_id = auth.uid()
+      AND created_at < now()
+  ) INTO v_is_new_conversation;
+
+  -- Insert or update rate limit record
+  INSERT INTO message_rate_limits (user_id, date, new_conversation_count, total_message_count)
+  VALUES (
+    auth.uid(),
+    CURRENT_DATE,
+    CASE WHEN v_is_new_conversation THEN 1 ELSE 0 END,
+    1
+  )
+  ON CONFLICT (user_id, date)
+  DO UPDATE SET
+    new_conversation_count = message_rate_limits.new_conversation_count + CASE WHEN v_is_new_conversation THEN 1 ELSE 0 END,
+    total_message_count = message_rate_limits.total_message_count + 1;
+END;
+$$;
+
+-- Function to check if user is a moderator
+CREATE OR REPLACE FUNCTION is_moderator(p_user_id UUID DEFAULT NULL)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_user_id UUID;
+BEGIN
+  v_user_id := COALESCE(p_user_id, auth.uid());
+
+  RETURN EXISTS(
+    SELECT 1 FROM moderators
+    WHERE user_id = v_user_id
+      AND is_active = true
+  );
+END;
+$$;
+
+-- Function to update grower last active timestamp
+CREATE OR REPLACE FUNCTION update_grower_last_active()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE profiles
+  SET grower_last_active = now()
+  WHERE user_id = NEW.sender_id
+    AND is_grower = true;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_grower_last_active
+  AFTER INSERT ON messages
+  FOR EACH ROW
+  EXECUTE FUNCTION update_grower_last_active();
 
 -- =====================================================
 -- 6. TRIGGERS
@@ -332,12 +561,22 @@ COMMENT ON TABLE conversation_participants IS 'Tracks which users are in which c
 COMMENT ON TABLE messages IS 'Stores all messages with moderation support';
 COMMENT ON TABLE message_read_receipts IS 'Tracks when users read messages';
 COMMENT ON TABLE blocked_users IS 'Allows users to block unwanted contacts';
+COMMENT ON TABLE user_moderation_actions IS 'Tracks warnings, suspensions, and bans with appeal process';
+COMMENT ON TABLE message_rate_limits IS 'Rate limiting: 25 new conversations/day, 100 total messages/day';
+COMMENT ON TABLE moderators IS 'Users with moderation permissions';
 
 COMMENT ON COLUMN profiles.is_grower IS 'Whether user identifies as a grower';
 COMMENT ON COLUMN profiles.grower_license_status IS 'Licensed, unlicensed, or not applicable';
 COMMENT ON COLUMN profiles.grower_listed_in_directory IS 'Whether user consents to be listed in public grower directory';
 COMMENT ON COLUMN profiles.grower_directory_consent_date IS 'When user consented to directory listing';
+COMMENT ON COLUMN profiles.grower_experience_years IS 'Years of growing experience - minimum 3 required for directory listing';
 COMMENT ON COLUMN profiles.grower_city IS 'Approximate location - city only (no exact address)';
 COMMENT ON COLUMN profiles.grower_state IS 'Approximate location - state only';
 COMMENT ON COLUMN profiles.grower_accepts_messages IS 'Whether grower accepts messages from other members';
+COMMENT ON COLUMN profiles.grower_phone IS 'OPTIONAL phone number - user must acknowledge risks';
+COMMENT ON COLUMN profiles.grower_address IS 'OPTIONAL address - user must acknowledge risks';
+COMMENT ON COLUMN profiles.grower_contact_risk_acknowledged IS 'User acknowledged risks of sharing contact info';
+COMMENT ON COLUMN profiles.grower_farm_name IS 'Farm or business name (not personal name)';
+COMMENT ON COLUMN profiles.grower_profile_image_url IS 'Image of product/farm (not personal photos) - requires moderation approval';
+COMMENT ON COLUMN profiles.grower_last_active IS 'Last time grower sent a message or was active';
 
