@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Card,
@@ -10,6 +10,8 @@ import {
   List,
   ListItem,
   ListItemText,
+  ListItemAvatar,
+  Avatar,
   Chip,
   Container,
   IconButton,
@@ -20,12 +22,14 @@ import {
   DialogActions,
   FormControlLabel,
   Checkbox,
-  Link as MuiLink
+  Link as MuiLink,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import FlagIcon from '@mui/icons-material/Flag';
 import { API_BASE } from '../config';
 import { supabase } from '../supabaseClient';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth.js';
 
 export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   const { user: authUser } = useAuth(); // Get user from global context
@@ -48,8 +52,6 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     'Events',
     'Help & Advice'
   ];
-  const [newGroupName, setNewGroupName] = useState(ALLOWED_GROUPS[0]);
-  const [creatingGroup, setCreatingGroup] = useState(false);
   const [isMember, setIsMember] = useState(false);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportingMessage, setReportingMessage] = useState(null);
@@ -58,7 +60,39 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   const [guidelinesOpen, setGuidelinesOpen] = useState(false);
   const [guidelinesChecked, setGuidelinesChecked] = useState(false);
   const [guidelinesAccepted, setGuidelinesAccepted] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const guidelinesKey = useMemo(() => `ss_guidelines_accepted_${userId || 'guest'}`, [userId]);
+  const handleSnackbarClose = (_event, reason) => {
+    if (reason === 'clickaway') return;
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+  const [adminUserId, setAdminUserId] = useState(null);
+
+  const formatTimestamp = useCallback((iso) => {
+    if (!iso) return '';
+    const date = new Date(iso);
+    const diffSeconds = (Date.now() - date.getTime()) / 1000;
+    if (diffSeconds < 45) return 'just now';
+    if (diffSeconds < 90) return '1 min ago';
+    const diffMinutes = diffSeconds / 60;
+    if (diffMinutes < 60) return `${Math.round(diffMinutes)} min ago`;
+    const diffHours = diffMinutes / 60;
+    if (diffHours < 24) return `${Math.round(diffHours)} hr${Math.round(diffHours) === 1 ? '' : 's'} ago`;
+    const diffDays = diffHours / 24;
+    if (diffDays < 30) return `${Math.round(diffDays)} day${Math.round(diffDays) === 1 ? '' : 's'} ago`;
+    return date.toLocaleDateString();
+  }, []);
+
+  const messageSnippet = useCallback((content) => {
+    if (!content) return '';
+    return content.length > 90 ? `${content.slice(0, 87)}…` : content;
+  }, []);
+
+  const currentUserName = useMemo(() => {
+    return authUser?.user_metadata?.username ||
+      authUser?.email?.split('@')[0] ||
+      'You';
+  }, [authUser]);
 
   // Track auth user id if not provided via props
   useEffect(() => {
@@ -97,102 +131,6 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     return () => sub?.unsubscribe?.();
   }, [userIdProp, authUser]);
   
-  // Create a new group via backend API
-  const createGroup = async () => {
-    const name = newGroupName.trim();
-    if (!name) return;
-    
-    // Always use the current Supabase user ID
-    let validUserId = userId;
-    if (!validUserId && supabase) {
-      try {
-        const { data } = await supabase.auth.getSession();
-        validUserId = data?.session?.user?.id || null;
-      } catch {
-        console.error('Groups: getSession in createGroup failed');
-      }
-    }
-    
-    if (!validUserId) {
-      alert('Please sign in to create a group.');
-      onNavigate && onNavigate('login');
-      return;
-    }
-    
-    setCreatingGroup(true);
-    
-    try {
-      // Get user info from supabase session for email/username
-      let userEmail = null;
-      let userName = null;
-      if (supabase) {
-        try {
-          const { data } = await supabase.auth.getSession();
-          userEmail = data?.session?.user?.email || null;
-          userName = data?.session?.user?.user_metadata?.username || 
-                     userEmail?.split('@')[0] || 
-                     `user_${validUserId.substring(0, 8)}`;
-  } catch {
-          console.log('[Groups] Could not fetch session for email');
-        }
-      }
-      
-      // First, ensure user record exists with email and username
-      console.log('[Groups] Ensuring user record exists for:', validUserId, userEmail);
-      const ensureRes = await fetch(`${API_BASE}/api/users/ensure`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          user_id: validUserId,
-          email: userEmail,
-          username: userName
-        })
-      });
-      
-      if (!ensureRes.ok) {
-        console.error('[Groups] Failed to ensure user record');
-        const ensureErr = await ensureRes.json().catch(() => ({}));
-        console.error('[Groups] Ensure error:', ensureErr);
-      } else {
-        console.log('[Groups] User record verified/created');
-      }
-      
-      // Now create the group
-      console.log('[Groups] Creating group:', name, 'for user:', validUserId);
-      const res = await fetch(`${API_BASE}/api/groups`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, user_id: validUserId })
-      });
-      
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const errorMsg = err.error || 'Failed to create group';
-        console.error('[Groups] Create failed:', errorMsg, err);
-        
-        // Show more helpful error messages
-        if (errorMsg.includes('already exists')) {
-          alert(`The "${name}" group already exists. Please join it from the list below.`);
-        } else {
-          alert(errorMsg + (err.hint ? `\n\n${err.hint}` : ''));
-        }
-        return;
-      }
-      
-      const g = await res.json();
-      console.log('[Groups] Group created successfully:', g);
-      setGroups([g, ...groups]);
-      setNewGroupName(ALLOWED_GROUPS[0]); // Reset to first option
-      selectGroup(g);
-      
-    } catch (e) {
-      console.error('[Groups] Exception:', e);
-      alert('Network error creating group. Please check your connection and try again.');
-    } finally {
-      setCreatingGroup(false);
-    }
-  };
-
   useEffect(() => {
     (async () => {
       // Auto-setup user account when component loads
@@ -223,14 +161,23 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       
       try {
         const res = await fetch(`${API_BASE}/api/groups`);
-        if (res.ok) setGroups(await res.json());
+        if (res.ok) {
+          const payload = await res.json();
+          const curated = Array.isArray(payload)
+            ? payload.filter(group => ALLOWED_GROUPS.includes(group.name))
+            : [];
+          setGroups(curated);
+          if (!adminUserId && Array.isArray(payload) && payload.length) {
+            setAdminUserId(payload[0]?.admin_user_id || null);
+          }
+        }
       } finally {
         setLoading(false);
       }
     })();
     const stored = localStorage.getItem(guidelinesKey);
     if (stored === 'true') setGuidelinesAccepted(true);
-  }, [guidelinesKey, userId]);
+  }, [guidelinesKey, userId, adminUserId]);
 
   const loadMessages = async (groupId) => {
     const res = await fetch(`${API_BASE}/api/groups/${groupId}/messages`);
@@ -243,37 +190,69 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       const data = await res.json();
       setMembers(data);
       setIsMember(userId ? data.some(m => m.user_id === userId) : false);
+      return data;
+    }
+    return [];
+  };
+
+  const selectGroup = async (g) => {
+    setSelectedGroup(g);
+    await loadMessages(g.id);
+    const currentMembers = await loadMembers(g.id);
+    const alreadyMember = userId ? currentMembers.some(m => m.user_id === userId) : false;
+    if (userId && !alreadyMember) {
+      await joinGroup({ group: g, silent: true });
+      await loadMembers(g.id);
+      await loadMessages(g.id);
     }
   };
 
-  const selectGroup = (g) => {
-    setSelectedGroup(g);
-    loadMessages(g.id);
-    loadMembers(g.id);
-  };
-
-  const joinGroup = async () => {
-    if (!selectedGroup) return;
+  const joinGroup = async ({ group = selectedGroup, silent = false } = {}) => {
+    const targetGroup = group;
+    if (!targetGroup) return;
     try {
       if (!userId) {
-        alert('Please log in to join groups.');
-        onNavigate && onNavigate('login');
+        if (!silent) {
+          alert('Please log in to join groups.');
+          onNavigate && onNavigate('login');
+        }
         return;
       }
-      const res = await fetch(`${API_BASE}/api/groups/${selectedGroup.id}/join`, {
+      const res = await fetch(`${API_BASE}/api/groups/${targetGroup.id}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId })
       });
       if (res.ok) {
-        await loadMembers(selectedGroup.id);
+        await loadMembers(targetGroup.id);
+        setIsMember(true);
+        if (!silent) {
+          setSnackbar({ open: true, message: 'Joined group!', severity: 'success' });
+        }
+        return;
+      }
+
+      const err = await res.json().catch(() => ({}));
+      const message = err.error || '';
+      if (typeof message === 'string' && message.toLowerCase().includes('already a member')) {
+        await loadMembers(targetGroup.id);
+        setIsMember(true);
+        if (!silent) {
+          setSnackbar({ open: true, message: 'You are already in this group.', severity: 'info' });
+        }
+        return;
+      }
+
+      if (!silent) {
+        alert(message || 'Failed to join group');
       } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Failed to join group');
+        console.error('Failed to join group silently:', message || 'Unknown error');
       }
     } catch (e) {
       console.error('Failed to join group', e);
-      alert('Failed to join group');
+      if (!silent) {
+        alert('Failed to join group');
+      }
     }
   };
 
@@ -315,20 +294,42 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       return;
     }
     const accessToken = localStorage.getItem('sb-access-token');
-    const res = await fetch(`${API_BASE}/api/groups/${selectedGroup.id}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`
+    const optimisticId = `temp-${Date.now()}`;
+    const optimisticMessage = {
+      id: optimisticId,
+      content,
+      created_at: new Date().toISOString(),
+      user_id: userId,
+      users: {
+        id: userId,
+        username: currentUserName,
+        avatar_url: null
       },
-      body: JSON.stringify({ content, user_id: userId })
-    });
-    if (res.ok) {
-      setInput('');
-      await loadMessages(selectedGroup.id);
-    } else {
-      const err = await res.json();
-      alert(err.error || 'Failed to send message');
+      optimistic: true
+    };
+
+    setMessages(prev => [...prev, optimisticMessage]);
+    setInput('');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${selectedGroup.id}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ content, user_id: userId })
+      });
+      if (res.ok) {
+        await loadMessages(selectedGroup.id);
+      } else {
+        const err = await res.json();
+        setMessages(prev => prev.filter(m => m.id !== optimisticId));
+        alert(err.error || 'Failed to send message');
+      }
+    } catch (e) {
+      setMessages(prev => prev.filter(m => m.id !== optimisticId));
+      alert('Failed to send message');
     }
   };
 
@@ -367,21 +368,146 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     }
   };
 
-  return (
-  <Container maxWidth="lg" sx={{ py: 4 }}>
-      {onBack && (
-        <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 1, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
-      )}
-      <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
-        Groups & Chat
-      </Typography>
+  useEffect(() => {
+    if (!selectedGroup) return;
+    const updated = groups.find(g => g.id === selectedGroup.id);
+    if (updated && updated !== selectedGroup) {
+      setSelectedGroup(updated);
+    }
+  }, [groups, selectedGroup]);
 
-      <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', md: 'row' } }}>
-        {/* Groups list */}
-        <Card sx={{
-          flex: { xs: '1 1 auto', md: '0 0 300px' },
-          bgcolor: 'rgba(255,255,255,0.7)',
-          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+  const sortedGroups = useMemo(() => {
+    const copy = [...groups];
+    return copy.sort((a, b) => {
+      const aTime = a?.last_message?.created_at || a?.created_at || 0;
+      const bTime = b?.last_message?.created_at || b?.created_at || 0;
+      return new Date(bTime).getTime() - new Date(aTime).getTime();
+    });
+  }, [groups]);
+
+  const renderGroupButton = (group) => {
+    const last = group.last_message;
+    const snippet = last ? `${last.user?.username ? `${last.user.username}: ` : ''}${messageSnippet(last.content)}` : 'No conversations yet.';
+    const timestamp = formatTimestamp(last?.created_at || group.created_at);
+    return (
+      <Button
+        key={group.id}
+        variant={selectedGroup?.id === group.id ? 'contained' : 'outlined'}
+        onClick={() => selectGroup(group)}
+        fullWidth
+        sx={{
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          textAlign: 'left',
+          p: 2,
+          borderRadius: 3,
+          borderColor: 'rgba(124,179,66,0.35)',
+          bgcolor: selectedGroup?.id === group.id ? 'rgba(124,179,66,0.25)' : 'rgba(255,255,255,0.8)',
+          color: '#1f3320',
+          '&:hover': {
+            bgcolor: 'rgba(124,179,66,0.3)'
+          }
+        }}
+      >
+        <Stack spacing={0.5} sx={{ flex: 1, pr: 2 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{group.name}</Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(22,34,22,0.75)' }}>{snippet}</Typography>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Typography variant="caption" sx={{ color: 'rgba(22,34,22,0.6)' }}>
+              {group.member_count || 0} member{group.member_count === 1 ? '' : 's'}
+            </Typography>
+            {group.member_preview?.map(member => (
+              <Chip
+                key={`${group.id}-${member.id}`}
+                label={member.username}
+                size="small"
+                sx={{ maxWidth: 120 }}
+              />
+            ))}
+          </Stack>
+        </Stack>
+        <Typography variant="caption" sx={{ color: 'rgba(22,34,22,0.6)' }}>{timestamp}</Typography>
+      </Button>
+    );
+  };
+
+  const renderMessageAuthor = (message) => {
+    const name = message.users?.username || 'Member';
+    const initials = name.slice(0, 2).toUpperCase();
+    return (
+      <ListItemAvatar>
+        <Avatar sx={{ bgcolor: 'rgba(124,179,66,0.35)', color: '#0c220f' }}>
+          {initials}
+        </Avatar>
+      </ListItemAvatar>
+    );
+  };
+
+  const isAdminMessage = (message) => {
+    if (!adminUserId) return false;
+    return message.user_id === adminUserId;
+  };
+
+  return (
+    <Box
+      sx={{
+        position: 'relative',
+        minHeight: '100vh',
+        py: { xs: 3, md: 6 },
+        px: { xs: 1.5, md: 4 },
+        display: 'flex',
+        justifyContent: 'center'
+      }}
+    >
+      <Box
+        sx={{
+          position: 'absolute',
+          inset: { xs: 16, md: 48 },
+          zIndex: 0,
+          borderRadius: 6,
+          background: 'rgba(6, 20, 7, 0.78)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.55)'
+        }}
+      />
+      <Container
+        maxWidth="lg"
+        sx={{
+          position: 'relative',
+          zIndex: 1,
+          color: '#f5f5f5'
+        }}
+      >
+        {onBack && (
+          <Button
+            onClick={onBack}
+            size="small"
+            variant="contained"
+            sx={{
+              bgcolor: 'rgba(255,255,255,0.2)',
+              color: '#fff',
+              textTransform: 'none',
+              fontWeight: 700,
+              borderRadius: 999,
+              mb: 1,
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' }
+            }}
+          >
+            ← Back to Garden
+          </Button>
+        )}
+        <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
+          Groups & Chat
+        </Typography>
+
+        <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', md: 'row' } }}>
+          {/* Groups list */}
+          <Card sx={{
+            flex: { xs: '1 1 auto', md: '0 0 300px' },
+            bgcolor: 'rgba(255,255,255,0.9)',
+            color: '#1f3320',
+          boxShadow: '0 18px 50px rgba(0,0,0,0.3)',
           backdropFilter: 'blur(12px)',
           borderRadius: 4,
           border: '1px solid rgba(255,255,255,0.18)'
@@ -391,8 +517,8 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
               Groups
             </Typography>
             <Stack spacing={2}>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                {userId ? 'Select a group below or create a new one:' : 'Sign in to create or join groups'}
+              <Typography variant="body2" sx={{ mb: 1, color: 'rgba(22,34,22,0.8)' }}>
+                {userId ? 'Select one of our curated community groups below to jump into the conversation.' : 'Sign in to join the community groups.'}
               </Typography>
               
               {!userId && (
@@ -406,55 +532,17 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                   Sign In to Continue
                 </Button>
               )}
-              
-              {userId && (
-                <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-                  <TextField
-                    id="add-group-input"
-                    select
-                    size="small"
-                    label="Select Group Type"
-                    value={newGroupName}
-                    onChange={e => setNewGroupName(e.target.value)}
-                    disabled={creatingGroup}
-                    fullWidth
-                    SelectProps={{ native: true }}
-                  >
-                    {ALLOWED_GROUPS.map(g => (
-                      <option key={g} value={g}>{g}</option>
-                    ))}
-                  </TextField>
-                  <Button
-                    variant="contained"
-                    onClick={createGroup}
-                    disabled={creatingGroup || !newGroupName.trim()}
-                    sx={{ minWidth: 120 }}
-                  >
-                    {creatingGroup ? 'Creating...' : 'Create Group'}
-                  </Button>
-                </Stack>
-              )}
               {loading ? (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{ color: 'rgba(22,34,22,0.6)' }}>
                   Loading...
                 </Typography>
-              ) : groups.length === 0 ? (
+              ) : sortedGroups.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
                   No groups yet.
                 </Typography>
               ) : (
-                <Stack spacing={1}>
-                  {groups.map((g) => (
-                    <Button
-                      key={g.id}
-                      variant={selectedGroup?.id === g.id ? 'contained' : 'outlined'}
-                      onClick={() => selectGroup(g)}
-                      fullWidth
-                      sx={{ justifyContent: 'flex-start' }}
-                    >
-                      {g.name}
-                    </Button>
-                  ))}
+                <Stack spacing={1.5}>
+                  {sortedGroups.map(renderGroupButton)}
                 </Stack>
               )}
             </Stack>
@@ -464,8 +552,9 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         {/* Chat area */}
         <Card sx={{
           flex: 1,
-          bgcolor: 'rgba(255,255,255,0.7)',
-          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+          bgcolor: 'rgba(255,255,255,0.9)',
+          color: '#1f3320',
+          boxShadow: '0 18px 50px rgba(0,0,0,0.3)',
           backdropFilter: 'blur(12px)',
           borderRadius: 4,
           border: '1px solid rgba(255,255,255,0.18)'
@@ -482,19 +571,36 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                   {isMember ? (
                     <Button size="small" variant="outlined" color="error" onClick={leaveGroup}>Leave</Button>
                   ) : (
-                    <Button size="small" variant="contained" onClick={joinGroup}>Join</Button>
+                    <Button size="small" variant="contained" onClick={() => joinGroup()}>Join</Button>
                   )}
                 </Stack>
                 {!guidelinesAccepted && (
-                  <Box sx={{ p: 1, bgcolor: 'warning.light', color: 'black', borderRadius: 1 }}>
-                    <Typography variant="caption">
-                      By participating, you agree to our{' '}
-                      <MuiLink component="button" onClick={() => onNavigate && onNavigate('guidelines')} sx={{ fontWeight: 700 }}>
-                        Community Guidelines
-                      </MuiLink>.
-                    </Typography>
-                  </Box>
+                  <Alert
+                    severity="warning"
+                    icon={false}
+                    sx={{
+                      background: 'rgba(255,193,7,0.18)',
+                      color: '#3f2c02',
+                      border: '1px solid rgba(255,193,7,0.4)'
+                    }}
+                  >
+                    By participating, you agree to our{' '}
+                    <MuiLink component="button" onClick={() => onNavigate && onNavigate('guidelines')} sx={{ fontWeight: 700 }}>
+                      Community Guidelines
+                    </MuiLink>.
+                  </Alert>
                 )}
+                <Alert
+                  severity="info"
+                  icon={false}
+                  sx={{
+                    background: 'rgba(124,179,66,0.12)',
+                    color: '#102A12',
+                    border: '1px solid rgba(124,179,66,0.4)'
+                  }}
+                >
+                  Groups keep the 100 most recent messages so conversations stay tidy. Older threads roll off automatically.
+                </Alert>
                 <Typography variant="caption" color="text.secondary">
                   {members.length} member{members.length !== 1 ? 's' : ''}
                   {members.length > 0 && ': '}
@@ -504,12 +610,27 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                 <List sx={{ maxHeight: 400, overflow: 'auto' }}>
                   {messages.length === 0 ? (
                     <ListItem>
-                      <ListItemText secondary="No messages yet. Start the conversation!" />
+                      <ListItemText
+                        secondary={
+                          <Typography variant="body2" color="text.secondary">
+                            Be the first to say hello! Share what brings you here or ask a quick question to get the conversation rolling.
+                          </Typography>
+                        }
+                      />
                     </ListItem>
                   ) : (
                     messages.map((m) => (
                       <ListItem 
                         key={m.id}
+                        alignItems="flex-start"
+                        sx={{
+                          alignItems: 'flex-start',
+                          bgcolor: isAdminMessage(m) ? 'rgba(124,179,66,0.12)' : 'transparent',
+                          borderLeft: isAdminMessage(m) ? '4px solid rgba(124,179,66,0.8)' : '4px solid transparent',
+                          mb: 1,
+                          borderRadius: 2,
+                          pr: 6
+                        }}
                         secondaryAction={
                           <Tooltip title="Report this message">
                             <IconButton 
@@ -525,9 +646,19 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                           </Tooltip>
                         }
                       >
+                        {renderMessageAuthor(m)}
                         <ListItemText
-                          primary={m.content}
-                          secondary={new Date(m.created_at).toLocaleString()}
+                          primary={
+                            <Typography variant="body2" sx={{ color: '#112516' }}>
+                              {m.content}
+                            </Typography>
+                          }
+                          secondary={
+                            <Typography variant="caption" color="text.secondary">
+                              {(m.users?.username || 'Member')} • {new Date(m.created_at).toLocaleString()}
+                              {m.optimistic ? ' • sending…' : ''}
+                            </Typography>
+                          }
                         />
                       </ListItem>
                     ))
@@ -654,6 +785,22 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={handleSnackbarClose}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
+  </Box>
   );
 }

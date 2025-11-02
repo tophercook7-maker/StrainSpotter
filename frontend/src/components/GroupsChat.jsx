@@ -1,4 +1,6 @@
-export default function GroupsChat({ onNavigate }) {
+import CannabisLeafIcon from './CannabisLeafIcon.jsx';
+
+export default function GroupsChat({ onNavigate, onBack }) {
   return (
         <div className="groups-chat-root" style={{ color: 'white', padding: 32 }}>
           <button
@@ -19,14 +21,14 @@ export default function GroupsChat({ onNavigate }) {
               fontWeight: 600,
               fontSize: 18,
             }}
-            onClick={() => onNavigate('home')}
+            onClick={() => (onBack ? onBack() : onNavigate?.('home'))}
           >
             <CannabisLeafIcon style={{ marginRight: 8, height: 24 }} />
-            Home
+            Back to Garden
           </button>
       <h2>Groups & Chat</h2>
       <p>Feature coming soon! Here you will be able to join groups, chat, and connect with other users.</p>
-      <button onClick={() => onNavigate('home')}>Back to Home</button>
+      <button onClick={() => (onBack ? onBack() : onNavigate?.('home'))}>Back to Garden</button>
     </div>
   );
 }

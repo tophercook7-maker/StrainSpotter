@@ -12,7 +12,7 @@ import {
   Container
 } from '@mui/material';
 import { LocationOn, EmojiEvents } from '@mui/icons-material';
-import { FUNCTIONS_BASE } from '../config';
+import { API_BASE } from '../config';
 
 export default function GrowerDirectory({ onBack, onNavigate }) {
   const [growers, setGrowers] = useState([]);
@@ -21,19 +21,110 @@ export default function GrowerDirectory({ onBack, onNavigate }) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${FUNCTIONS_BASE}/growers-list`);
-        if (res.ok) setGrowers(await res.json());
+        const res = await fetch(`${API_BASE}/api/growers`);
+        if (res.ok) {
+          const payload = await res.json();
+          const list = Array.isArray(payload)
+            ? payload
+            : Array.isArray(payload.growers)
+              ? payload.growers
+              : [];
+          setGrowers(list);
+        }
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
+  const renderGrowerCard = (g) => (
+    <Grid item xs={12} sm={6} md={4} key={g.user_id || g.id}>
+      <Card sx={{ height: '100%', background: 'rgba(255,255,255,0.10)', backdropFilter: 'blur(12px)', border: '2px solid black', boxShadow: 'none' }}>
+        <CardContent>
+          <Stack spacing={2}>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Avatar sx={{ bgcolor: 'primary.main', width: 56, height: 56 }}>
+                {(g.grower_farm_name || g.grower_city || '??').substring(0, 2).toUpperCase()}
+              </Avatar>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="h6">
+                  {g.grower_farm_name || 'Grower'}
+                </Typography>
+                {g.grower_certified && (
+                  <Chip
+                    label="Certified"
+                    color="success"
+                    size="small"
+                    sx={{ mt: 0.5, alignSelf: 'flex-start' }}
+                  />
+                )}
+                {g.grower_city && (
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <LocationOn fontSize="small" color="action" />
+                    <Typography variant="body2" color="text.secondary">
+                      {g.grower_city}{g.grower_state ? `, ${g.grower_state}` : ''}
+                    </Typography>
+                  </Stack>
+                )}
+              </Box>
+            </Stack>
+
+            {Array.isArray(g.grower_specialties) && g.grower_specialties.length > 0 && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Specialties:
+                </Typography>
+                <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                  {g.grower_specialties.map((s, i) => (
+                    <Chip key={i} label={s} size="small" color="success" variant="outlined" />
+                  ))}
+                </Stack>
+              </Box>
+            )}
+
+            <Typography variant="body2" color="text.secondary">
+              Experience: {g.grower_experience_years || 0} years
+            </Typography>
+            <Chip
+              icon={<EmojiEvents fontSize="small" />}
+              label={g.grower_license_status === 'licensed' ? 'Licensed' : 'Community'}
+              size="small"
+              sx={{ alignSelf: 'flex-start' }}
+            />
+
+            <Button variant="outlined" size="small">
+              View Profile
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
+    </Grid>
+  );
+
+  const renderSection = (title, list) => {
+    if (!list || list.length === 0) return null;
+    const sorted = [...list].sort((a, b) => {
+      const experienceA = Number(a.grower_experience_years) || 0;
+      const experienceB = Number(b.grower_experience_years) || 0;
+      return experienceB - experienceA;
+    });
+    return (
+      <Box>
+        <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
+          {title}
+        </Typography>
+        <Grid container spacing={2}>
+          {sorted.map(renderGrowerCard)}
+        </Grid>
+      </Box>
+    );
+  };
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
         {onBack && (
-          <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
+          <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, '&:hover': { bgcolor: 'grey.100' } }}>← Back to Garden</Button>
         )}
         <Button 
           variant="contained" 
@@ -66,66 +157,10 @@ export default function GrowerDirectory({ onBack, onNavigate }) {
           </CardContent>
         </Card>
       ) : (
-        <Grid container spacing={2}>
-          {growers.map((g) => (
-            <Grid item xs={12} sm={6} md={4} key={g.id}>
-              <Card sx={{ height: '100%', background: 'rgba(255,255,255,0.10)', backdropFilter: 'blur(12px)', border: '2px solid black', boxShadow: 'none' }}>
-                <CardContent>
-                  <Stack spacing={2}>
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      <Avatar sx={{ bgcolor: 'primary.main', width: 56, height: 56 }}>
-                        {g.user_id?.substring(0, 2).toUpperCase() || '??'}
-                      </Avatar>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="h6">Grower</Typography>
-                        {g.location && (
-                          <Stack direction="row" spacing={0.5} alignItems="center">
-                            <LocationOn fontSize="small" color="action" />
-                            <Typography variant="body2" color="text.secondary">
-                              {g.location}
-                            </Typography>
-                          </Stack>
-                        )}
-                      </Box>
-                    </Stack>
-
-                    {g.specialties && g.specialties.length > 0 && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          Specialties:
-                        </Typography>
-                        <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
-                          {g.specialties.map((s, i) => (
-                            <Chip key={i} label={s} size="small" color="success" variant="outlined" />
-                          ))}
-                        </Stack>
-                      </Box>
-                    )}
-
-                    {g.reputation != null && (
-                      <Stack direction="row" spacing={0.5} alignItems="center">
-                        <EmojiEvents fontSize="small" color="warning" />
-                        <Typography variant="body2">Rep: {g.reputation}</Typography>
-                      </Stack>
-                    )}
-
-                    {g.badges && g.badges.length > 0 && (
-                      <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                        {g.badges.map((b, i) => (
-                          <Chip key={i} label={b} size="small" color="secondary" />
-                        ))}
-                      </Stack>
-                    )}
-
-                    <Button variant="outlined" size="small">
-                      View Profile
-                    </Button>
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+        <Stack spacing={4}>
+          {renderSection('Certified Growers', growers.filter(g => g.grower_certified))}
+          {renderSection('Community Growers', growers.filter(g => !g.grower_certified))}
+        </Stack>
       )}
     </Container>
   );

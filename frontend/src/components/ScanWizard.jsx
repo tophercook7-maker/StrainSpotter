@@ -1,8 +1,8 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import MembershipLogin from "./MembershipLogin";
 import ErrorBoundary from "./ErrorBoundary";
 import Snackbar from '@mui/material/Snackbar';
-import { Container, Box, Button, Typography, Paper, CircularProgress, Tabs, Tab, Dialog, DialogTitle, DialogContent, Chip, Stack, TextField, IconButton } from "@mui/material";
+import { Container, Box, Button, Typography, Paper, CircularProgress, Tabs, Tab, Dialog, DialogTitle, DialogContent, Chip, Stack, TextField, IconButton, Alert, DialogActions, DialogContentText, Divider } from "@mui/material";
 import CloseIcon from '@mui/icons-material/Close';
 import { supabase } from '../supabaseClient';
 
@@ -22,7 +22,6 @@ export default function ScanWizard({ onBack }) {
   const [scanStatus, setScanStatus] = useState("");
   const [result, setResult] = useState(null);
   const [match, setMatch] = useState(null);
-  const [pendingScans, setPendingScans] = useState([]);
   const [scanHistory, setScanHistory] = useState([]);
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
@@ -41,6 +40,16 @@ export default function ScanWizard({ onBack }) {
   // Auth state
   const [currentUser, setCurrentUser] = useState(null);
   const [showMembershipDialog, setShowMembershipDialog] = useState(false);
+  const [creditSummary, setCreditSummary] = useState(null);
+  const [creditsLoading, setCreditsLoading] = useState(false);
+  const [showTopUpDialog, setShowTopUpDialog] = useState(false);
+  const [topUpMessage, setTopUpMessage] = useState('');
+  const topUpOptions = [
+    { credits: 10, price: '$4.99' },
+    { credits: 20, price: '$7.99' },
+    { credits: 50, price: '$17.99' },
+    { credits: 100, price: '$29.99' }
+  ];
 
   // Track authentication state
   useEffect(() => {
@@ -58,6 +67,36 @@ export default function ScanWizard({ onBack }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const loadCredits = useCallback(async () => {
+    if (!currentUser) {
+      setCreditSummary(null);
+      return;
+    }
+    setCreditsLoading(true);
+    try {
+      const resp = await fetch(`${API_BASE}/api/scans/credits?user_id=${currentUser.id}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setCreditSummary(data);
+      } else {
+        const err = await resp.json().catch(() => ({}));
+        console.error('Failed to load credits', err);
+      }
+    } catch (err) {
+      console.error('Credit summary error:', err);
+    } finally {
+      setCreditsLoading(false);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setCreditSummary(null);
+      return;
+    }
+    loadCredits();
+  }, [currentUser, loadCredits]);
 
   // Fetch existing reviews when match changes
   useEffect(() => {
@@ -134,10 +173,36 @@ export default function ScanWizard({ onBack }) {
     }
   };
 
-  // Handle file selection and upload
+  const parseErrorResponse = async (response) => {
+    try {
+      const data = await response.json();
+      return data.error || data.message || response.statusText || 'Unexpected error';
+    } catch {
+      return response.statusText || 'Unexpected error';
+    }
+  };
+
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!currentUser) {
+      setAlertMsg('Sign in to use AI-powered scans.');
+      setAlertOpen(true);
+      setShowMembershipDialog(true);
+      return;
+    }
+
+    if (disableScanning) {
+      const message = starterExpired
+        ? 'Your starter access window has ended. Join the Garden membership or purchase a top-up pack within 3 days to keep scanning.'
+        : 'You are out of scan credits. Join the Garden or purchase a top-up pack to continue scanning.';
+      setAlertMsg(message);
+      setAlertOpen(true);
+      setTopUpMessage(message);
+      setShowTopUpDialog(true);
+      return;
+    }
 
     setLoading(true);
     setScanStatus("Uploading image...");
@@ -145,75 +210,126 @@ export default function ScanWizard({ onBack }) {
     try {
       const reader = new FileReader();
       reader.onload = async () => {
-        const base64 = reader.result.split(',')[1];
+        try {
+          const base64 = reader.result.split(',')[1];
 
-        // Step 1: Upload image
-        const uploadResp = await fetch(`${API_BASE}/api/uploads`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filename: file.name,
-            contentType: file.type,
-            base64
-          })
-        });
+          const uploadResp = await fetch(`${API_BASE}/api/uploads`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filename: file.name,
+              contentType: file.type,
+              base64,
+              user_id: currentUser.id
+            })
+          });
 
-        if (!uploadResp.ok) throw new Error("Upload failed");
-        const uploadData = await uploadResp.json();
-        const scanId = uploadData.id;
+          if (uploadResp.status === 401) {
+            const message = await parseErrorResponse(uploadResp);
+            setAlertMsg(message);
+            setAlertOpen(true);
+            setShowMembershipDialog(true);
+            setScanStatus("Sign in required");
+            return;
+          }
 
-        setScanStatus("Processing scan...");
+          if (!uploadResp.ok) {
+            const message = await parseErrorResponse(uploadResp);
+            throw new Error(message || "Upload failed");
+          }
 
-        // Step 2: Process scan
-        const processResp = await fetch(`${API_BASE}/api/scans/${scanId}/process`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" }
-        });
+          const uploadData = await uploadResp.json();
+          const scanId = uploadData.id;
 
-        if (!processResp.ok) throw new Error("Scan processing failed");
-        const processData = await processResp.json();
-        setResult(processData.result);
-        setScanStatus("Matching strain...");
+          setScanStatus("Processing scan...");
 
-        // Step 3: Visual match
-        const matchResp = await fetch(`${API_BASE}/api/visual-match`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ visionResult: processData.result })
-        });
+          const processResp = await fetch(`${API_BASE}/api/scans/${scanId}/process`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+          });
 
-        if (matchResp.ok) {
-          const matchData = await matchResp.json();
-          if (matchData.matches && matchData.matches.length > 0) {
-            const topMatch = matchData.matches[0];
-            setMatch(topMatch);
-
-            // Step 4: Save the matched strain to the scan record
+          if (processResp.status === 402 || processResp.status === 403) {
+            let errorPayload = {};
             try {
-              await fetch(`${API_BASE}/api/scans/${scanId}/save-match`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  matched_strain_slug: topMatch.strain.slug,
-                  user_id: currentUser?.id || null
-                })
-              });
-            } catch (saveErr) {
-              console.error('Failed to save match:', saveErr);
-              // Don't fail the whole scan if saving the match fails
-            }
+              errorPayload = await processResp.json();
+            } catch {}
+            const defaultMessage = processResp.status === 403
+              ? 'Your starter access window has ended. Join the Garden membership or redeem a top-up pack to keep scanning.'
+              : 'No scan credits remaining. Join the Garden or purchase a top-up pack to continue scanning.';
+            const message = errorPayload.error || errorPayload.message || defaultMessage;
+            setAlertMsg(message);
+            setAlertOpen(true);
+            setTopUpMessage(message);
+            setShowTopUpDialog(true);
+            setScanStatus(processResp.status === 403 ? 'Starter access ended' : 'Add credits to continue');
+            await loadCredits();
+            return;
+          }
 
-            setScanStatus("Scan complete!");
+          if (!processResp.ok) {
+            const message = await parseErrorResponse(processResp);
+            throw new Error(message || "Scan processing failed");
+          }
+
+          const processData = await processResp.json();
+          setResult(processData.result);
+          setScanStatus("Matching strain...");
+
+          const matchResp = await fetch(`${API_BASE}/api/visual-match`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ visionResult: processData.result })
+          });
+
+          if (matchResp.ok) {
+            const matchData = await matchResp.json();
+            if (matchData.matches && matchData.matches.length > 0) {
+              const topMatch = matchData.matches[0];
+              setMatch(topMatch);
+
+              try {
+                await fetch(`${API_BASE}/api/scans/${scanId}/save-match`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    matched_strain_slug: topMatch.strain.slug,
+                    user_id: currentUser.id
+                  })
+                });
+              } catch (saveErr) {
+                console.error('Failed to save match:', saveErr);
+              }
+
+              setScanStatus("Scan complete!");
+            } else {
+              setScanStatus("No matches found");
+            }
           } else {
             setScanStatus("No matches found");
           }
+
+          await loadCredits();
+        } catch (err) {
+          console.error('Scan error:', err);
+          setScanStatus(err.message || "Error: Upload or scan failed");
+          setAlertMsg(err.message || 'Scan failed. Please try again.');
+          setAlertOpen(true);
+        } finally {
+          setLoading(false);
         }
+      };
+      reader.onerror = () => {
+        setScanStatus("Error reading file");
+        setAlertMsg("Unable to read the selected file.");
+        setAlertOpen(true);
         setLoading(false);
       };
       reader.readAsDataURL(file);
     } catch (err) {
       console.error('Scan error:', err);
-      setScanStatus("Error: Upload or scan failed");
+      setScanStatus(err.message || "Error: Upload or scan failed");
+      setAlertMsg(err.message || 'Scan failed. Please try again.');
+      setAlertOpen(true);
       setLoading(false);
     }
   };
@@ -225,14 +341,13 @@ export default function ScanWizard({ onBack }) {
         const resp = await fetch(`${API_BASE}/api/scans`);
         if (resp.ok) {
           const data = await resp.json();
-          const pending = (data.scans || []).filter(s => s.status === 'pending');
-          const completed = (data.scans || []).filter(s => s.status === 'complete');
+          const scans = data.scans || [];
+          const completed = scans.filter(s => s.status === 'complete');
           if (completed.length > 0) {
             setAlertMsg(`Scan matched: ${completed.map(s => s.strain?.name || 'Unknown').join(', ')}`);
             setAlertOpen(true);
           }
-          setPendingScans(pending);
-          setScanHistory(data.scans || []);
+          setScanHistory(scans);
         }
       } catch (err) {
         console.error('Poll error:', err);
@@ -285,6 +400,45 @@ export default function ScanWizard({ onBack }) {
       </Dialog>
     );
   };
+
+  const membershipTier = (currentUser?.user_metadata?.membership || currentUser?.user_metadata?.tier || '').toString().toLowerCase();
+  const metadataMembershipActive = membershipTier === 'club' || membershipTier === 'full-access' || membershipTier === 'pro';
+  const membershipActive = typeof creditSummary?.membershipActive === 'boolean'
+    ? creditSummary.membershipActive
+    : metadataMembershipActive;
+  const creditsRemaining = typeof creditSummary?.credits === 'number' ? creditSummary.credits : null;
+  const monthlyBundle = typeof creditSummary?.monthlyBundle === 'number' ? creditSummary.monthlyBundle : null;
+  const resetAt = creditSummary?.resetAt ? new Date(creditSummary.resetAt) : null;
+  const accessExpiresAt = creditSummary?.accessExpiresAt ? new Date(creditSummary.accessExpiresAt) : null;
+  const starterExpired = Boolean(creditSummary?.starterExpired) && !membershipActive;
+  const trialDaysRemaining = typeof creditSummary?.trialDaysRemaining === 'number'
+    ? creditSummary.trialDaysRemaining
+    : (accessExpiresAt
+        ? Math.max(0, Math.ceil((accessExpiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+        : null);
+  const lowCredits = typeof creditsRemaining === 'number' && creditsRemaining <= 5;
+  const disableScanning = !membershipActive && (starterExpired || (typeof creditsRemaining === 'number' && creditsRemaining <= 0));
+
+  const trialMessage = (() => {
+    if (membershipActive) return null;
+    if (!accessExpiresAt) return null;
+    if (starterExpired) {
+      return 'Your starter access has ended. Join the Garden to keep scanning with full AI access.';
+    }
+    const diffDays = trialDaysRemaining ?? Math.ceil((accessExpiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (diffDays <= 0) {
+      return 'Starter access ends today. Join the Garden to keep scanning with full AI access.';
+    }
+    return `Starter access ends in ${diffDays} day${diffDays === 1 ? '' : 's'}. Join the Garden or grab a top-up pack to keep scanning.`;
+  })();
+
+  const nextResetLabel = (() => {
+    if (!resetAt) return null;
+    return resetAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  })();
+  const accessExpiresLabel = accessExpiresAt
+    ? accessExpiresAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
 
   return (
     <ErrorBoundary>
@@ -400,6 +554,101 @@ export default function ScanWizard({ onBack }) {
             Snap a photo of your cannabis and let our AI deliver the full strain breakdown—<span style={{ color: '#00e676', fontWeight: 900 }}>no hype</span>, just <span style={{ color: '#ffd600', fontWeight: 900 }}>next-gen science</span>.
           </Typography>
 
+          {currentUser && (
+            <Paper
+              sx={{
+                mt: 4,
+                mb: 3,
+                p: 3,
+                width: '100%',
+                maxWidth: 720,
+                background: 'rgba(0, 0, 0, 0.45)',
+                borderRadius: 4,
+                border: '1px solid rgba(124, 179, 66, 0.4)',
+                color: '#e8f5e9'
+              }}
+            >
+              <Box>
+                <Typography variant="subtitle2" sx={{ textTransform: 'uppercase', letterSpacing: 1, color: '#c8ff9e' }}>
+                  Scan Credits
+                </Typography>
+                <Typography variant="h3" sx={{ fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                  {creditsLoading ? <CircularProgress size={28} sx={{ color: '#c8ff9e' }} /> : (creditsRemaining ?? '--')}
+                  <Typography component="span" variant="h6" sx={{ color: '#c8ff9e', fontWeight: 500 }}>
+                    left
+                  </Typography>
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#d0ffd6', maxWidth: 420 }}>
+                  {membershipActive
+                    ? 'Membership perks active — we auto-refresh your bundle every month so you never lose your streak.'
+                    : 'Starter bundle includes 20 scans. After 3 days you\'ll need a membership or a top-up pack to keep scanning.'}
+                </Typography>
+                {membershipActive && nextResetLabel && (
+                  <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#b2fab4' }}>
+                    Next monthly reset: {nextResetLabel}
+                  </Typography>
+                )}
+                {!membershipActive && accessExpiresLabel && (
+                  <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#ffcc80' }}>
+                    Starter access expires: {accessExpiresLabel}
+                  </Typography>
+                )}
+              </Box>
+              {!membershipActive && trialMessage && (
+                <Alert
+                  severity={starterExpired ? 'error' : 'info'}
+                  sx={{
+                    mt: 2,
+                    bgcolor: starterExpired ? 'rgba(244, 67, 54, 0.2)' : 'rgba(124, 179, 66, 0.18)',
+                    color: '#fff',
+                    '& .MuiAlert-icon': { color: starterExpired ? '#ffccbc' : '#c8ff9e' }
+                  }}
+                >
+                  {trialMessage}
+                </Alert>
+              )}
+              {membershipActive && monthlyBundle && (
+                <Alert
+                  severity="success"
+                  sx={{
+                    mt: 2,
+                    bgcolor: 'rgba(76, 175, 80, 0.18)',
+                    color: '#e8f5e9',
+                    '& .MuiAlert-icon': { color: '#c8ff9e' }
+                  }}
+                >
+                  Your membership includes a {monthlyBundle}-scan bundle each month. We’ll keep it topped up automatically.
+                </Alert>
+              )}
+              {!membershipActive && lowCredits && !starterExpired && (
+                <Alert
+                  severity="warning"
+                  sx={{
+                    mt: 2,
+                    bgcolor: 'rgba(255, 193, 7, 0.18)',
+                    color: '#fff',
+                    '& .MuiAlert-icon': { color: '#ffe082' }
+                  }}
+                >
+                  Only {creditsRemaining} scan{creditsRemaining === 1 ? '' : 's'} left. Add a top-up pack or join the Garden to keep results flowing.
+                </Alert>
+              )}
+              {!membershipActive && starterExpired && (
+                <Alert
+                  severity="error"
+                  sx={{
+                    mt: 2,
+                    bgcolor: 'rgba(244, 67, 54, 0.25)',
+                    color: '#fff',
+                    '& .MuiAlert-icon': { color: '#ffccbc' }
+                  }}
+                >
+                  Starter access has ended. Join the Garden membership or redeem a top-up pack within the app stores to continue scanning.
+                </Alert>
+              )}
+            </Paper>
+          )}
+
           <Box sx={{ mt: 4, textAlign: 'center' }}>
             <input
               type="file"
@@ -424,11 +673,29 @@ export default function ScanWizard({ onBack }) {
                 color: '#388e3c',
                 textTransform: 'none'
               }}
-              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              onClick={() => {
+                if (disableScanning) {
+                  const message = starterExpired
+                    ? 'Your starter access window has ended. Join the Garden membership or purchase a top-up pack within 3 days to keep scanning.'
+                    : 'You are out of scan credits. Join the Garden or purchase a top-up pack to continue scanning.';
+                  setAlertMsg(message);
+                  setAlertOpen(true);
+                  setTopUpMessage(message);
+                  setShowTopUpDialog(true);
+                  return;
+                }
+                fileInputRef.current?.click();
+              }}
             >
               <span role="img" aria-label="camera" style={{ marginRight: 8 }}>📷</span>
               Add Photo & Scan
             </Button>
+            {disableScanning && (
+              <Typography align="center" sx={{ mt: 1, color: '#ffcc80', fontWeight: 600 }}>
+                Add credits or join the Garden to unlock new scans.
+              </Typography>
+            )}
             {loading && (
               <CircularProgress color="success" sx={{ mt: 2 }} />
             )}
@@ -1042,6 +1309,121 @@ export default function ScanWizard({ onBack }) {
         )}
           {renderDetailsDialog()}
 
+          <Dialog
+            open={showTopUpDialog}
+            onClose={() => setShowTopUpDialog(false)}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle sx={{ bgcolor: '#111', color: '#c8ff9e', fontWeight: 700 }}>
+              Keep Your Scans Going
+            </DialogTitle>
+            <DialogContent sx={{ bgcolor: '#111', color: '#fff' }}>
+              {topUpMessage && (
+                <DialogContentText sx={{ color: '#e0ffe3', mb: 2 }}>
+                  {topUpMessage}
+                </DialogContentText>
+              )}
+              {!membershipActive && (
+                <Paper
+                  sx={{
+                    p: 2,
+                    mb: 3,
+                    background: 'linear-gradient(135deg, rgba(124,179,66,0.25), rgba(0,0,0,0.65))',
+                    border: '1px solid rgba(124,179,66,0.4)',
+                    borderRadius: 3
+                  }}
+                >
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#c8ff9e', mb: 1 }}>
+                    Garden Membership · $7.99 / month
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#e8f5e9', mb: 1 }}>
+                    Unlimited monthly scan bundles, private grower community access, and priority support. Perfect if you scan often or want the full Garden experience.
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    fullWidth
+                    sx={{ mt: 1, borderRadius: 999, textTransform: 'none', fontWeight: 700 }}
+                    onClick={() => {
+                      setShowTopUpDialog(false);
+                      setShowMembershipDialog(true);
+                    }}
+                  >
+                    Join the Garden
+                  </Button>
+                </Paper>
+              )}
+
+              <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)', mb: 3 }} />
+
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#c8ff9e', mb: 1 }}>
+                Quick Top-Up Packs (3-day access window)
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#e8f5e9', mb: 2 }}>
+                Redeem on iOS or Android. Each pack reloads your credits instantly and keeps your non-member access alive for 3 more days.
+              </Typography>
+              <Stack spacing={2} sx={{ mb: 3 }}>
+                {topUpOptions.map((pack) => (
+                  <Paper
+                    key={pack.credits}
+                    sx={{
+                      p: 2,
+                      borderRadius: 3,
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(124,179,66,0.3)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ color: '#fff', fontWeight: 700 }}>
+                        {pack.credits} scans
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#c8ff9e' }}>
+                        Expires 3 days after activation
+                      </Typography>
+                    </Box>
+                    <Button
+                      variant="outlined"
+                      sx={{
+                        borderColor: 'rgba(200,255,158,0.7)',
+                        color: '#c8ff9e',
+                        textTransform: 'none',
+                        borderRadius: 999,
+                        fontWeight: 600,
+                        '&:hover': { borderColor: 'rgba(200,255,158,1)' }
+                      }}
+                      onClick={() => {
+                        setAlertMsg('Checkout for scan packs happens through Apple App Store or Google Play. Launch the mobile app to complete your purchase.');
+                        setAlertOpen(true);
+                      }}
+                    >
+                      {pack.price}
+                    </Button>
+                  </Paper>
+                ))}
+              </Stack>
+
+              <Alert
+                severity="info"
+                sx={{
+                  bgcolor: 'rgba(124, 179, 66, 0.2)',
+                  color: '#e8f5e9',
+                  '& .MuiAlert-icon': { color: '#c8ff9e' }
+                }}
+              >
+                Purchases finalize inside the Apple App Store or Google Play app. Once the store confirms your order we auto-sync credits to your account. Need a hand? Email support@strainspotter.com.
+              </Alert>
+            </DialogContent>
+            <DialogActions sx={{ bgcolor: '#111', borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+              <Button onClick={() => setShowTopUpDialog(false)} sx={{ color: '#c8ff9e', textTransform: 'none' }}>
+                Close
+              </Button>
+            </DialogActions>
+          </Dialog>
+
           {/* Membership Dialog */}
           <Dialog
             open={showMembershipDialog}
@@ -1057,7 +1439,7 @@ export default function ScanWizard({ onBack }) {
               color: '#00e676'
             }}>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                🌿 Members Only Feature
+                🌿 Garden Membership Access
               </Typography>
               <IconButton
                 onClick={() => setShowMembershipDialog(false)}
@@ -1068,19 +1450,20 @@ export default function ScanWizard({ onBack }) {
             </DialogTitle>
             <DialogContent sx={{ bgcolor: 'rgba(0, 0, 0, 0.9)', color: '#fff', pt: 3 }}>
               <Typography variant="body1" sx={{ mb: 3 }}>
-                Leaving reviews is a members-only feature. Join the StrainSpotter community to:
+                Membership unlocks unlimited scan refills, in-depth strain tools, and the private grower community. Join the StrainSpotter Garden to:
               </Typography>
               <Box component="ul" sx={{ pl: 3, mb: 3 }}>
-                <li>Leave reviews and ratings</li>
-                <li>Share your experiences with the community</li>
-                <li>Help others discover great strains</li>
-                <li>Access unlimited scans</li>
-                <li>Connect with other growers</li>
+                <li>Access unlimited AI scan bundles every month</li>
+                <li>Unlock reviews, ratings, and premium strain breakdowns</li>
+                <li>Connect with certified growers in members-only chats</li>
+                <li>Get early access to new cultivation features</li>
+                <li>Support the AI lab that keeps strain matching sharp</li>
               </Box>
               <MembershipLogin onSuccess={() => {
                 setShowMembershipDialog(false);
-                setAlertMsg('Welcome! You can now leave reviews.');
+                setAlertMsg('Welcome to the Garden! Membership perks are now active.');
                 setAlertOpen(true);
+                loadCredits();
               }} />
             </DialogContent>
           </Dialog>

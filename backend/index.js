@@ -40,6 +40,14 @@ import messagesRoutes from './routes/messages.js';
 import profileGeneratorRoutes from './routes/profile-generator.js';
 import usersRoutes from './routes/users.js';
 import { matchStrainByVisuals } from './services/visualMatcher.js';
+import {
+  consumeScanCredits,
+  ensureMonthlyBundle,
+  getCreditSummary,
+  grantScanCredits,
+  ensureStarterBundle,
+  refreshStarterWindow
+} from './services/scanCredits.js';
 import { checkAccess, enforceTrialLimit } from './middleware/membershipCheck.js';
 
 // Load env from ../env/.env.local (works when launched from backend/)
@@ -219,6 +227,13 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
       return res.status(400).json({ error: 'unsupported contentType' });
     }
 
+    if (!user_id) {
+      return res.status(401).json({ error: 'Sign in required to upload scans. Please log in to continue.' });
+    }
+
+    // Ensure starter credits exist and membership bundle is aligned before any processing
+    await ensureStarterBundle(user_id);
+    await ensureMonthlyBundle(user_id);
 
     let buffer = Buffer.from(base64, 'base64');
 
@@ -278,7 +293,7 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
 
     // Use service role for table insert to bypass RLS
     const dbClient = supabaseAdmin ?? supabase;
-    const insert = await dbClient.from('scans').insert({ image_url: publicUrl, image_key: normalizedKey, status: 'pending', user_id: user_id || null }).select();
+    const insert = await dbClient.from('scans').insert({ image_url: publicUrl, image_key: normalizedKey, status: 'pending', user_id }).select();
     if (insert.error) {
       const msg = insert.error.message || 'insert failed';
       const rlsHint = (!supabaseAdmin && /row-level security/i.test(msg))
@@ -338,6 +353,48 @@ app.post('/api/scans/from-url', async (req, res, next) => {
   }
 });
 
+// GET /api/scans/credits?user_id=...
+app.get('/api/scans/credits', async (req, res) => {
+  try {
+    const userId = req.query.user_id || req.headers['x-user-id'] || req.headers['x-session-id'] || null;
+    if (!userId) {
+      return res.status(400).json({ error: 'user_id required' });
+    }
+    await ensureStarterBundle(userId);
+    const summary = await getCreditSummary(userId);
+    res.json(summary);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/scans/credits/grant - backoffice/IAP redemption
+app.post('/api/scans/credits/grant', async (req, res) => {
+  try {
+    const { user_id, amount, reason, metadata, secret } = req.body || {};
+    if (!user_id || !amount || amount <= 0) {
+      return res.status(400).json({ error: 'user_id and positive amount are required' });
+    }
+
+    const requiredSecret = process.env.SCAN_TOPUP_SECRET || null;
+    if (requiredSecret) {
+      if (!secret || secret !== requiredSecret) {
+        return res.status(401).json({ error: 'Invalid top-up secret' });
+      }
+    }
+
+    const grantReason = reason || 'iap-topup';
+    await grantScanCredits(user_id, Number(amount), grantReason, metadata || null);
+
+    await refreshStarterWindow(user_id);
+
+    const summary = await getCreditSummary(user_id);
+    res.json({ ok: true, summary });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // GET /api/scans/:id - single
 app.get('/api/scans/:id', async (req, res, next) => {
   try {
@@ -363,6 +420,7 @@ app.post('/api/scans/:id/process', writeLimiter, async (req, res, next) => {
   // Use service role for all scan operations when available
   const readClient = supabaseAdmin ?? supabase;
   const writeClient = supabaseAdmin ?? supabase;
+  let creditConsumed = false;
   try {
     const id = req.params.id;
     const { data: scan, error: fetchErr } = await readClient.from('scans').select('*').eq('id', id).maybeSingle();
@@ -370,6 +428,53 @@ app.post('/api/scans/:id/process', writeLimiter, async (req, res, next) => {
     if (!scan) return res.status(404).json({ error: 'scan not found' });
     if (!scan.image_url) return res.status(400).json({ error: 'scan has no image_url' });
     if (!visionClient) return res.status(500).json({ error: 'Google Vision client not configured' });
+
+    if (scan.status === 'done' && scan.result) {
+      const result = scan.result;
+      return res.json({
+        ok: true,
+        result,
+        cached: true,
+        debug: {
+          labelCount: result.labelAnnotations?.length || 0,
+          topLabels: (result.labelAnnotations || []).slice(0, 10).map(x => ({ label: x.description, score: Math.round((x.score || 0) * 100) })),
+          textBlocks: result.textAnnotations?.length || 0,
+          webEntities: result.webDetection?.webEntities?.length || 0,
+          dominantColors: (result.imagePropertiesAnnotation?.dominantColors?.colors || []).slice(0, 5).map(c => ({
+            rgb: `rgb(${Math.round(c.color.red || 0)}, ${Math.round(c.color.green || 0)}, ${Math.round(c.color.blue || 0)})`,
+            score: Math.round((c.score || 0) * 100),
+            pixelFraction: Math.round((c.pixelFraction || 0) * 100)
+          })),
+          objects: (result.localizedObjectAnnotations || []).map(o => ({ name: o.name, score: Math.round((o.score || 0) * 100) }))
+        }
+      });
+    }
+
+    const scanOwnerId = scan.user_id;
+    if (!scanOwnerId) {
+      return res.status(400).json({ error: 'Scan is not associated with a user. Please upload again while signed in.' });
+    }
+
+    await ensureStarterBundle(scanOwnerId);
+
+    const creditResult = await consumeScanCredits(scanOwnerId, 1, { scan_id: id, stage: 'process' });
+    if (!creditResult.success) {
+      if (creditResult.code === 'STARTER_WINDOW_EXPIRED') {
+        return res.status(403).json({
+          error: 'Your starter access window has ended. Join the Garden membership or redeem a top-up pack within 3 days to keep scanning.',
+          code: 'STARTER_WINDOW_EXPIRED',
+          accessExpiresAt: creditResult.accessExpiresAt || null
+        });
+      }
+
+      const status = creditResult.code === 'INSUFFICIENT_SCAN_CREDITS' ? 402 : 400;
+      return res.status(status).json({
+        error: 'No scan credits remaining. Join the Garden or purchase a top-up pack to continue scanning.',
+        code: creditResult.code || 'SCAN_CREDIT_ERROR',
+        accessExpiresAt: creditResult.accessExpiresAt || null
+      });
+    }
+    creditConsumed = true;
 
     await writeClient.from('scans').update({ status: 'processing' }).eq('id', id);
 
@@ -460,6 +565,22 @@ app.post('/api/scans/:id/process', writeLimiter, async (req, res, next) => {
       }
     });
   } catch (e) {
+    if (req?.params?.id) {
+      try {
+        const { data: scan } = await (supabaseAdmin ?? supabase)
+          .from('scans')
+          .select('user_id')
+          .eq('id', req.params.id)
+          .maybeSingle();
+        if (scan?.user_id) {
+          if (scan?.user_id && creditConsumed) {
+            await grantScanCredits(scan.user_id, 1, 'scan-refund', { scan_id: req.params.id, reason: 'processing-error' });
+          }
+        }
+      } catch (refundErr) {
+        console.error('[scan] Failed to refund credits after error:', refundErr);
+      }
+    }
     try {
       await writeClient
         .from('scans')

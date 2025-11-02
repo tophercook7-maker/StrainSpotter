@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
 /**
@@ -11,18 +11,7 @@ export function useMembershipGuard() {
   const [isExpired, setIsExpired] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    checkMembership();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      checkMembership();
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const checkMembership = async () => {
+  const checkMembership = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const currentUser = session?.user || null;
@@ -53,7 +42,17 @@ export function useMembershipGuard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    checkMembership();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      checkMembership();
+    });
+
+    return () => subscription.unsubscribe();
+  }, [checkMembership]);
 
   // User can only logout if they're not a member or if membership is not expired
   const canLogout = !isMember || !isExpired;
@@ -67,4 +66,3 @@ export function useMembershipGuard() {
     refreshMembership: checkMembership
   };
 }
-

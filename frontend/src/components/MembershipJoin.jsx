@@ -100,7 +100,8 @@ export default function MembershipJoin() {
         return;
       }
       setShowLogin(false);
-    } catch (e) {
+    } catch (error) {
+      console.error('Supabase login failed:', error);
       setLoginError('Login failed. Please try again.');
     }
   };

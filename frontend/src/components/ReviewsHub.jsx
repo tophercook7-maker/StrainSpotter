@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Stack, Paper, Button, TextField, Rating, Chip,
   Grid, Card, CardContent, IconButton, Divider, Avatar, CircularProgress,
@@ -20,14 +20,8 @@ export default function ReviewsHub({ onBack, currentUser }) {
   const [editRating, setEditRating] = useState(5);
   const [editComment, setEditComment] = useState('');
 
-  useEffect(() => {
-    if (currentUser) {
-      fetchMyReviews();
-    }
-    fetchAllReviews();
-  }, [currentUser]);
-
-  const fetchMyReviews = async () => {
+  const fetchMyReviews = useCallback(async () => {
+    if (!currentUser?.id) return;
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -43,9 +37,9 @@ export default function ReviewsHub({ onBack, currentUser }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser?.id]);
 
-  const fetchAllReviews = async () => {
+  const fetchAllReviews = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('reviews')
@@ -58,7 +52,14 @@ export default function ReviewsHub({ onBack, currentUser }) {
     } catch (error) {
       console.error('Error fetching all reviews:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchMyReviews();
+    }
+    fetchAllReviews();
+  }, [currentUser, fetchMyReviews, fetchAllReviews]);
 
   const handleEditClick = (review) => {
     setEditingReview(review);
@@ -376,4 +377,3 @@ export default function ReviewsHub({ onBack, currentUser }) {
     </Box>
   );
 }
-

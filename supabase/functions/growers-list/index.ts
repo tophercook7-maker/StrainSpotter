@@ -20,11 +20,28 @@ serve(async (req) => {
     });
   }
 
-  // Query all growers
+  // Query growers listed in directory with minimum experience
   const { data, error } = await supabase
-    .from('growers')
-    .select('*')
-    .order('created_at', { ascending: false })
+    .from('profiles')
+    .select(`
+      user_id,
+      grower_farm_name,
+      grower_city,
+      grower_state,
+      grower_country,
+      grower_specialties,
+      grower_bio,
+      grower_experience_years,
+      grower_license_status,
+      grower_certified,
+      grower_accepts_messages,
+      grower_listed_in_directory,
+      grower_last_active
+    `)
+    .eq('is_grower', true)
+    .eq('grower_listed_in_directory', true)
+    .gte('grower_experience_years', 3)
+    .order('grower_last_active', { ascending: false })
     .limit(100);
 
   if (error) {

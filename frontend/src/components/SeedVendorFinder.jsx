@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Stack, Paper, Button, TextField, CircularProgress,
   Card, CardContent, Chip, IconButton, FormControl, InputLabel,
@@ -22,15 +22,7 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
   const [country, setCountry] = useState('all');
   const [showPopular, setShowPopular] = useState(false);
 
-  useEffect(() => {
-    if (strainName || strainSlug) {
-      searchVendors(strainSlug || strainName);
-    } else {
-      loadPopularVendors();
-    }
-  }, []);
-
-  const searchVendors = async (strain) => {
+  const searchVendors = useCallback(async (strain) => {
     setLoading(true);
     setError(null);
     setShowPopular(false);
@@ -51,9 +43,9 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [country]);
 
-  const loadPopularVendors = async () => {
+  const loadPopularVendors = useCallback(async () => {
     setLoading(true);
     setError(null);
     setShowPopular(true);
@@ -69,7 +61,15 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (strainName || strainSlug) {
+      searchVendors(strainSlug || strainName);
+    } else {
+      loadPopularVendors();
+    }
+  }, [strainName, strainSlug, searchVendors, loadPopularVendors]);
 
   const handleSearch = () => {
     if (searchStrain.trim()) {
@@ -373,4 +373,3 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
     </Box>
   );
 }
-

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, TextField, Grid, Card, CardContent, Typography, Chip, Stack, Button,
   InputAdornment, Select, MenuItem, FormControl, InputLabel, CircularProgress,
@@ -18,6 +18,7 @@ import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import SortIcon from '@mui/icons-material/Sort';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import { supabase } from '../supabaseClient';
+import { API_BASE } from '../config';
 import SeedVendorFinder from './SeedVendorFinder';
 
 const STRAINS_PER_PAGE = 100; // Display 100 strains at a time
@@ -40,7 +41,6 @@ export default function StrainBrowser({ onBack }) {
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [totalStrains, setTotalStrains] = useState(0);
   const [allStrainsLoaded, setAllStrainsLoaded] = useState(false);
 
   // New state for enhancements
@@ -79,16 +79,168 @@ export default function StrainBrowser({ onBack }) {
   }, []);
 
   // Fetch ALL strains on mount
+  const fetchStrainsFromSupabase = useCallback(async () => {
+    if (!supabase) return [];
+    let allData = [];
+    let from = 0;
+    const batchSize = FETCH_BATCH_SIZE;
+    let hasMoreData = true;
+
+    while (hasMoreData) {
+      const to = from + batchSize - 1;
+      const { data, error, count } = await supabase
+        .from('strains')
+        .select('*', { count: 'exact' })
+        .order('name')
+        .range(from, to);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        allData = [...allData, ...data];
+
+        if (count && allData.length < count) {
+          from += batchSize;
+        } else {
+          hasMoreData = false;
+        }
+      } else {
+        hasMoreData = false;
+      }
+    }
+
+    return allData;
+  }, [supabase]);
+
+  const fetchStrainsFromApi = useCallback(async () => {
+    let results = [];
+    let pageIndex = 1;
+    let totalPages = 1;
+
+    while (pageIndex <= totalPages) {
+      const res = await fetch(`${API_BASE}/api/strains?page=${pageIndex}&limit=${FETCH_BATCH_SIZE}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} when fetching strains from API`);
+      }
+      const payload = await res.json();
+      const pageStrains = Array.isArray(payload?.strains) ? payload.strains : [];
+      results = [...results, ...pageStrains];
+
+      totalPages = payload?.pages || 1;
+      if (pageStrains.length === 0) {
+        break;
+      }
+      pageIndex += 1;
+    }
+
+    return results;
+  }, [API_BASE]);
+
+  const fetchAllStrains = useCallback(async () => {
+    try {
+      setLoading(true);
+      console.log('🔍 Fetching ALL strains from database...');
+
+      let allData = [];
+      let usedSupabase = false;
+
+      if (supabase) {
+        try {
+          allData = await fetchStrainsFromSupabase();
+          usedSupabase = allData.length > 0;
+          if (usedSupabase) {
+            console.log(`✅ Loaded ${allData.length} total strains from Supabase!`);
+          } else {
+            console.warn('Supabase returned 0 strains, attempting API fallback...');
+          }
+        } catch (supabaseError) {
+          console.error('❌ Supabase error fetching strains:', supabaseError);
+        }
+      }
+
+      if (!allData.length) {
+        console.log('🌐 Falling back to local API for strain data...');
+        allData = await fetchStrainsFromApi();
+        console.log(`✅ Loaded ${allData.length} strains via API fallback`);
+      }
+
+      if (!allData.length) {
+        throw new Error('No strain data returned from Supabase or API');
+      }
+
+      setStrains(allData);
+      setAllStrainsLoaded(true);
+      setHasMore(false);
+    } catch (error) {
+      console.error('❌ Error fetching strains:', error);
+      setStrains([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchStrainsFromApi, fetchStrainsFromSupabase, supabase]);
+
   useEffect(() => {
     fetchAllStrains();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchAllStrains]);
+
+  // Sort strains
+  const sortStrains = useCallback((strainsToSort) => {
+    const sorted = [...strainsToSort];
+    switch (sortBy) {
+      case 'name':
+        return sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      case 'thc':
+        return sorted.sort((a, b) => (parseFloat(b.thc) || 0) - (parseFloat(a.thc) || 0));
+      case 'rating':
+        // For now, sort by name if no rating field exists
+        return sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      default:
+        return sorted;
+    }
+  }, [sortBy]);
+
+  // Apply THC filter
+  const applyThcFilter = useCallback((strainsToFilter) => {
+    return strainsToFilter.filter(strain => {
+      const thc = parseFloat(strain.thc) || 0;
+      return thc >= thcRange[0] && thc <= thcRange[1];
+    });
+  }, [thcRange]);
 
   // Filter strains when search/type/sort/thc changes
+  const filterStrains = useCallback(() => {
+    let filtered = [...strains];
+
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(s =>
+        s.name?.toLowerCase().includes(query) ||
+        s.description?.toLowerCase().includes(query) ||
+        s.effects?.some(e => e.toLowerCase().includes(query)) ||
+        s.flavors?.some(f => f.toLowerCase().includes(query))
+      );
+    }
+
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(s => s.type?.toLowerCase() === typeFilter);
+    }
+
+    if (showFilters) {
+      filtered = applyThcFilter(filtered);
+    } else {
+      filtered = filtered.filter(s => {
+        const thcValue = s.thc ?? 0;
+        return thcValue >= thcRange[0] && thcValue <= thcRange[1];
+      });
+    }
+
+    filtered = sortStrains(filtered);
+    setFilteredStrains(filtered);
+  }, [strains, searchQuery, typeFilter, showFilters, thcRange, sortStrains, applyThcFilter]);
+
   useEffect(() => {
     filterStrains();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, typeFilter, strains, sortBy, thcRange]);
+  }, [filterStrains]);
 
   // Reset displayed strains when filtered strains change
   useEffect(() => {
@@ -135,100 +287,20 @@ export default function StrainBrowser({ onBack }) {
     };
   }, [hasMore, loading, page, filteredStrains]);
 
-  const fetchAllStrains = async () => {
-    try {
-      setLoading(true);
-      console.log('🔍 Fetching ALL strains from database...');
-
-      let allData = [];
-      let from = 0;
-      const batchSize = FETCH_BATCH_SIZE;
-      let hasMoreData = true;
-
-      // Fetch in batches until we have all strains
-      while (hasMoreData) {
-        const to = from + batchSize - 1;
-
-        const { data, error, count } = await supabase
-          .from('strains')
-          .select('*', { count: 'exact' })
-          .order('name')
-          .range(from, to);
-
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          allData = [...allData, ...data];
-          console.log(`   Loaded ${allData.length} strains...`);
-
-          // Check if we have more data
-          if (count && allData.length < count) {
-            from += batchSize;
-          } else {
-            hasMoreData = false;
-          }
-        } else {
-          hasMoreData = false;
-        }
-      }
-
-      console.log(`✅ Loaded ${allData.length} total strains!`);
-      setStrains(allData);
-      setTotalStrains(allData.length);
-      setAllStrainsLoaded(true);
-      setHasMore(false); // All strains loaded, no more to fetch
-
-    } catch (error) {
-      console.error('❌ Error fetching strains:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filterStrains = () => {
-    let filtered = [...strains];
-
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(s =>
-        s.name?.toLowerCase().includes(query) ||
-        s.description?.toLowerCase().includes(query) ||
-        s.effects?.some(e => e.toLowerCase().includes(query)) ||
-        s.flavors?.some(f => f.toLowerCase().includes(query))
-      );
-    }
-
-    // Type filter
-    if (typeFilter !== 'all') {
-      filtered = filtered.filter(s => s.type?.toLowerCase() === typeFilter);
-    }
-
-    // THC range filter (only if filters are shown)
-    if (showFilters) {
-      filtered = applyThcFilter(filtered);
-    }
-
-    // Sort
-    filtered = sortStrains(filtered);
-
-    setFilteredStrains(filtered);
-  };
-
   const handleStrainClick = async (strain) => {
     setSelectedStrain(strain);
     setDetailsOpen(true);
     setDetailsTab(0);
-    fetchVendorsForStrain(strain.slug, strain.name);
-    fetchDispensariesForStrain(strain.slug);
-    fetchReviewsForStrain(strain.slug);
+    fetchVendorsForStrain(strain.name);
+    fetchDispensariesForStrain();
+    fetchReviewsForStrain(strain.slug, strain);
   };
 
-  const fetchVendorsForStrain = async (strainSlug, strainName) => {
+  const fetchVendorsForStrain = async (strainName) => {
     try {
       // Use live seed vendor search API
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5181';
-      const response = await fetch(`${API_BASE}/api/seeds-live?strain=${encodeURIComponent(strainName)}&limit=20`);
+      const apiBase = API_BASE || 'http://localhost:5181';
+      const response = await fetch(`${apiBase}/api/seeds-live?strain=${encodeURIComponent(strainName)}&limit=20`);
       const data = await response.json();
 
       // Transform results to match expected format
@@ -253,7 +325,7 @@ export default function StrainBrowser({ onBack }) {
     }
   };
 
-  const fetchDispensariesForStrain = async (strainSlug) => {
+  const fetchDispensariesForStrain = async () => {
     try {
       // Use live dispensary search API with user location
       if (!userLocation) {
@@ -261,9 +333,9 @@ export default function StrainBrowser({ onBack }) {
         return;
       }
 
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5181';
+      const apiBase = API_BASE || 'http://localhost:5181';
       const response = await fetch(
-        `${API_BASE}/api/dispensaries-live?lat=${userLocation.lat}&lng=${userLocation.lng}&radius=100&limit=20`
+        `${apiBase}/api/dispensaries-live?lat=${userLocation.lat}&lng=${userLocation.lng}&radius=100&limit=20`
       );
       const data = await response.json();
 
@@ -290,14 +362,35 @@ export default function StrainBrowser({ onBack }) {
     }
   };
 
-  const fetchReviewsForStrain = async (strainSlug) => {
+  const fetchReviewsForStrain = async (strainSlug, strainForFallback) => {
     try {
-      const { data, error } = await supabase.from('reviews').select('*').eq('strain_slug', strainSlug).order('created_at', { ascending: false }).limit(10);
-      if (error) throw error;
-      setReviews(data || []);
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('reviews')
+          .select('*')
+          .eq('strain_slug', strainSlug)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        if (error) throw error;
+        if (data && data.length) {
+          setReviews(data);
+          return;
+        }
+      }
+
+      const res = await fetch(`${API_BASE}/api/strains/${strainSlug}/reviews`);
+      if (res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        const reviewList = Array.isArray(payload?.reviews) ? payload.reviews : [];
+        setReviews(reviewList);
+        return;
+      }
+
+      throw new Error(`HTTP ${res.status} when fetching reviews`);
     } catch (error) {
       console.error('Error fetching reviews:', error);
-      setReviews([]);
+      const fallbackReviews = strainForFallback?.reviews;
+      setReviews(Array.isArray(fallbackReviews) ? fallbackReviews : []);
     }
   };
 
@@ -352,30 +445,6 @@ export default function StrainBrowser({ onBack }) {
         setSnackbar({ open: true, message: 'Added to favorites! ⭐', severity: 'success' });
         return [...prev, strainSlug];
       }
-    });
-  };
-
-  // Sort strains
-  const sortStrains = (strainsToSort) => {
-    const sorted = [...strainsToSort];
-    switch (sortBy) {
-      case 'name':
-        return sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      case 'thc':
-        return sorted.sort((a, b) => (parseFloat(b.thc) || 0) - (parseFloat(a.thc) || 0));
-      case 'rating':
-        // For now, sort by name if no rating field exists
-        return sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      default:
-        return sorted;
-    }
-  };
-
-  // Apply THC filter
-  const applyThcFilter = (strainsToFilter) => {
-    return strainsToFilter.filter(strain => {
-      const thc = parseFloat(strain.thc) || 0;
-      return thc >= thcRange[0] && thc <= thcRange[1];
     });
   };
 
@@ -840,4 +909,3 @@ export default function StrainBrowser({ onBack }) {
     </Box>
   );
 }
-

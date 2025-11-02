@@ -17,35 +17,40 @@ export default function GardenGate({ onSuccess, onBack }) {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   
-  // Payment state
-  const [showPayment, setShowPayment] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
 
   // Check if user is already logged in and has membership
   useEffect(() => {
-    checkAuthStatus();
-  }, []);
+    let isMounted = true;
 
-  const checkAuthStatus = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        // User is logged in, check membership status
-        const membership = session.user.user_metadata?.membership;
-        if (membership === 'club') {
-          // Already a member, grant access
-          onSuccess?.();
-        } else {
-          // Logged in but not a member, show payment
-          setMode('payment');
+    const checkAuthStatus = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!isMounted) return;
+
+        if (session?.user) {
+          const membership = session.user.user_metadata?.membership;
+          if (membership === 'club') {
+            onSuccess?.();
+          } else {
+            setMode('payment');
+          }
+        }
+      } catch (e) {
+        console.error('Auth check failed:', e);
+      } finally {
+        if (isMounted) {
+          setCheckingAuth(false);
         }
       }
-    } catch (e) {
-      console.error('Auth check failed:', e);
-    } finally {
-      setCheckingAuth(false);
-    }
-  };
+    };
+
+    checkAuthStatus();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [onSuccess]);
 
   const handleSignup = async () => {
     setError('');
@@ -447,4 +452,3 @@ export default function GardenGate({ onSuccess, onBack }) {
     </Box>
   );
 }
-
