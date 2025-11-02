@@ -94,7 +94,10 @@ app.use(express.json({ limit: '50mb' }));
 const DEFAULT_ORIGINS = [
   'http://localhost:5173', 'http://127.0.0.1:5173',
   'http://localhost:5174', 'http://127.0.0.1:5174',
-  'http://localhost:4173', 'http://127.0.0.1:4173'
+  'http://localhost:4173', 'http://127.0.0.1:4173',
+  'https://strainspotter-frontend.vercel.app',
+  'https://frontend-goaqagqo9-tophercook7-makers-projects.vercel.app',
+  'https://frontend-gmgc1mgxt-tophercook7-makers-projects.vercel.app'
 ];
 const ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS || DEFAULT_ORIGINS.join(','))
   .split(',')
@@ -116,7 +119,16 @@ function isAllowedOrigin(origin) {
   // Allow Vercel preview/prod frontend domains for this project
   try {
     const { host } = new URL(origin);
-    if (host.endsWith('.vercel.app') && host.includes('strainspotter-frontend')) return true;
+    if (
+      host.endsWith('.vercel.app') &&
+      (
+        host.includes('strainspotter-frontend') ||
+        host.includes('frontend-') ||
+        host.includes('tophercook7-makers-projects')
+      )
+    ) {
+      return true;
+    }
   } catch {}
   return false;
 }
