@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { supabase } from './supabaseClient.js';
 import { ensureBucketExists, supabaseAdmin } from './supabaseAdmin.js';
+import serverless from 'serverless-http';
 import sharp from 'sharp';
 import strainRoutes from './routes/strains.js';
 import healthRoutes from './routes/health.js';
@@ -766,3 +767,4 @@ if (!process.env.VERCEL) {
 }
 
 export default app;
+export const handler = serverless(app);
