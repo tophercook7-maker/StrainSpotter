@@ -34,49 +34,74 @@ export default function Home({ onNavigate }) {
   }
 
   return (
-    <Box sx={{
-      minHeight: '100vh',
-      width: '100vw',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      p: 0,
-      background: 'none',
-    }}>
-      <Box sx={{ textAlign: 'center', mt: 8, bgcolor: 'rgba(255,255,255,0.85)', borderRadius: 6, px: 4, py: 4, boxShadow: 3, display: 'inline-block' }}>
-        <Box sx={{
-          width: 220,
-          height: 220,
-          margin: '0 auto 24px auto',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#fff',
-          borderRadius: 24,
-          boxShadow: 2,
-        }}>
-          <img src="/hero.png" alt="hero" style={{ width: '80%', height: '80%', objectFit: 'contain', background: 'transparent', borderRadius: 16 }} />
+    <Box
+      sx={{
+        minHeight: '100vh',
+        width: '100vw',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        p: { xs: 2, sm: 0 },
+        background: 'none'
+      }}
+    >
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: 480,
+          textAlign: 'center',
+          mt: { xs: 4, md: 8 },
+          bgcolor: 'rgba(255,255,255,0.88)',
+          borderRadius: 6,
+          px: { xs: 2.5, sm: 3.5, md: 4 },
+          py: { xs: 3, md: 4 },
+          boxShadow: 3
+        }}
+      >
+        <Box
+          sx={{
+            width: { xs: 160, sm: 200, md: 220 },
+            height: { xs: 160, sm: 200, md: 220 },
+            margin: '0 auto 20px auto',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#fff',
+            borderRadius: 24,
+            boxShadow: 2
+          }}
+        >
+          <img
+            src="/hero.png"
+            alt="hero"
+            style={{ width: '80%', height: '80%', objectFit: 'contain', background: 'transparent', borderRadius: 16 }}
+          />
         </Box>
-        <Typography variant="h2" sx={{ fontWeight: 900, color: '#388e3c', mb: 1 }}>
+        <Typography variant="h3" sx={{ fontWeight: 900, color: '#388e3c', mb: 1, fontSize: { xs: '2rem', sm: '2.4rem', md: '2.75rem' } }}>
           StrainSpotter
         </Typography>
-        <Typography variant="h5" sx={{ color: '#222', fontWeight: 700, mb: 2 }}>
+        <Typography variant="h5" sx={{ color: '#222', fontWeight: 700, mb: 2, fontSize: { xs: '1.3rem', sm: '1.5rem' } }}>
           AI Cannabis Scan: Reveal Your Strain
         </Typography>
-        <Typography variant="body1" sx={{ color: '#444', fontWeight: 500, fontSize: 20, mb: 4 }}>
+        <Typography variant="body1" sx={{ color: '#444', fontWeight: 500, fontSize: { xs: '1rem', sm: '1.1rem' }, mb: 4 }}>
           Upload a photo of your cannabis plant or bud and let our AI deliver a full scientific breakdown—no hype, just next-gen genetics.
         </Typography>
-        <Stack direction="row" spacing={3} justifyContent="center" sx={{ mt: 4 }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={{ xs: 1.5, sm: 3 }}
+          justifyContent="center"
+          sx={{ mt: 4 }}
+        >
           <Button
             variant="contained"
             color="success"
             sx={{
               fontWeight: 700,
               borderRadius: 999,
-              px: 6,
-              py: 2,
-              fontSize: 24,
+              px: { xs: 3, sm: 5, md: 6 },
+              py: { xs: 1.5, md: 2 },
+              fontSize: { xs: 18, md: 24 },
               boxShadow: 'none',
               bgcolor: 'rgba(124, 179, 66, 0.3)',
               border: '2px solid rgba(124, 179, 66, 0.6)',
@@ -86,6 +111,7 @@ export default function Home({ onNavigate }) {
               display: 'flex',
               alignItems: 'center',
               gap: 2,
+              width: { xs: '100%', sm: 'auto' },
               '&:hover': {
                 bgcolor: 'rgba(124, 179, 66, 0.5)',
                 border: '2px solid rgba(124, 179, 66, 0.8)'
@@ -114,6 +140,7 @@ export default function Home({ onNavigate }) {
               display: 'flex',
               alignItems: 'center',
               gap: 2,
+              width: { xs: '100%', sm: 'auto' },
               '&:hover': {
                 bgcolor: 'rgba(124, 179, 66, 0.3)',
                 border: '2px solid rgba(124, 179, 66, 0.7)'

@@ -285,7 +285,7 @@ export default function Garden({ onNavigate, onBack }) {
 
       {/* Header */}
       <Paper sx={{
-        p: 3,
+        p: { xs: 2, md: 3 },
         mb: 3,
         background: 'rgba(255,255,255,0.15)',
         backdropFilter: 'blur(20px)',
@@ -293,12 +293,17 @@ export default function Garden({ onNavigate, onBack }) {
         borderRadius: 4
       }}>
         {/* Header actions */}
-        <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+        <Stack
+          direction={{ xs: 'column-reverse', sm: 'row' }}
+          spacing={1.5}
+          sx={{ mb: { xs: 2, md: 3 }, alignSelf: { xs: 'stretch', sm: 'flex-end' } }}
+        >
           <Button
             variant="outlined"
             startIcon={<ExitToAppIcon />}
             onClick={handleLogout}
             sx={{
+              width: { xs: '100%', sm: 'auto' },
               color: '#fff',
               borderColor: 'rgba(255, 82, 82, 0.6)',
               '&:hover': { borderColor: 'rgba(255, 82, 82, 1)', bgcolor: 'rgba(255, 82, 82, 0.1)' }
@@ -309,14 +314,14 @@ export default function Garden({ onNavigate, onBack }) {
         </Stack>
 
         {/* Welcome section below buttons */}
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }}>
           <Avatar
             src={avatarUrl || undefined}
             sx={{
               bgcolor: '#7cb342',
-              width: 64,
-              height: 64,
-              fontSize: 24,
+              width: { xs: 56, md: 64 },
+              height: { xs: 56, md: 64 },
+              fontSize: { xs: 20, md: 24 },
               border: '3px solid rgba(124, 179, 66, 0.4)'
             }}
           >
@@ -371,7 +376,7 @@ export default function Garden({ onNavigate, onBack }) {
 
       {/* Membership details */}
       <Paper sx={{
-        p: 3,
+        p: { xs: 2, md: 3 },
         mb: 4,
         background: 'linear-gradient(135deg, rgba(124,179,66,0.25), rgba(0,0,0,0.35))',
         borderRadius: 4,
@@ -406,13 +411,13 @@ export default function Garden({ onNavigate, onBack }) {
             </Stack>
           </Stack>
           <Divider sx={{ borderColor: 'rgba(255,255,255,0.15)' }} />
-          <Grid container spacing={2}>
+          <Grid container spacing={{ xs: 1.5, sm: 2 }}>
             {membershipBenefits.map((benefit, idx) => (
-              <Grid item xs={12} sm={4} key={idx}>
+              <Grid item xs={12} sm={6} md={4} key={idx}>
                 <Stack
                   spacing={1}
                   sx={{
-                    p: 2,
+                    p: { xs: 1.5, sm: 2 },
                     borderRadius: 3,
                     bgcolor: 'rgba(0,0,0,0.35)',
                     border: '1px solid rgba(255,255,255,0.08)',
@@ -437,7 +442,7 @@ export default function Garden({ onNavigate, onBack }) {
 
       {user && (
         <Paper sx={{
-          p: 3,
+          p: { xs: 2, md: 3 },
           mb: 4,
           background: 'linear-gradient(135deg, rgba(0,0,0,0.45), rgba(124,179,66,0.2))',
           borderRadius: 4,
@@ -515,13 +520,23 @@ export default function Garden({ onNavigate, onBack }) {
       )}
 
       {/* Feature Tiles */}
-      <Grid container spacing={3}>
+      <Grid container spacing={{ xs: 1.5, md: 3 }}>
         {tiles.map((tile) => (
-          <Grid item xs={12} sm={6} md={4} key={tile.nav}>
+          <Grid
+            item
+            xs={6}
+            sm={4}
+            md={3}
+            key={tile.nav}
+            sx={{
+              display: 'flex'
+            }}
+          >
             <Paper
               onClick={() => handleFeatureClick(tile.title, tile.nav)}
               sx={{
-                p: 4,
+                flex: 1,
+                p: { xs: 2.25, sm: 3, md: 4 },
                 textAlign: 'center',
                 cursor: 'pointer',
                 background: 'rgba(255,255,255,0.1)',
@@ -538,19 +553,22 @@ export default function Garden({ onNavigate, onBack }) {
               }}
             >
               <Box sx={{
-                width: 80,
-                height: 80,
+                width: { xs: 60, sm: 72, md: 80 },
+                height: { xs: 60, sm: 72, md: 80 },
                 margin: '0 auto 16px auto',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 bgcolor: tile.color,
                 borderRadius: '50%',
-                '& svg': { fontSize: 40, color: '#fff' }
+                '& svg': { fontSize: { xs: 28, sm: 36, md: 40 }, color: '#fff' }
               }}>
                 {tile.icon}
               </Box>
-              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700 }}>
+              <Typography
+                variant="subtitle1"
+                sx={{ color: '#fff', fontWeight: 700, fontSize: { xs: '0.95rem', sm: '1rem', md: '1.15rem' } }}
+              >
                 {tile.title}
               </Typography>
             </Paper>

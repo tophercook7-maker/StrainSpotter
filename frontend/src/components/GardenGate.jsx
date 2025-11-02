@@ -196,13 +196,13 @@ export default function GardenGate({ onSuccess, onBack }) {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      p: 3
+      p: { xs: 2, sm: 3 }
     }}>
       <Paper sx={{
-        p: 4,
+        p: { xs: 3, sm: 4 },
         borderRadius: 6,
-        minWidth: 340,
-        maxWidth: 500,
+        width: '100%',
+        maxWidth: 480,
         textAlign: 'center',
         background: 'rgba(255,255,255,0.15)',
         backdropFilter: 'blur(20px)',
@@ -224,6 +224,7 @@ export default function GardenGate({ onSuccess, onBack }) {
                 size="large"
                 onClick={() => setMode('signup')}
                 sx={{
+                  width: '100%',
                   py: 2,
                   fontSize: '1.1rem',
                   fontWeight: 700,
@@ -239,6 +240,7 @@ export default function GardenGate({ onSuccess, onBack }) {
                 size="large"
                 onClick={() => setMode('login')}
                 sx={{
+                  width: '100%',
                   py: 2,
                   fontSize: '1.1rem',
                   fontWeight: 700,
@@ -314,6 +316,7 @@ export default function GardenGate({ onSuccess, onBack }) {
                 onClick={handleSignup}
                 disabled={loading}
                 sx={{
+                  width: '100%',
                   py: 2,
                   fontSize: '1.1rem',
                   fontWeight: 700,
@@ -375,6 +378,7 @@ export default function GardenGate({ onSuccess, onBack }) {
                 onClick={handleLogin}
                 disabled={loading}
                 sx={{
+                  width: '100%',
                   py: 2,
                   fontSize: '1.1rem',
                   fontWeight: 700,
@@ -431,6 +435,7 @@ export default function GardenGate({ onSuccess, onBack }) {
                   onClick={handlePayment}
                   disabled={loading}
                   sx={{
+                    width: '100%',
                     py: 2,
                     fontSize: '1.1rem',
                     fontWeight: 700,
