@@ -2,6 +2,7 @@ import express from 'express';
 import { supabase } from '../supabaseClient.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 import { checkAccess } from '../middleware/membershipCheck.js';
+import { ensureMonthlyBundle } from '../services/scanCredits.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -113,6 +114,7 @@ router.post('/master-key', express.json(), async (req, res, next) => {
       if (error) return res.status(500).json({ error: error.message });
       membership = data;
     }
+    await ensureMonthlyBundle(user_id);
     res.json({ success: true, membership });
   } catch (e) {
     next(e);
@@ -331,6 +333,7 @@ router.post('/members/:id/update', express.json(), async (req, res, next) => {
       return res.status(500).json({ error: error.message });
     }
 
+    await ensureMonthlyBundle(user_id);
     res.json({ success: true, membership: data });
   } catch (e) {
     next(e);

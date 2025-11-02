@@ -40,7 +40,10 @@ router.post('/profile/setup', async (req, res) => {
       optInDirectory,
       phone,
       address,
-      contactRiskAcknowledged
+      contactRiskAcknowledged,
+      certified,
+      moderatorOptIn,
+      moderatorApplication
     } = req.body;
 
     // Validate required fields
@@ -48,12 +51,7 @@ router.post('/profile/setup', async (req, res) => {
       return res.status(400).json({ error: 'userId is required' });
     }
 
-    if (isGrower && experienceYears < 3) {
-      return res.status(400).json({
-        error: 'Minimum 3 years of growing experience required to be listed in directory'
-      });
-    }
-
+    const experience = Number(experienceYears) || 0;
     // Validate contact info risk acknowledgment
     if ((phone || address) && !contactRiskAcknowledged) {
       return res.status(400).json({
@@ -62,6 +60,15 @@ router.post('/profile/setup', async (req, res) => {
     }
 
     const client = supabaseAdmin ?? supabase;
+    const sanitizedModeratorApplication = (moderatorOptIn && certified && moderatorApplication && typeof moderatorApplication === 'object')
+      ? moderatorApplication
+      : null;
+
+    const specialtiesArray = Array.isArray(specialties)
+      ? specialties
+      : (typeof specialties === 'string'
+          ? specialties.split(',').map((s) => s.trim()).filter(Boolean)
+          : null);
 
     // Update profile with grower information
     const { data, error } = await client
@@ -69,9 +76,9 @@ router.post('/profile/setup', async (req, res) => {
       .update({
         is_grower: isGrower,
         grower_license_status: licenseStatus,
-        grower_experience_years: experienceYears,
+        grower_experience_years: experience,
         grower_bio: bio,
-        grower_specialties: specialties,
+        grower_specialties: specialtiesArray,
         grower_city: city,
         grower_state: state,
         grower_country: country || 'USA',
@@ -83,7 +90,10 @@ router.post('/profile/setup', async (req, res) => {
         grower_address: address || null,
         grower_contact_risk_acknowledged: contactRiskAcknowledged || false,
         grower_contact_risk_acknowledged_date: (phone || address) ? new Date().toISOString() : null,
-        grower_last_active: new Date().toISOString()
+        grower_last_active: new Date().toISOString(),
+        grower_certified: !!certified,
+        grower_moderator_opt_in: !!moderatorOptIn,
+        grower_moderator_application: sanitizedModeratorApplication
       })
       .eq('user_id', userId)
       .select()
@@ -92,6 +102,37 @@ router.post('/profile/setup', async (req, res) => {
     if (error) {
       console.error('Error setting up grower profile:', error);
       return res.status(500).json({ error: error.message });
+    }
+
+    // Manage moderator status & comped membership
+    if (moderatorOptIn && certified) {
+      const permissions = ['moderate_messages', 'moderate_images', 'warn_users'];
+      const { error: modErr } = await client
+        .from('moderators')
+        .upsert({
+          user_id: userId,
+          assigned_by: userId,
+          assigned_at: new Date().toISOString(),
+          is_active: true,
+          permissions
+        }, { onConflict: 'user_id' });
+      if (modErr) {
+        console.error('Error upserting moderator record:', modErr);
+      }
+    } else {
+      const { error: deactivateErr } = await client
+        .from('moderators')
+        .update({ is_active: false })
+        .eq('user_id', userId);
+      if (deactivateErr && deactivateErr.code !== 'PGRST116') {
+        console.error('Error deactivating moderator record:', deactivateErr);
+      }
+    }
+
+    try {
+      await client.rpc('refresh_comp_membership_for_user', { p_user_id: userId });
+    } catch (rpcErr) {
+      console.error('refresh_comp_membership_for_user failed:', rpcErr);
     }
 
     res.json({ success: true, profile: data });

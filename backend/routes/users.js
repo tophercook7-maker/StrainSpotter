@@ -1,6 +1,7 @@
 import express from 'express';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 import { supabase } from '../supabaseClient.js';
+import { ensureUserRecord } from '../utils/ensureUser.js';
 
 const router = express.Router();
 const writeClient = supabaseAdmin ?? supabase;
@@ -17,17 +18,6 @@ router.post('/ensure', async (req, res) => {
       return res.status(400).json({ error: 'user_id required' });
     }
 
-    // Check if user already exists
-    const { data: existing } = await writeClient
-      .from('users')
-      .select('id')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (existing) {
-      return res.json({ success: true, message: 'User already exists' });
-    }
-
     // Try to get email from auth.users if not provided
     let email = emailFromFrontend;
     if (!email && supabaseAdmin) {
@@ -40,36 +30,23 @@ router.post('/ensure', async (req, res) => {
       }
     }
 
-    const placeholderEmail = `${userId.substring(0, 8)}@placeholder.local`;
-    const finalEmail = email || placeholderEmail || 'unknown@strainspotter.app';
-    const finalUsername = usernameFromFrontend || `user_${userId.substring(0, 8)}`;
-    
-    console.log('[users/ensure] Will use email:', finalEmail, 'username:', finalUsername);
+    const ensureResult = await ensureUserRecord({
+      client: writeClient,
+      userId,
+      emailHint: email,
+      usernameHint: usernameFromFrontend,
+      loggerPrefix: '[users/ensure]'
+    });
 
-    // Create user record with username and email
-    const insertData = { 
-      id: userId,
-      username: finalUsername,
-      email: finalEmail,
-      created_at: new Date().toISOString()
-    };
-    console.log('[users/ensure] Insert data:', JSON.stringify(insertData));
-    
-    const { error: insertErr } = await writeClient
-      .from('users')
-      .insert(insertData)
-      .select()
-      .single();
-
-    if (insertErr) {
-      console.error('[users/ensure] Failed to create user:', insertErr);
-      return res.status(500).json({ 
+    if (!ensureResult.ok) {
+      console.error('[users/ensure] Failed to ensure user:', ensureResult.error);
+      return res.status(500).json({
         error: 'Failed to create user record',
-        details: insertErr.message 
+        details: ensureResult.error?.message || ensureResult.error || null
       });
     }
 
-    res.json({ success: true, message: 'User created' });
+    res.json({ success: true, message: ensureResult.created ? 'User created' : 'User already exists' });
   } catch (err) {
     console.error('[users/ensure] Error:', err);
     res.status(500).json({ error: String(err) });

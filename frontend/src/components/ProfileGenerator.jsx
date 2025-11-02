@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -29,14 +29,13 @@ export default function ProfileGenerator({ user, onProfileGenerated }) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Generate initial profile on mount
-  useEffect(() => {
-    if (user?.email) {
-      generateProfile();
+  const generateProfile = useCallback(async () => {
+    if (!user?.email) {
+      setProfile(null);
+      setLoading(false);
+      return;
     }
-  }, [user]);
 
-  const generateProfile = async () => {
     setLoading(true);
     setError(null);
 
@@ -55,7 +54,14 @@ export default function ProfileGenerator({ user, onProfileGenerated }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.email]);
+
+  // Generate initial profile on mount
+  useEffect(() => {
+    if (user?.email) {
+      generateProfile();
+    }
+  }, [user?.email, generateProfile]);
 
   const regenerateProfile = async () => {
     setLoading(true);
@@ -255,4 +261,3 @@ export default function ProfileGenerator({ user, onProfileGenerated }) {
     </Box>
   );
 }
-

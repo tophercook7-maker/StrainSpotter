@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Typography, Stack, Paper, Button, TextField, CircularProgress,
   Card, CardContent, Chip, IconButton, Slider, FormControl, InputLabel,
@@ -21,37 +21,9 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
   const [userLocation, setUserLocation] = useState(null);
   const [radius, setRadius] = useState(10);
   const [locationStatus, setLocationStatus] = useState('detecting');
+  const initialRadiusRef = useRef(10);
 
-  useEffect(() => {
-    // Get user's location
-    if (navigator.geolocation) {
-      setLocationStatus('detecting');
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const location = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          setUserLocation(location);
-          setLocationStatus('success');
-          searchDispensaries(location.lat, location.lng, radius);
-        },
-        (error) => {
-          console.error('Location access denied:', error);
-          setLocationStatus('denied');
-          // Fallback to San Francisco
-          const fallback = { lat: 37.7749, lng: -122.4194 };
-          setUserLocation(fallback);
-          searchDispensaries(fallback.lat, fallback.lng, radius);
-        }
-      );
-    } else {
-      setLocationStatus('unsupported');
-      setError('Geolocation is not supported by your browser');
-    }
-  }, []);
-
-  const searchDispensaries = async (lat, lng, searchRadius) => {
+  const searchDispensaries = useCallback(async (lat, lng, searchRadius) => {
     setLoading(true);
     setError(null);
     try {
@@ -71,7 +43,36 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [strainSlug]);
+
+  useEffect(() => {
+    // Get user's location
+    if (navigator.geolocation) {
+      setLocationStatus('detecting');
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const location = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          setUserLocation(location);
+          setLocationStatus('success');
+          searchDispensaries(location.lat, location.lng, initialRadiusRef.current);
+        },
+        (error) => {
+          console.error('Location access denied:', error);
+          setLocationStatus('denied');
+          // Fallback to San Francisco
+          const fallback = { lat: 37.7749, lng: -122.4194 };
+          setUserLocation(fallback);
+          searchDispensaries(fallback.lat, fallback.lng, initialRadiusRef.current);
+        }
+      );
+    } else {
+      setLocationStatus('unsupported');
+      setError('Geolocation is not supported by your browser');
+    }
+  }, [searchDispensaries]);
 
   const handleRadiusChange = (event, newValue) => {
     setRadius(newValue);
@@ -327,4 +328,3 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
     </Box>
   );
 }
-

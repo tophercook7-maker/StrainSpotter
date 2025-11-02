@@ -7,8 +7,6 @@ export default function MembershipLogin({ onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [applied, setApplied] = useState(false);
-  const [applicationId, setApplicationId] = useState(null);
-  const [paymentComplete, setPaymentComplete] = useState(false);
 
   const handleApply = async () => {
     setLoading(true);
@@ -22,26 +20,6 @@ export default function MembershipLogin({ onSuccess }) {
       const data = await resp.json();
       if (!resp.ok || !data.success) throw new Error(data.error || "Application failed");
       setApplied(true);
-      setApplicationId(data.application.id);
-    } catch (e) {
-      setError(e.message);
-    }
-    setLoading(false);
-  };
-
-  const handlePayment = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const resp = await fetch(`/api/membership/applications/${applicationId}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payment_received: true, payment_amount: 49, payment_reference: "TESTPAY" })
-      });
-      const data = await resp.json();
-      if (!resp.ok || !data.success) throw new Error(data.error || "Payment failed");
-      setPaymentComplete(true);
-      if (onSuccess) onSuccess();
     } catch (e) {
       setError(e.message);
     }

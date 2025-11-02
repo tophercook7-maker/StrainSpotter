@@ -1,33 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Container,
   Typography,
   Card,
   CardContent,
-  AppBar,
-  Toolbar,
-  IconButton,
   CircularProgress,
   Alert,
-  Chip,
   Stack,
-  CardMedia,
   Button,
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
-  Fade,
-  Slide,
-  Zoom,
-  Tooltip,
-  Badge
+  DialogActions
 } from '@mui/material';
-import { ArrowBack, LocalFlorist, Visibility, Close, Share, Favorite, FavoriteBorder } from '@mui/icons-material';
-
-import { useNavigate } from "react-router-dom";
-import CannabisLeafIcon from "./CannabisLeafIcon";
+import LocalFloristIcon from '@mui/icons-material/LocalFlorist';
+import CloseIcon from '@mui/icons-material/Close';
+import { useNavigate } from 'react-router-dom';
+import CannabisLeafIcon from './CannabisLeafIcon';
 import { API_BASE } from '../config';
 import { supabase } from '../supabaseClient';
 
@@ -40,35 +30,44 @@ function ScanHistory({ onBack }) {
   const [strainDetails, setStrainDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
-  useEffect(() => {
-    fetchScans();
-  }, []);
-
-  const fetchScans = async () => {
+  const fetchScans = useCallback(async () => {
     try {
+      setLoading(true);
       let userId = null;
       try {
         const session = await supabase?.auth.getSession();
         userId = session?.data?.session?.user?.id || null;
-      } catch (e) {
-        console.debug('[ScanHistory] getSession failed', e);
+      } catch (sessionError) {
+        console.debug('[ScanHistory] getSession failed', sessionError);
       }
-      const url = userId ? `${API_BASE}/api/scans?user_id=${encodeURIComponent(userId)}` : `${API_BASE}/api/scans`;
+
+      const url = userId
+        ? `${API_BASE}/api/scans?user_id=${encodeURIComponent(userId)}`
+        : `${API_BASE}/api/scans`;
+
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch scans');
+
       const data = await response.json();
       setScans(data.scans || []);
+      setError(null);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchScans();
+  }, [fetchScans]);
 
   const handleViewStrain = async (scan) => {
     if (!scan.matched_strain_slug) return;
+
     setSelectedScan(scan);
     setLoadingDetails(true);
+
     try {
       const response = await fetch(`${API_BASE}/api/strains/${scan.matched_strain_slug}`);
       if (response.ok) {
@@ -78,6 +77,7 @@ function ScanHistory({ onBack }) {
         setStrainDetails(null);
       }
     } catch (err) {
+      console.error('Failed to load strain details:', err);
       setStrainDetails(null);
     } finally {
       setLoadingDetails(false);
@@ -90,96 +90,162 @@ function ScanHistory({ onBack }) {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh' }}>
-      {/* Back to Home button */}
-      <Box>
-        {onBack && (
-          <Box sx={{ position: 'fixed', top: 16, left: 16, zIndex: 1000 }}>
+    <Box sx={{ minHeight: '100vh', py: 4 }}>
+      <Container maxWidth="md">
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <CannabisLeafIcon style={{ height: 28 }} />
+            <Typography variant="h5" fontWeight={700}>
+              Scan History
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={1}>
+            {onBack && (
+              <Button variant="outlined" onClick={onBack}>
+                Back
+              </Button>
+            )}
             <Button
-              onClick={onBack}
-              size="small"
               variant="contained"
-              sx={{
-                bgcolor: 'white',
-                color: 'black',
-                textTransform: 'none',
-                fontWeight: 700,
-                borderRadius: 999,
-                px: 1.5,
-                minWidth: 0,
-                '&:hover': { bgcolor: 'grey.100' }
-              }}
+              color="success"
+              startIcon={<CannabisLeafIcon style={{ height: 20 }} />}
+              onClick={() => navigate('/')}
+              sx={{ textTransform: 'none' }}
             >
               Home
             </Button>
+          </Stack>
+        </Stack>
+
+        {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+            <CircularProgress />
           </Box>
         )}
-        <button
-          style={{
-            position: "absolute",
-            top: 16,
-            left: 16,
-            zIndex: 100,
-            background: "rgba(34, 139, 34, 0.25)",
-            border: "1px solid #228B22",
-            borderRadius: 12,
-            boxShadow: "0 2px 12px rgba(34,139,34,0.15)",
-            backdropFilter: "blur(8px)",
-            color: "#228B22",
-            padding: "8px 16px",
-            display: "flex",
-            alignItems: "center",
-            fontWeight: 600,
-            fontSize: 18,
-          }}
-          onClick={() => navigate("/")}
-        >
-          <CannabisLeafIcon style={{ marginRight: 8, height: 24 }} />
-          Home
-        </button>
-      </Box>
-      <Container maxWidth="md" sx={{ py: 4 }}>
-        {/* ...existing code for scan list and details... */}
+
+        {!loading && error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
+
+        {!loading && !error && scans.length === 0 && (
+          <Alert severity="info">
+            No scans found yet. Run a scan to see it appear here.
+          </Alert>
+        )}
+
+        {!loading && !error && scans.length > 0 && (
+          <Stack spacing={2}>
+            {scans.map((scan) => (
+              <Card
+                key={scan.id}
+                variant="outlined"
+                sx={{ borderRadius: 3, background: 'rgba(255,255,255,0.08)' }}
+              >
+                <CardContent>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Box>
+                      <Typography variant="h6" fontWeight={600}>
+                        {scan.matched_strain_name || 'Unknown Strain'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Scanned on {new Date(scan.created_at).toLocaleString()}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="success"
+                        onClick={() => handleViewStrain(scan)}
+                        disabled={!scan.matched_strain_slug}
+                      >
+                        View Details
+                      </Button>
+                    </Stack>
+                  </Stack>
+                  {scan.notes && (
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      {scan.notes}
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </Stack>
+        )}
       </Container>
-      {/* Strain Details Dialog */}
-      <Dialog 
-        open={!!selectedScan} 
-        onClose={handleCloseDialog} 
-        maxWidth="md" 
+
+      <Dialog
+        open={Boolean(selectedScan)}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
         fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}
       >
-        <DialogTitle sx={{ bgcolor: 'success.main', color: 'white' }}>
+        <DialogTitle>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Stack direction="row" spacing={1} alignItems="center">
-              <LocalFlorist />
-              <Typography variant="h6" fontWeight="bold">
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <LocalFloristIcon color="success" />
+              <Typography variant="h6" fontWeight={600}>
                 Strain Details
               </Typography>
             </Stack>
-            <IconButton onClick={handleCloseDialog} sx={{ color: 'white' }}>
-              <Close />
-            </IconButton>
+            <Button
+              onClick={handleCloseDialog}
+              size="small"
+              color="inherit"
+              startIcon={<CloseIcon fontSize="small" />}
+            >
+              Close
+            </Button>
           </Stack>
         </DialogTitle>
-        <DialogContent sx={{ pt: 3 }}>
-          {loadingDetails ? (
+        <DialogContent dividers>
+          {loadingDetails && (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <CircularProgress />
             </Box>
-          ) : strainDetails ? (
+          )}
+          {!loadingDetails && strainDetails && (
             <Stack spacing={2}>
-              {/* ...existing code for strain details... */}
+              <Typography variant="h6">{strainDetails.name}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {strainDetails.description || 'No description available.'}
+              </Typography>
+              {Array.isArray(strainDetails.effects) && strainDetails.effects.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Effects
+                  </Typography>
+                  <Typography variant="body2">
+                    {strainDetails.effects.join(', ')}
+                  </Typography>
+                </Box>
+              )}
+              {Array.isArray(strainDetails.flavors) && strainDetails.flavors.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Flavors
+                  </Typography>
+                  <Typography variant="body2">
+                    {strainDetails.flavors.join(', ')}
+                  </Typography>
+                </Box>
+              )}
             </Stack>
-          ) : (
-            <Alert severity="info">
-              Strain details not available
-            </Alert>
+          )}
+          {!loadingDetails && !strainDetails && (
+            <Alert severity="info">Strain details not available.</Alert>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Close</Button>
-        </DialogActions>
+        {selectedScan && (
+          <DialogActions>
+            <Typography variant="caption" color="text.secondary" sx={{ px: 2, pb: 1 }}>
+              Scan ID: {selectedScan.id}
+            </Typography>
+          </DialogActions>
+        )}
       </Dialog>
     </Box>
   );
