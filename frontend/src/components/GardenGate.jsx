@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Box, Button, Typography, TextField, Stack, Paper, Dialog, DialogTitle, DialogContent, Alert, CircularProgress } from '@mui/material';
-import { supabase } from '../supabaseClient';
+import { supabase, isAuthConfigured } from '../supabaseClient';
 
 export default function GardenGate({ onSuccess, onBack }) {
   const [mode, setMode] = useState('welcome'); // 'welcome', 'signup', 'login'
@@ -18,12 +18,18 @@ export default function GardenGate({ onSuccess, onBack }) {
   const [loginPassword, setLoginPassword] = useState('');
   
   const [paymentComplete, setPaymentComplete] = useState(false);
+  const authConfigured = isAuthConfigured();
 
   // Check if user is already logged in and has membership
   useEffect(() => {
+    if (!supabase) {
+      setCheckingAuth(false);
+      return;
+    }
     let isMounted = true;
 
     const checkAuthStatus = async () => {
+      if (!supabase) return;
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!isMounted) return;
@@ -50,9 +56,13 @@ export default function GardenGate({ onSuccess, onBack }) {
     return () => {
       isMounted = false;
     };
-  }, [onSuccess]);
+  }, [onSuccess, supabase]);
 
   const handleSignup = async () => {
+    if (!supabase) {
+      setError('Supabase authentication is not configured for this deployment. Please contact support.');
+      return;
+    }
     setError('');
     if (!signupEmail || !signupPassword || !signupName) {
       setError('Please fill in all fields');
@@ -87,6 +97,10 @@ export default function GardenGate({ onSuccess, onBack }) {
   };
 
   const handleLogin = async () => {
+    if (!supabase) {
+      setError('Supabase authentication is not configured for this deployment. Please contact support.');
+      return;
+    }
     setError('');
     if (!loginEmail || !loginPassword) {
       setError('Please enter email and password');
@@ -135,6 +149,10 @@ export default function GardenGate({ onSuccess, onBack }) {
   };
 
   const handlePayment = async () => {
+    if (!supabase) {
+      setError('Supabase authentication is not configured for this deployment. Please contact support.');
+      return;
+    }
     setLoading(true);
     setError('');
 
@@ -185,6 +203,26 @@ export default function GardenGate({ onSuccess, onBack }) {
     return (
       <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <CircularProgress sx={{ color: '#7cb342' }} />
+      </Box>
+    );
+  }
+
+  if (!authConfigured) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
+        <Paper sx={{ p: 4, borderRadius: 6, maxWidth: 420, textAlign: 'center', bgcolor: 'rgba(0,0,0,0.6)', color: '#fff' }}>
+          <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
+            Authentication Offline
+          </Typography>
+          <Typography variant="body2">
+            The StrainSpotter authentication service is not configured for this deployment. Please reach out to the site administrator or try again later.
+          </Typography>
+          {onBack && (
+            <Button variant="outlined" sx={{ mt: 3, color: '#fff', borderColor: 'rgba(255,255,255,0.4)' }} onClick={onBack}>
+              ← Back
+            </Button>
+          )}
+        </Paper>
       </Box>
     );
   }
