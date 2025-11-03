@@ -125,18 +125,18 @@ export default function PasswordReset({ onBack }) {
 
   return (
     <Box sx={{ maxWidth: 420, mx: 'auto', py: 4 }}>
-      <Button 
-        onClick={goHome} 
-        size="small" 
-        variant="contained" 
-        sx={{ 
+      <Button
+        onClick={goHome}
+        size="small"
+        variant="contained"
+        sx={{
           mb: 2,
-          bgcolor: 'white', 
-          color: 'black', 
-          textTransform: 'none', 
-          fontWeight: 700, 
-          borderRadius: 999, 
-          '&:hover': { bgcolor: 'grey.100' } 
+          bgcolor: '#7CB342',
+          color: 'white',
+          textTransform: 'none',
+          fontWeight: 700,
+          borderRadius: 999,
+          '&:hover': { bgcolor: '#689f38' }
         }}
       >
         ← Home

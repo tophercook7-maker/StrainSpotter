@@ -136,7 +136,7 @@ export default function Dispensaries({ onBack }) {
       </button>
       {onBack && (
         <Box sx={{ mb: 2 }}>
-          <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
+          <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: '#7CB342', color: 'white', textTransform: 'none', fontWeight: 700, borderRadius: 999, '&:hover': { bgcolor: '#689f38' } }}>← Back to Garden</Button>
         </Box>
       )}
       <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>

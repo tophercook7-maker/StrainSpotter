@@ -1269,8 +1269,11 @@ export default function ScanWizard({ onBack }) {
               <Button
                 variant="contained"
                 size="large"
-                href={`/seeds?strain=${encodeURIComponent(match.strain?.slug || match.strain?.name)}`}
-                target="_blank"
+                onClick={() => {
+                  // Open seed vendors in a new window with the strain pre-filled
+                  const strainName = match.strain?.slug || match.strain?.name;
+                  window.open(`https://www.seedsman.com/en/search?q=${encodeURIComponent(strainName)}`, '_blank');
+                }}
                 sx={{
                   flex: 1,
                   maxWidth: { sm: 250 },
@@ -1296,8 +1299,11 @@ export default function ScanWizard({ onBack }) {
               <Button
                 variant="outlined"
                 size="large"
-                href={`/dispensaries?strain=${encodeURIComponent(match.strain?.slug || match.strain?.name)}`}
-                target="_blank"
+                onClick={() => {
+                  // Open Google search for dispensaries with this strain
+                  const strainName = match.strain?.name || match.strain?.slug;
+                  window.open(`https://www.google.com/search?q=${encodeURIComponent(strainName + ' cannabis dispensary near me')}`, '_blank');
+                }}
                 sx={{
                   flex: 1,
                   maxWidth: { sm: 250 },

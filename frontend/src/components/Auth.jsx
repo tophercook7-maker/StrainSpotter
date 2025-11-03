@@ -195,21 +195,21 @@ export default function Auth({ onBack }) {
   return (
   <Box sx={{ maxWidth: 420, mx: 'auto', py: 4, background: 'transparent' }}>
       {onBack && (
-        <Button 
-          onClick={onBack} 
-          size="small" 
-          variant="contained" 
-          sx={{ 
+        <Button
+          onClick={onBack}
+          size="small"
+          variant="contained"
+          sx={{
             mb: 2,
-            bgcolor: 'white', 
-            color: 'black', 
-            textTransform: 'none', 
-            fontWeight: 700, 
-            borderRadius: 999, 
-            '&:hover': { bgcolor: 'grey.100' } 
+            bgcolor: '#7CB342',
+            color: 'white',
+            textTransform: 'none',
+            fontWeight: 700,
+            borderRadius: 999,
+            '&:hover': { bgcolor: '#689f38' }
           }}
         >
-          Home
+          ← Home
         </Button>
       )}
       <Card sx={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(12px)', border: '2px solid rgba(0,0,0,0.12)', boxShadow: 'none' }}>

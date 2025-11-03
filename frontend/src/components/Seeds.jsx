@@ -69,7 +69,7 @@ export default function Seeds({ onBack }) {
           Home
         </button>
       {onBack && (
-        <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: 'white', color: 'black', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 2, '&:hover': { bgcolor: 'grey.100' } }}>Home</Button>
+        <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: '#7CB342', color: 'white', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 2, '&:hover': { bgcolor: '#689f38' } }}>← Back to Garden</Button>
       )}
       <Typography variant="h4" gutterBottom sx={{ color: 'white' }}>Seeds & Genetics</Typography>
 
