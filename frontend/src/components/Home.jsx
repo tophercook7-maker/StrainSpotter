@@ -78,10 +78,12 @@ export default function Home({ onNavigate }) {
       sx={{
         minHeight: '100vh',
         width: '100%',
+        backgroundColor: '#0a0a0a',
         backgroundImage: 'url(/strainspotter-bg.jpg)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundAttachment: 'fixed',
+        backgroundRepeat: 'no-repeat',
         position: 'relative',
         overflow: 'hidden',
         '&::before': {
@@ -92,7 +94,8 @@ export default function Home({ onNavigate }) {
           right: 0,
           bottom: 0,
           background: 'rgba(0, 0, 0, 0.4)',
-          pointerEvents: 'none'
+          pointerEvents: 'none',
+          zIndex: 0
         }
       }}
     >
@@ -103,7 +106,8 @@ export default function Home({ onNavigate }) {
           minHeight: { xs: '90vh', md: '100vh' },
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          background: 'transparent'
         }}
       >
         <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1, py: { xs: 8, md: 12 } }}>
