@@ -10,6 +10,8 @@ import ScanWizard from './ScanWizard';
 import GardenGate from './GardenGate';
 import Garden from './Garden';
 
+// Modern UI Overhaul - Phase 1
+
 export default function Home({ onNavigate }) {
   const [showScan, setShowScan] = useState(false);
   const [showGarden, setShowGarden] = useState(false);
