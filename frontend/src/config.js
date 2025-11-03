@@ -11,8 +11,8 @@ const fromEnv = envCandidates.length ? envCandidates[0] : '';
 const isLocalhost = typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.host);
 const isEnvLocal = fromEnv && /localhost|127\.0\.0\.1/.test(fromEnv);
 
-// Default remote API (Vercel backend) used when no env override is provided
-const DEFAULT_REMOTE_API = 'https://backend-qp9e6f9oh-tophercook7-makers-projects.vercel.app';
+// Default remote API (Render backend) used when no env override is provided
+const DEFAULT_REMOTE_API = 'https://strainspotter.onrender.com';
 
 // If we're on localhost but VITE_API_BASE points to a remote server (e.g., Vercel), use the local backend to avoid CORS in dev.
 const resolvedForLocal = isLocalhost
