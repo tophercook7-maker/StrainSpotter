@@ -63,7 +63,7 @@ if (!process.env.VERCEL) {
 }
 if (process.env.NODE_ENV !== 'production') {
   console.log('[boot] SUPABASE_URL present =', !!process.env.SUPABASE_URL);
-  console.log('[boot] GOOGLE_APPLICATION_CREDENTIALS set =', !!process.env.GOOGLE_APPLICATION_CREDENTIALS || !!process.env.GOOGLE_VISION_JSON);
+  console.log('[boot] GOOGLE_APPLICATION_CREDENTIALS set =', !!process.env.GOOGLE_APPLICATION_CREDENTIALS || !!process.env.GOOGLE_VISION_JSON || !!process.env.GOOGLE_VISION_CREDENTIALS_PATH);
   // Helpful to confirm admin client usage without exposing secrets
   console.log('[boot] Service role client active =', !!supabaseAdmin);
 }
@@ -75,6 +75,10 @@ try {
   if (process.env.GOOGLE_VISION_JSON) {
     const credentials = JSON.parse(process.env.GOOGLE_VISION_JSON);
     visionClient = new ImageAnnotatorClient({ credentials });
+  } else if (process.env.GOOGLE_VISION_CREDENTIALS_PATH) {
+    // For Render.com: use secret file path
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = process.env.GOOGLE_VISION_CREDENTIALS_PATH;
+    visionClient = new ImageAnnotatorClient();
   } else {
     // Fall back to default credentials file (local development)
     visionClient = new ImageAnnotatorClient();
@@ -258,7 +262,7 @@ const writeLimiter = rateLimit({ windowMs: 60 * 1000, max: 30 }); // 30 req/min 
 app.get('/health', async (req, res, next) => {
   try {
     const supabaseOk = !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
-    const visionOk = !!process.env.GOOGLE_APPLICATION_CREDENTIALS || !!process.env.GOOGLE_VISION_JSON;
+    const visionOk = !!process.env.GOOGLE_APPLICATION_CREDENTIALS || !!process.env.GOOGLE_VISION_JSON || !!process.env.GOOGLE_VISION_CREDENTIALS_PATH;
     res.json({ ok: true, supabaseConfigured: supabaseOk, googleVisionConfigured: visionOk });
   } catch (e) {
     next(e);
