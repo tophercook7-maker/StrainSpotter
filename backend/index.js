@@ -151,6 +151,7 @@ const DEFAULT_ORIGINS = [
   'http://localhost:5173', 'http://127.0.0.1:5173',
   'http://localhost:5174', 'http://127.0.0.1:5174',
   'http://localhost:4173', 'http://127.0.0.1:4173',
+  'https://strain-spotter.vercel.app',
   'https://strainspotter-frontend.vercel.app',
   'https://frontend-goaqagqo9-tophercook7-makers-projects.vercel.app',
   'https://frontend-gmgc1mgxt-tophercook7-makers-projects.vercel.app'
@@ -178,6 +179,7 @@ function isAllowedOrigin(origin) {
     if (
       host.endsWith('.vercel.app') &&
       (
+        host.includes('strain-spotter') ||
         host.includes('strainspotter-frontend') ||
         host.includes('frontend-') ||
         host.includes('tophercook7-makers-projects')
