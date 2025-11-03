@@ -43,6 +43,9 @@ export default function ScanWizard({ onBack }) {
     { credits: 100, price: '$29.99' }
   ];
 
+  const membershipTier = (currentUser?.user_metadata?.membership || currentUser?.user_metadata?.tier || '').toString().toLowerCase();
+  const metadataMembershipActive = membershipTier === 'club' || membershipTier === 'full-access' || membershipTier === 'pro';
+
   const canUseEdgeUploads = typeof FUNCTIONS_BASE === 'string' && FUNCTIONS_BASE.length > 0 && FUNCTIONS_BASE !== `${API_BASE}/api`;
 
   const uploadViaEdgeFunction = useCallback(async ({ base64, filename, contentType, userId }) => {
@@ -104,13 +107,31 @@ export default function ScanWizard({ onBack }) {
       } else {
         const err = await resp.json().catch(() => ({}));
         console.error('Failed to load credits', err);
+        if (metadataMembershipActive) {
+          setCreditSummary(prev => prev ?? {
+            credits: 999,
+            membershipActive: true,
+            starterExpired: false,
+            trialDaysRemaining: null,
+            monthlyBundle: 999
+          });
+        }
       }
     } catch (err) {
       console.error('Credit summary error:', err);
+      if (metadataMembershipActive) {
+        setCreditSummary(prev => prev ?? {
+          credits: 999,
+          membershipActive: true,
+          starterExpired: false,
+          trialDaysRemaining: null,
+          monthlyBundle: 999
+        });
+      }
     } finally {
       setCreditsLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser, metadataMembershipActive]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -441,11 +462,15 @@ export default function ScanWizard({ onBack }) {
     );
   };
 
-  const membershipTier = (currentUser?.user_metadata?.membership || currentUser?.user_metadata?.tier || '').toString().toLowerCase();
-  const metadataMembershipActive = membershipTier === 'club' || membershipTier === 'full-access' || membershipTier === 'pro';
-  const membershipActive = typeof creditSummary?.membershipActive === 'boolean'
-    ? creditSummary.membershipActive
-    : metadataMembershipActive;
+  const membershipActive = (() => {
+    if (typeof creditSummary?.membershipActive === 'boolean') {
+      if (creditSummary.membershipActive) return true;
+      if (metadataMembershipActive) return true;
+      if (typeof creditSummary.monthlyBundle === 'number' && creditSummary.monthlyBundle > 0) return true;
+      return false;
+    }
+    return metadataMembershipActive;
+  })();
   const creditsRemaining = typeof creditSummary?.credits === 'number' ? creditSummary.credits : null;
   const monthlyBundle = typeof creditSummary?.monthlyBundle === 'number' ? creditSummary.monthlyBundle : null;
   const resetAt = creditSummary?.resetAt ? new Date(creditSummary.resetAt) : null;
@@ -457,7 +482,7 @@ export default function ScanWizard({ onBack }) {
         ? Math.max(0, Math.ceil((accessExpiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
         : null);
   const lowCredits = typeof creditsRemaining === 'number' && creditsRemaining <= 5;
-  const disableScanning = !membershipActive && (starterExpired || (typeof creditsRemaining === 'number' && creditsRemaining <= 0));
+  const disableScanning = !membershipActive && Boolean(creditSummary) && (starterExpired || (typeof creditsRemaining === 'number' && creditsRemaining <= 0));
 
   const trialMessage = (() => {
     if (membershipActive) return null;
