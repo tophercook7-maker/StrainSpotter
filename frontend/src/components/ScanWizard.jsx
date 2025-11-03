@@ -1,6 +1,8 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import MembershipLogin from "./MembershipLogin";
 import ErrorBoundary from "./ErrorBoundary";
+import SeedVendorFinder from "./SeedVendorFinder";
+import DispensaryFinder from "./DispensaryFinder";
 import Snackbar from '@mui/material/Snackbar';
 import { Container, Box, Button, Typography, Paper, CircularProgress, Tabs, Tab, Dialog, DialogTitle, DialogContent, Chip, Stack, TextField, IconButton, Alert, DialogActions, DialogContentText, Divider } from "@mui/material";
 import CloseIcon from '@mui/icons-material/Close';
@@ -29,6 +31,10 @@ export default function ScanWizard({ onBack }) {
   const [reviewRating, setReviewRating] = useState(5);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [existingReviews, setExistingReviews] = useState([]);
+
+  // Navigation state for seed vendors and dispensaries
+  const [showSeedVendorFinder, setShowSeedVendorFinder] = useState(false);
+  const [showDispensaryFinder, setShowDispensaryFinder] = useState(false);
 
   // Auth state
   const [currentUser, setCurrentUser] = useState(null);
@@ -509,6 +515,16 @@ export default function ScanWizard({ onBack }) {
   const accessExpiresLabel = accessExpiresAt
     ? accessExpiresAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
+
+  // Show SeedVendorFinder if user clicked Buy Seeds
+  if (showSeedVendorFinder) {
+    return <SeedVendorFinder onBack={() => setShowSeedVendorFinder(false)} />;
+  }
+
+  // Show DispensaryFinder if user clicked Find Dispensaries
+  if (showDispensaryFinder) {
+    return <DispensaryFinder onBack={() => setShowDispensaryFinder(false)} />;
+  }
 
   return (
     <ErrorBoundary>
@@ -1270,9 +1286,14 @@ export default function ScanWizard({ onBack }) {
                 variant="contained"
                 size="large"
                 onClick={() => {
-                  // Open seed vendors in a new window with the strain pre-filled
-                  const strainName = match.strain?.slug || match.strain?.name;
-                  window.open(`https://www.seedsman.com/en/search?q=${encodeURIComponent(strainName)}`, '_blank');
+                  if (currentUser) {
+                    // Logged-in users: Navigate to in-app seed vendor finder
+                    setShowSeedVendorFinder(true);
+                  } else {
+                    // Anonymous users: Open external seed vendor site
+                    const strainName = match.strain?.slug || match.strain?.name;
+                    window.open(`https://www.seedsman.com/en/search?q=${encodeURIComponent(strainName)}`, '_blank');
+                  }
                 }}
                 sx={{
                   flex: 1,
@@ -1300,9 +1321,14 @@ export default function ScanWizard({ onBack }) {
                 variant="outlined"
                 size="large"
                 onClick={() => {
-                  // Open Google search for dispensaries with this strain
-                  const strainName = match.strain?.name || match.strain?.slug;
-                  window.open(`https://www.google.com/search?q=${encodeURIComponent(strainName + ' cannabis dispensary near me')}`, '_blank');
+                  if (currentUser) {
+                    // Logged-in users: Navigate to in-app dispensary finder
+                    setShowDispensaryFinder(true);
+                  } else {
+                    // Anonymous users: Open Google search
+                    const strainName = match.strain?.name || match.strain?.slug;
+                    window.open(`https://www.google.com/search?q=${encodeURIComponent(strainName + ' cannabis dispensary near me')}`, '_blank');
+                  }
                 }}
                 sx={{
                   flex: 1,
