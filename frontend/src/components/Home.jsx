@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { Box, Button, Typography, Stack } from '@mui/material';
+import { Box, Button, Typography, Stack, Container, Grid, Card, CardContent, Chip } from '@mui/material';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
+import SpaIcon from '@mui/icons-material/Spa';
+import LocalFloristIcon from '@mui/icons-material/LocalFlorist';
+import ScienceIcon from '@mui/icons-material/Science';
+import SpeedIcon from '@mui/icons-material/Speed';
+import VerifiedIcon from '@mui/icons-material/Verified';
 import ScanWizard from './ScanWizard';
 import GardenGate from './GardenGate';
 import Garden from './Garden';
@@ -16,7 +22,6 @@ export default function Home({ onNavigate }) {
   if (showGarden && !inGarden) {
     return <GardenGate
       onSuccess={() => {
-        // User successfully joined/logged in, show garden dashboard
         setInGarden(true);
       }}
       onBack={() => setShowGarden(false)}
@@ -33,126 +38,379 @@ export default function Home({ onNavigate }) {
     />;
   }
 
+  const features = [
+    {
+      icon: <CameraAltIcon sx={{ fontSize: 40 }} />,
+      title: 'AI-Powered Scanning',
+      description: 'Upload a photo and get instant strain identification using advanced computer vision'
+    },
+    {
+      icon: <ScienceIcon sx={{ fontSize: 40 }} />,
+      title: 'Scientific Analysis',
+      description: 'Detailed breakdown of cannabinoids, terpenes, and genetic lineage'
+    },
+    {
+      icon: <SpeedIcon sx={{ fontSize: 40 }} />,
+      title: 'Instant Results',
+      description: 'Get comprehensive strain data in seconds, not hours'
+    },
+    {
+      icon: <LocalFloristIcon sx={{ fontSize: 40 }} />,
+      title: '35,000+ Strains',
+      description: 'Access our massive database of cannabis genetics and strain information'
+    },
+    {
+      icon: <SpaIcon sx={{ fontSize: 40 }} />,
+      title: 'Find Vendors',
+      description: 'Discover where to buy seeds from trusted vendors worldwide'
+    },
+    {
+      icon: <VerifiedIcon sx={{ fontSize: 40 }} />,
+      title: 'Verified Data',
+      description: 'Curated strain information from reliable sources and grower reviews'
+    }
+  ];
+
   return (
     <Box
       sx={{
         minHeight: '100vh',
-        width: '100vw',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        p: { xs: 2, sm: 0 },
-        background: 'none'
+        width: '100%',
+        background: 'linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%)',
+        position: 'relative',
+        overflow: 'hidden'
       }}
     >
+      {/* Hero Section */}
       <Box
         sx={{
-          width: '100%',
-          maxWidth: 480,
-          textAlign: 'center',
-          mt: { xs: 4, md: 8 },
-          bgcolor: 'rgba(255,255,255,0.88)',
-          borderRadius: 6,
-          px: { xs: 2.5, sm: 3.5, md: 4 },
-          py: { xs: 3, md: 4 },
-          boxShadow: 3
+          position: 'relative',
+          minHeight: { xs: '90vh', md: '100vh' },
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.05) 0%, rgba(0, 0, 0, 0) 100%)',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(124, 179, 66, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(156, 204, 101, 0.08) 0%, transparent 50%)',
+            pointerEvents: 'none'
+          }
         }}
       >
-        <Box
-          sx={{
-            width: { xs: 160, sm: 200, md: 220 },
-            height: { xs: 160, sm: 200, md: 220 },
-            margin: '0 auto 20px auto',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: '#fff',
-            borderRadius: 24,
-            boxShadow: 2
-          }}
-        >
-          <img
-            src="/hero.png"
-            alt="hero"
-            style={{ width: '80%', height: '80%', objectFit: 'contain', background: 'transparent', borderRadius: 16 }}
-          />
-        </Box>
-        <Typography variant="h3" sx={{ fontWeight: 900, color: '#388e3c', mb: 1, fontSize: { xs: '2rem', sm: '2.4rem', md: '2.75rem' } }}>
-          StrainSpotter
-        </Typography>
-        <Typography variant="h5" sx={{ color: '#222', fontWeight: 700, mb: 2, fontSize: { xs: '1.3rem', sm: '1.5rem' } }}>
-          AI Cannabis Scan: Reveal Your Strain
-        </Typography>
-        <Typography variant="body1" sx={{ color: '#444', fontWeight: 500, fontSize: { xs: '1rem', sm: '1.1rem' }, mb: 4 }}>
-          Upload a photo of your cannabis plant or bud and let our AI deliver a full scientific breakdown—no hype, just next-gen genetics.
-        </Typography>
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={{ xs: 1.5, sm: 3 }}
-          justifyContent="center"
-          sx={{ mt: 4 }}
-        >
-          <Button
-            variant="contained"
-            color="success"
-            sx={{
-              fontWeight: 700,
-              borderRadius: 999,
-              px: { xs: 3, sm: 5, md: 6 },
-              py: { xs: 1.5, md: 2 },
-              fontSize: { xs: 18, md: 24 },
-              boxShadow: 'none',
-              bgcolor: 'rgba(124, 179, 66, 0.3)',
-              border: '2px solid rgba(124, 179, 66, 0.6)',
-              backdropFilter: 'blur(10px)',
-              color: '#fff',
-              textTransform: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-              width: { xs: '100%', sm: 'auto' },
-              '&:hover': {
-                bgcolor: 'rgba(124, 179, 66, 0.5)',
-                border: '2px solid rgba(124, 179, 66, 0.8)'
-              }
-            }}
-            onClick={() => setShowScan(true)}
-          >
-            <img src="/hero.png" alt="hero" style={{ width: 32, height: 32, borderRadius: '50%', marginRight: 8, background: 'transparent' }} />
-            Start AI Scan
-          </Button>
-          <Button
-            variant="outlined"
-            color="success"
-            sx={{
-              borderRadius: 999,
-              px: 6,
-              py: 2,
-              fontWeight: 700,
-              fontSize: 24,
-              bgcolor: 'rgba(124, 179, 66, 0.2)',
-              border: '2px solid rgba(124, 179, 66, 0.5)',
-              backdropFilter: 'blur(10px)',
-              color: '#fff',
-              boxShadow: 'none',
-              textTransform: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-              width: { xs: '100%', sm: 'auto' },
-              '&:hover': {
-                bgcolor: 'rgba(124, 179, 66, 0.3)',
-                border: '2px solid rgba(124, 179, 66, 0.7)'
-              }
-            }}
-            onClick={() => setShowGarden(true)}
-          >
-            <img src="/hero.png" alt="hero" style={{ width: 32, height: 32, borderRadius: '50%', marginRight: 8, background: 'transparent' }} />
-            Enter the Garden
-          </Button>
-        </Stack>
+        <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1, py: { xs: 8, md: 12 } }}>
+          <Stack spacing={6} alignItems="center" textAlign="center">
+            {/* Logo/Icon */}
+            <Box
+              className="animate-fade-in"
+              sx={{
+                width: { xs: 120, md: 160 },
+                height: { xs: 120, md: 160 },
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.2) 0%, rgba(156, 204, 101, 0.1) 100%)',
+                border: '3px solid rgba(124, 179, 66, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 60px rgba(124, 179, 66, 0.3)',
+                animation: 'glow 3s ease-in-out infinite alternate'
+              }}
+            >
+              <img
+                src="/hero.png"
+                alt="StrainSpotter"
+                style={{ width: '70%', height: '70%', objectFit: 'contain' }}
+              />
+            </Box>
+
+            {/* Headline */}
+            <Stack spacing={2} className="animate-slide-up">
+              <Typography
+                variant="h1"
+                sx={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 900,
+                  background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  fontSize: { xs: '2.5rem', sm: '3.5rem', md: '4.5rem' },
+                  lineHeight: 1.1,
+                  letterSpacing: '-0.02em'
+                }}
+              >
+                StrainSpotter
+              </Typography>
+
+              <Typography
+                variant="h2"
+                sx={{
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' },
+                  maxWidth: 800,
+                  mx: 'auto'
+                }}
+              >
+                AI-Powered Cannabis Strain Identification
+              </Typography>
+
+              <Typography
+                variant="body1"
+                sx={{
+                  color: '#b0b0b0',
+                  fontSize: { xs: '1.1rem', md: '1.25rem' },
+                  maxWidth: 600,
+                  mx: 'auto',
+                  lineHeight: 1.8
+                }}
+              >
+                Upload a photo of your cannabis and get instant strain identification,
+                genetic analysis, and vendor recommendations powered by advanced AI.
+              </Typography>
+            </Stack>
+
+            {/* CTA Buttons */}
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={3}
+              sx={{ mt: 4 }}
+              className="animate-slide-up"
+            >
+              <Button
+                variant="contained"
+                size="large"
+                onClick={() => setShowScan(true)}
+                startIcon={<CameraAltIcon />}
+                sx={{
+                  px: 6,
+                  py: 2,
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                  borderRadius: '50px',
+                  background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
+                  boxShadow: '0 8px 30px rgba(124, 179, 66, 0.4)',
+                  textTransform: 'none',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 12px 40px rgba(124, 179, 66, 0.6)',
+                    background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)'
+                  }
+                }}
+              >
+                Start AI Scan
+              </Button>
+
+              <Button
+                variant="outlined"
+                size="large"
+                onClick={() => setShowGarden(true)}
+                startIcon={<SpaIcon />}
+                sx={{
+                  px: 6,
+                  py: 2,
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                  borderRadius: '50px',
+                  border: '2px solid rgba(124, 179, 66, 0.5)',
+                  color: '#9CCC65',
+                  textTransform: 'none',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    border: '2px solid rgba(124, 179, 66, 0.8)',
+                    background: 'rgba(124, 179, 66, 0.1)',
+                    transform: 'translateY(-2px)'
+                  }
+                }}
+              >
+                Enter the Garden
+              </Button>
+            </Stack>
+
+            {/* Trust Badges */}
+            <Stack
+              direction="row"
+              spacing={2}
+              flexWrap="wrap"
+              justifyContent="center"
+              sx={{ mt: 4 }}
+            >
+              <Chip
+                label="35,000+ Strains"
+                sx={{
+                  bgcolor: 'rgba(124, 179, 66, 0.15)',
+                  color: '#9CCC65',
+                  fontWeight: 600,
+                  border: '1px solid rgba(124, 179, 66, 0.3)'
+                }}
+              />
+              <Chip
+                label="AI-Powered"
+                sx={{
+                  bgcolor: 'rgba(124, 179, 66, 0.15)',
+                  color: '#9CCC65',
+                  fontWeight: 600,
+                  border: '1px solid rgba(124, 179, 66, 0.3)'
+                }}
+              />
+              <Chip
+                label="Instant Results"
+                sx={{
+                  bgcolor: 'rgba(124, 179, 66, 0.15)',
+                  color: '#9CCC65',
+                  fontWeight: 600,
+                  border: '1px solid rgba(124, 179, 66, 0.3)'
+                }}
+              />
+            </Stack>
+          </Stack>
+        </Container>
       </Box>
+
+      {/* Features Section */}
+      <Container maxWidth="lg" sx={{ py: { xs: 8, md: 12 }, position: 'relative', zIndex: 1 }}>
+        <Stack spacing={6}>
+          {/* Section Header */}
+          <Stack spacing={2} textAlign="center">
+            <Typography
+              variant="h2"
+              sx={{
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 800,
+                color: '#ffffff',
+                fontSize: { xs: '2rem', md: '3rem' }
+              }}
+            >
+              Why Choose StrainSpotter?
+            </Typography>
+            <Typography
+              variant="body1"
+              sx={{
+                color: '#b0b0b0',
+                fontSize: '1.1rem',
+                maxWidth: 600,
+                mx: 'auto'
+              }}
+            >
+              The most advanced cannabis strain identification platform powered by AI
+            </Typography>
+          </Stack>
+
+          {/* Features Grid */}
+          <Grid container spacing={4}>
+            {features.map((feature, index) => (
+              <Grid item xs={12} sm={6} md={4} key={index}>
+                <Card
+                  className="animate-fade-in"
+                  sx={{
+                    height: '100%',
+                    background: 'rgba(44, 44, 44, 0.6)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(124, 179, 66, 0.2)',
+                    borderRadius: 3,
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      transform: 'translateY(-8px)',
+                      border: '1px solid rgba(124, 179, 66, 0.5)',
+                      boxShadow: '0 12px 40px rgba(124, 179, 66, 0.2)'
+                    }
+                  }}
+                >
+                  <CardContent sx={{ p: 4 }}>
+                    <Stack spacing={2} alignItems="center" textAlign="center">
+                      <Box
+                        sx={{
+                          width: 80,
+                          height: 80,
+                          borderRadius: '50%',
+                          background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.2) 0%, rgba(156, 204, 101, 0.1) 100%)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#9CCC65'
+                        }}
+                      >
+                        {feature.icon}
+                      </Box>
+                      <Typography
+                        variant="h6"
+                        sx={{
+                          fontWeight: 700,
+                          color: '#ffffff'
+                        }}
+                      >
+                        {feature.title}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: '#b0b0b0',
+                          lineHeight: 1.7
+                        }}
+                      >
+                        {feature.description}
+                      </Typography>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* Bottom CTA */}
+          <Stack
+            spacing={3}
+            alignItems="center"
+            sx={{
+              mt: 8,
+              p: 6,
+              borderRadius: 4,
+              background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.1) 0%, rgba(0, 0, 0, 0.3) 100%)',
+              border: '1px solid rgba(124, 179, 66, 0.3)'
+            }}
+          >
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: 700,
+                color: '#ffffff',
+                textAlign: 'center'
+              }}
+            >
+              Ready to identify your strain?
+            </Typography>
+            <Button
+              variant="contained"
+              size="large"
+              onClick={() => setShowScan(true)}
+              startIcon={<CameraAltIcon />}
+              sx={{
+                px: 8,
+                py: 2.5,
+                fontSize: '1.2rem',
+                fontWeight: 700,
+                borderRadius: '50px',
+                background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
+                boxShadow: '0 8px 30px rgba(124, 179, 66, 0.4)',
+                textTransform: 'none',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 12px 40px rgba(124, 179, 66, 0.6)',
+                  background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)'
+                }
+              }}
+            >
+              Start Your Free Scan Now
+            </Button>
+          </Stack>
+        </Stack>
+      </Container>
     </Box>
   );
 }
