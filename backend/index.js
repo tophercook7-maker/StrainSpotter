@@ -46,6 +46,7 @@ import messagesRoutes from './routes/messages.js';
 import profileGeneratorRoutes from './routes/profile-generator.js';
 import usersRoutes from './routes/users.js';
 import { matchStrainByVisuals } from './services/visualMatcher.js';
+import { analyzePlantHealth } from './services/plantHealthAnalyzer.js';
 import {
   consumeScanCredits,
   ensureMonthlyBundle,
@@ -701,16 +702,21 @@ app.post('/api/scans/:id/process', writeLimiter, async (req, res, next) => {
     console.log('[Vision Debug] Dominant colors:', result.imagePropertiesAnnotation?.dominantColors?.colors?.length || 0);
     console.log('[Vision Debug] Objects:', result.localizedObjectAnnotations?.length || 0);
 
+    // Analyze plant health
+    const plantHealth = analyzePlantHealth(result);
+    console.log('[Plant Health] Stage:', plantHealth.growthStage.stage, 'Health:', plantHealth.healthStatus.status);
+
     const { error: upErr } = await writeClient
       .from('scans')
       .update({ result, status: 'done', processed_at: new Date().toISOString() })
       .eq('id', id);
     if (upErr) return res.status(500).json({ error: upErr.message });
 
-    // Return debug info in response
-    res.json({ 
-      ok: true, 
+    // Return debug info and plant health analysis in response
+    res.json({
+      ok: true,
       result,
+      plantHealth,
       debug: {
         labelCount: result.labelAnnotations?.length || 0,
         topLabels: (result.labelAnnotations || []).slice(0, 10).map(x => ({ label: x.description, score: Math.round((x.score||0)*100) })),

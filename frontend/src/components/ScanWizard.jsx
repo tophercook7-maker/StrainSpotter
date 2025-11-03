@@ -14,6 +14,7 @@ export default function ScanWizard({ onBack }) {
   const [scanStatus, setScanStatus] = useState("");
   const [result, setResult] = useState(null);
   const [match, setMatch] = useState(null);
+  const [plantHealth, setPlantHealth] = useState(null);
   const [scanHistory, setScanHistory] = useState([]);
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
@@ -337,6 +338,7 @@ export default function ScanWizard({ onBack }) {
 
           const processData = await processResp.json();
           setResult(processData.result);
+          setPlantHealth(processData.plantHealth || null);
           setScanStatus("Matching strain...");
 
           const matchResp = await fetch(`${API_BASE}/api/visual-match`, {
@@ -860,6 +862,87 @@ export default function ScanWizard({ onBack }) {
               </Typography>
             )}
 
+            {/* Plant Health Analysis */}
+            {plantHealth && (
+              <Box sx={{
+                mb: 3,
+                p: 3,
+                bgcolor: 'rgba(0, 0, 0, 0.4)',
+                borderRadius: 3,
+                border: `2px solid ${plantHealth.healthStatus.color}`,
+                boxShadow: `0 0 20px ${plantHealth.healthStatus.color}40`
+              }}>
+                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  🌿 Plant Analysis
+                </Typography>
+
+                {/* Growth Stage */}
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: '#9CCC65', fontWeight: 700, mb: 0.5 }}>
+                    Growth Stage:
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#fff', fontSize: 18, fontWeight: 600 }}>
+                    {plantHealth.growthStage.icon} {plantHealth.growthStage.stage}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#b0b0b0', mt: 0.5 }}>
+                    {plantHealth.growthStage.description}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#808080' }}>
+                    Timeframe: {plantHealth.growthStage.timeframe}
+                  </Typography>
+                </Box>
+
+                {/* Health Status */}
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: '#9CCC65', fontWeight: 700, mb: 0.5 }}>
+                    Health Status:
+                  </Typography>
+                  <Chip
+                    label={plantHealth.healthStatus.status}
+                    sx={{
+                      bgcolor: `${plantHealth.healthStatus.color}30`,
+                      color: plantHealth.healthStatus.color,
+                      fontWeight: 700,
+                      border: `2px solid ${plantHealth.healthStatus.color}`,
+                      fontSize: 16,
+                      px: 2,
+                      py: 2.5
+                    }}
+                  />
+                  {plantHealth.healthStatus.issues.length > 0 && (
+                    <Box sx={{ mt: 1 }}>
+                      {plantHealth.healthStatus.issues.map((issue, idx) => (
+                        <Typography key={idx} variant="body2" sx={{ color: '#fff', mt: 0.5 }}>
+                          • {issue}
+                        </Typography>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+
+                {/* Recommendations */}
+                {plantHealth.recommendations && plantHealth.recommendations.length > 0 && (
+                  <Box>
+                    <Typography variant="body2" sx={{ color: '#9CCC65', fontWeight: 700, mb: 1 }}>
+                      Care Recommendations:
+                    </Typography>
+                    <Stack spacing={0.5}>
+                      {plantHealth.recommendations.map((rec, idx) => (
+                        <Typography key={idx} variant="body2" sx={{ color: '#fff', fontSize: 14 }}>
+                          {rec}
+                        </Typography>
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
+
+                {/* Confidence */}
+                <Typography variant="caption" sx={{ color: '#808080', mt: 2, display: 'block' }}>
+                  Analysis Confidence: {plantHealth.confidence}%
+                </Typography>
+              </Box>
+            )}
+
             {/* Effects */}
             {match.strain?.effects && match.strain.effects.length > 0 && (
               <Box sx={{ mb: 2 }}>
@@ -1173,6 +1256,70 @@ export default function ScanWizard({ onBack }) {
                 </Stack>
               </Box>
             )}
+
+            {/* Quick Action Buttons - Seeds & Dispensaries */}
+            <Box sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: 2,
+              mt: 3,
+              width: '100%',
+              justifyContent: 'center'
+            }}>
+              <Button
+                variant="contained"
+                size="large"
+                href={`/seeds?strain=${encodeURIComponent(match.strain?.slug || match.strain?.name)}`}
+                target="_blank"
+                sx={{
+                  flex: 1,
+                  maxWidth: { sm: 250 },
+                  py: 2,
+                  px: 4,
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                  borderRadius: '50px',
+                  background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
+                  boxShadow: '0 8px 30px rgba(124, 179, 66, 0.4)',
+                  textTransform: 'none',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 12px 40px rgba(124, 179, 66, 0.6)',
+                    background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)'
+                  }
+                }}
+              >
+                🌱 Buy Seeds
+              </Button>
+
+              <Button
+                variant="outlined"
+                size="large"
+                href={`/dispensaries?strain=${encodeURIComponent(match.strain?.slug || match.strain?.name)}`}
+                target="_blank"
+                sx={{
+                  flex: 1,
+                  maxWidth: { sm: 250 },
+                  py: 2,
+                  px: 4,
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                  borderRadius: '50px',
+                  border: '2px solid rgba(124, 179, 66, 0.5)',
+                  color: '#9CCC65',
+                  textTransform: 'none',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    border: '2px solid rgba(124, 179, 66, 0.8)',
+                    background: 'rgba(124, 179, 66, 0.1)',
+                    transform: 'translateY(-2px)'
+                  }
+                }}
+              >
+                🏪 Find Dispensaries
+              </Button>
+            </Box>
 
             {/* Action Buttons */}
             <Box sx={{
