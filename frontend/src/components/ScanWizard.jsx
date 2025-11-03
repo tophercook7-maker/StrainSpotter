@@ -4,16 +4,8 @@ import ErrorBoundary from "./ErrorBoundary";
 import Snackbar from '@mui/material/Snackbar';
 import { Container, Box, Button, Typography, Paper, CircularProgress, Tabs, Tab, Dialog, DialogTitle, DialogContent, Chip, Stack, TextField, IconButton, Alert, DialogActions, DialogContentText, Divider } from "@mui/material";
 import CloseIcon from '@mui/icons-material/Close';
-import { supabase } from '../supabaseClient';
-
-let API_BASE = "http://localhost:5181";
-try {
-  if (import.meta.env && import.meta.env.VITE_API_BASE) {
-    API_BASE = import.meta.env.VITE_API_BASE;
-  }
-} catch (e) {
-  console.warn('Could not load API_BASE from env:', e);
-}
+import { supabase, SUPABASE_ANON_KEY } from '../supabaseClient';
+import { API_BASE, FUNCTIONS_BASE } from '../config';
 
 export default function ScanWizard({ onBack }) {
   const fileInputRef = useRef(null);
@@ -50,6 +42,36 @@ export default function ScanWizard({ onBack }) {
     { credits: 50, price: '$17.99' },
     { credits: 100, price: '$29.99' }
   ];
+
+  const canUseEdgeUploads = typeof FUNCTIONS_BASE === 'string' && FUNCTIONS_BASE.length > 0 && FUNCTIONS_BASE !== `${API_BASE}/api`;
+
+  const uploadViaEdgeFunction = useCallback(async ({ base64, filename, contentType, userId }) => {
+    if (!canUseEdgeUploads || !base64) return null;
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (SUPABASE_ANON_KEY) {
+        headers.Authorization = `Bearer ${SUPABASE_ANON_KEY}`;
+        headers.apikey = SUPABASE_ANON_KEY;
+      }
+      const resp = await fetch(`${FUNCTIONS_BASE}/uploads`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ filename, base64, contentType, user_id: userId })
+      });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        console.warn('[ScanWizard] Edge upload failed:', resp.status, text);
+        return null;
+      }
+      const data = await resp.json();
+      if (data?.id) {
+        return data;
+      }
+    } catch (err) {
+      console.warn('[ScanWizard] Edge upload exception:', err);
+    }
+    return null;
+  }, [canUseEdgeUploads, FUNCTIONS_BASE]);
 
   // Track authentication state
   useEffect(() => {
@@ -213,32 +235,50 @@ export default function ScanWizard({ onBack }) {
         try {
           const base64 = reader.result.split(',')[1];
 
-          const uploadResp = await fetch(`${API_BASE}/api/uploads`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+          let uploadData = null;
+          if (canUseEdgeUploads) {
+            setScanStatus('Uploading image to Supabase...');
+            const edge = await uploadViaEdgeFunction({
+              base64,
               filename: file.name,
               contentType: file.type,
-              base64,
-              user_id: currentUser.id
-            })
-          });
-
-          if (uploadResp.status === 401) {
-            const message = await parseErrorResponse(uploadResp);
-            setAlertMsg(message);
-            setAlertOpen(true);
-            setShowMembershipDialog(true);
-            setScanStatus("Sign in required");
-            return;
+              userId: currentUser.id
+            });
+            if (edge?.id) {
+              uploadData = edge;
+            }
           }
 
-          if (!uploadResp.ok) {
-            const message = await parseErrorResponse(uploadResp);
-            throw new Error(message || "Upload failed");
+          if (!uploadData) {
+            setScanStatus('Uploading image to backend...');
+            const uploadResp = await fetch(`${API_BASE}/api/uploads`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                filename: file.name,
+                contentType: file.type,
+                base64,
+                user_id: currentUser.id
+              })
+            });
+
+            if (uploadResp.status === 401) {
+              const message = await parseErrorResponse(uploadResp);
+              setAlertMsg(message);
+              setAlertOpen(true);
+              setShowMembershipDialog(true);
+              setScanStatus("Sign in required");
+              return;
+            }
+
+            if (!uploadResp.ok) {
+              const message = await parseErrorResponse(uploadResp);
+              throw new Error(message || "Upload failed");
+            }
+
+            uploadData = await uploadResp.json();
           }
 
-          const uploadData = await uploadResp.json();
           const scanId = uploadData.id;
 
           setScanStatus("Processing scan...");

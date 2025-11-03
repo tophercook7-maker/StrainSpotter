@@ -22,9 +22,10 @@ import {
   Rating
 } from '@mui/material';
 import { CameraAlt, History, Close, CheckCircle } from '@mui/icons-material';
-import { API_BASE } from '../config';
+import { API_BASE, FUNCTIONS_BASE } from '../config';
 import CannabisLeafIcon from './CannabisLeafIcon';
-import { supabase } from '../supabaseClient';
+import { supabase, SUPABASE_ANON_KEY } from '../supabaseClient';
+import { useAuth } from '../hooks/useAuth';
 
 function Scanner({ onViewHistory, onBack }) {
   const [showGuide, setShowGuide] = useState(true);
@@ -39,7 +40,6 @@ function Scanner({ onViewHistory, onBack }) {
   const [showResult, setShowResult] = useState(false);
   const [showTips, setShowTips] = useState(false);
   const [lastScanId, setLastScanId] = useState(null);
-  const [currentUserId, setCurrentUserId] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [avgRating, setAvgRating] = useState(null);
   const [myRating, setMyRating] = useState(0);
@@ -47,20 +47,8 @@ function Scanner({ onViewHistory, onBack }) {
   const [submittingReview, setSubmittingReview] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Capture current user id if authenticated (once)
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const session = await supabase?.auth.getSession();
-        const uid = session?.data?.session?.user?.id || null;
-        if (mounted && uid) setCurrentUserId(uid);
-      } catch (e) {
-        console.debug('[Scanner] getSession failed', e);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
+  const { user: authUser } = useAuth();
+  const currentUserId = authUser?.id || null;
 
   // Session helper used for anon uploads when no auth session exists
   const getSessionId = () => {
@@ -120,49 +108,112 @@ function Scanner({ onViewHistory, onBack }) {
     }
   };
 
-  // Helper: compress and convert image file to base64
-  const fileToBase64Resized = (file, maxDim = 1600, quality = 0.85) =>
-    new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let { width, height } = img;
-        if (width > height) {
-          if (width > maxDim) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          }
-        } else {
-          if (height > maxDim) {
+  const MAX_UPLOAD_BYTES = 3.3 * 1024 * 1024; // legacy fallback limit for JSON uploads
+  const canUseEdgeUploads = typeof FUNCTIONS_BASE === 'string' && FUNCTIONS_BASE.length > 0 && FUNCTIONS_BASE !== `${API_BASE}/api`;
+
+  const uploadViaEdgeFunction = async ({ base64, filename, contentType }) => {
+    if (!canUseEdgeUploads || !base64) return null;
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (SUPABASE_ANON_KEY) {
+        headers.Authorization = `Bearer ${SUPABASE_ANON_KEY}`;
+        headers.apikey = SUPABASE_ANON_KEY;
+      }
+      const resp = await fetch(`${FUNCTIONS_BASE}/uploads`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ filename, base64, contentType, user_id: currentUserId })
+      });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        console.warn('[Scanner] Edge upload failed:', resp.status, text);
+        return null;
+      }
+      const data = await resp.json();
+      if (data?.id) {
+        return data;
+      }
+    } catch (err) {
+      console.warn('[Scanner] Edge upload exception:', err);
+    }
+    return null;
+  };
+
+  const compressImageToBlob = async (file, targetBytes = Infinity, initialMaxDim = 2048, initialQuality = 0.92) => {
+    let workingFile = file;
+    let maxDim = initialMaxDim;
+    let quality = initialQuality;
+    let lastBlob = null;
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      lastBlob = await new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(workingFile);
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let { width, height } = img;
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            }
+          } else if (height > maxDim) {
             width = Math.round((width * maxDim) / height);
             height = maxDim;
           }
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob(
-          (blob) => {
-            URL.revokeObjectURL(url);
-            const reader = new FileReader();
-            reader.onload = () => {
-              const base64 = String(reader.result).split(',')[1];
-              resolve(base64);
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob || file);
-          },
-          'image/jpeg',
-          quality
-        );
-      };
-      img.onerror = (e) => {
-        URL.revokeObjectURL(url);
-        reject(e);
-      };
-      img.src = url;
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              URL.revokeObjectURL(url);
+              if (blob) {
+                resolve(blob);
+              } else {
+                reject(new Error('Failed to compress image'));
+              }
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+        img.onerror = (e) => {
+          URL.revokeObjectURL(url);
+          reject(e);
+        };
+        img.src = url;
+      });
+
+      const sizeMb = (lastBlob.size / (1024 * 1024)).toFixed(2);
+      console.log(
+        `[Scanner] Compression attempt ${attempt + 1}: ${sizeMb} MB @ q=${quality.toFixed(2)} maxDim=${maxDim}`
+      );
+
+      if (lastBlob.size <= targetBytes) {
+        break;
+      }
+
+      if (quality > 0.5) {
+        quality = Math.max(0.5, quality - 0.1);
+      } else {
+        maxDim = Math.max(720, Math.floor(maxDim * 0.8));
+      }
+
+      workingFile = new File([lastBlob], workingFile.name || file.name || 'upload.jpg', {
+        type: 'image/jpeg'
+      });
+    }
+
+    return lastBlob ?? file;
+  };
+
+  const blobToBase64 = async (blob) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
     });
 
   const parseErrorResponse = async (res) => {
@@ -187,6 +238,12 @@ function Scanner({ onViewHistory, onBack }) {
       return;
     }
 
+    if (!currentUserId) {
+      setError('Sign in to use AI scans. Join or log in to continue.');
+      setShowResult(false);
+      return;
+    }
+
     setLoading(true);
     setLoadingStatus('Preparing images...');
     setError(null);
@@ -194,24 +251,133 @@ function Scanner({ onViewHistory, onBack }) {
     try {
       // Helper to process a single image (upload + Vision)
       const processOne = async (file, index) => {
-        setLoadingStatus(`Uploading image ${index + 1} of ${images.length}...`);
-        const base64 = await fileToBase64Resized(file, 1600, 0.85);
-        console.log('[Scanner] Uploading to:', `${API_BASE}/api/uploads`);
-          const sessionId = currentUserId || getSessionId();
-          const uploadResponse = await fetch(`${API_BASE}/api/uploads`, {
+        setLoadingStatus(`Preparing image ${index + 1} of ${images.length}...`);
+        const compressedBlob = await compressImageToBlob(file, 12 * 1024 * 1024);
+        const sessionId = currentUserId || getSessionId();
+        const safeFileName = String(file.name || 'upload.jpg');
+
+        let useLegacyUploader = false;
+        let signedData = null;
+
+        if (supabase && typeof supabase.storage?.from === 'function') {
+          const preflight = await fetch(`${API_BASE}/api/uploads/signed-url`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId },
             credentials: 'include',
-            body: JSON.stringify({ filename: file.name, contentType: file.type, base64, user_id: currentUserId || null })
+            body: JSON.stringify({
+              filename: safeFileName,
+              contentType: compressedBlob.type || 'image/jpeg',
+              user_id: currentUserId || null
+            })
           });
-        if (!uploadResponse.ok) {
-          const msg = await parseErrorResponse(uploadResponse);
-          console.error('[Scanner] Upload failed:', msg);
-          throw new Error(`Upload failed: ${msg}`);
+
+          if (preflight.status === 501) {
+            useLegacyUploader = true;
+          } else if (!preflight.ok) {
+            const msg = await parseErrorResponse(preflight);
+            throw new Error(`Upload prep failed: ${msg}`);
+          } else {
+            signedData = await preflight.json();
+            if (!signedData?.bucket || !signedData?.path || !signedData?.token) {
+              console.warn('[Scanner] Signed upload data incomplete, falling back to legacy uploader');
+              useLegacyUploader = true;
+            }
+          }
+        } else {
+          useLegacyUploader = true;
         }
-        const uploadData = await uploadResponse.json();
-        const scanId = uploadData.id;
-        console.log('[Scanner] Uploaded, scan ID:', scanId);
+
+        let scanId = null;
+
+        if (!useLegacyUploader && signedData) {
+          setLoadingStatus(`Uploading image ${index + 1} of ${images.length}...`);
+          const uploadResult = await supabase.storage
+            .from(signedData.bucket)
+            .uploadToSignedUrl(signedData.path, signedData.token, compressedBlob, {
+              contentType: compressedBlob.type || 'image/jpeg'
+            });
+          if (uploadResult.error) {
+            console.error('[Scanner] Signed upload failed:', uploadResult.error);
+            throw new Error(`Cloud upload failed: ${uploadResult.error.message}`);
+          }
+
+          const finalizeResponse = await fetch(`${API_BASE}/api/uploads/complete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId },
+            credentials: 'include',
+            body: JSON.stringify({
+              path: signedData.path,
+              bucket: signedData.bucket,
+              user_id: currentUserId || null
+            })
+          });
+          if (!finalizeResponse.ok) {
+            const msg = await parseErrorResponse(finalizeResponse);
+            throw new Error(`Upload finalize failed: ${msg}`);
+          }
+          const finalizeData = await finalizeResponse.json();
+          scanId = finalizeData.id;
+          console.log('[Scanner] Signed upload complete, scan ID:', scanId);
+        } else {
+          let legacyBlob = compressedBlob;
+          let approxBytes = legacyBlob.size * (4 / 3); // rough base64 expansion estimate
+          let tightenAttempts = 0;
+
+          while (approxBytes > MAX_UPLOAD_BYTES && tightenAttempts < 6) {
+            legacyBlob = await compressImageToBlob(
+              new File([legacyBlob], safeFileName, { type: 'image/jpeg' }),
+              MAX_UPLOAD_BYTES * 0.55,
+              Math.max(640, Math.floor(1600 / (tightenAttempts + 1))),
+              Math.max(0.45, 0.85 - tightenAttempts * 0.1)
+            );
+            approxBytes = legacyBlob.size * (4 / 3);
+            tightenAttempts += 1;
+          }
+
+          if (approxBytes > MAX_UPLOAD_BYTES) {
+            throw new Error(
+              'Image is still too large after automatic compression. Please retake the photo a little closer so we can process it.'
+            );
+          }
+
+          const legacyBase64 = await blobToBase64(legacyBlob);
+
+          let edgeResult = null;
+          if (canUseEdgeUploads) {
+            setLoadingStatus(`Uploading image ${index + 1} of ${images.length} to Supabase...`);
+            edgeResult = await uploadViaEdgeFunction({
+              base64: legacyBase64,
+              filename: safeFileName,
+              contentType: legacyBlob.type || file.type || 'image/jpeg'
+            });
+          }
+
+          if (edgeResult?.id) {
+            scanId = edgeResult.id;
+            console.log('[Scanner] Uploaded via Supabase Edge function, scan ID:', scanId);
+          } else {
+            setLoadingStatus(`Uploading image ${index + 1} of ${images.length}...`);
+            const uploadResponse = await fetch(`${API_BASE}/api/uploads`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId },
+              credentials: 'include',
+              body: JSON.stringify({
+                filename: safeFileName,
+                contentType: legacyBlob.type || file.type || 'image/jpeg',
+                base64: legacyBase64,
+                user_id: currentUserId || null
+              })
+            });
+            if (!uploadResponse.ok) {
+              const msg = await parseErrorResponse(uploadResponse);
+              console.error('[Scanner] Upload failed:', msg);
+              throw new Error(`Upload failed: ${msg}`);
+            }
+            const uploadData = await uploadResponse.json();
+            scanId = uploadData.id;
+            console.log('[Scanner] Uploaded via legacy path (compressed), scan ID:', scanId);
+          }
+        }
 
         setLoadingStatus(`Analyzing image ${index + 1} with AI (this may take 30-60 seconds)...`);
         
@@ -235,7 +401,11 @@ function Scanner({ onViewHistory, onBack }) {
           if (processResponse.ok) {
             const processData = await processResponse.json();
             console.log('[Scanner] Process succeeded:', processData);
-            return processData.result;
+            const payload = processData?.result ?? processData ?? {};
+            if (payload && !payload.id) {
+              payload.id = scanId;
+            }
+            return payload;
           } else {
             const errText = await processResponse.text();
             console.error('[Scanner] Process failed:', errText);
@@ -597,6 +767,12 @@ function Scanner({ onViewHistory, onBack }) {
           </CardContent>
         </Card>
 
+        {!currentUserId && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            Sign in to use AI scans. Uploads require an account so we can track your starter credits.
+          </Alert>
+        )}
+
         {error && (
           <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
             {error}
@@ -713,7 +889,7 @@ function Scanner({ onViewHistory, onBack }) {
                 size="large"
                 fullWidth
                 onClick={handleScan}
-                disabled={loading}
+                disabled={loading || !currentUserId}
                 sx={{ 
                   py: 3,
                   fontSize: '1.1rem',

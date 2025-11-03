@@ -19,3 +19,5 @@ export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
 export function isAuthConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 }
+
+export { SUPABASE_URL, SUPABASE_ANON_KEY };
