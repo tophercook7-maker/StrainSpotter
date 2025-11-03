@@ -11,8 +11,7 @@ import StarIcon from '@mui/icons-material/Star';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import PaymentIcon from '@mui/icons-material/Payment';
 import VerifiedIcon from '@mui/icons-material/Verified';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5181';
+import { API_BASE } from '../config';
 
 export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
   const [vendors, setVendors] = useState([]);

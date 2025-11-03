@@ -38,7 +38,7 @@ async function checkDatabase() {
   console.log('1️⃣ Checking profiles table for grower columns...');
   const { data: profiles, error: profileError } = await supabase
     .from('profiles')
-    .select('user_id, username, is_grower, grower_farm_name, grower_experience_years')
+    .select('id, display_name, is_grower, grower_farm_name, grower_experience_years')
     .limit(1);
   
   if (profileError) {
@@ -105,7 +105,7 @@ async function checkDatabase() {
   console.log('5️⃣ Checking all user profiles...');
   const { data: allProfiles, error: allError } = await supabase
     .from('profiles')
-    .select('user_id, email, username, is_grower, grower_farm_name, grower_listed_in_directory')
+    .select('id, display_name, is_grower, grower_farm_name, grower_listed_in_directory, scan_credits')
     .order('created_at', { ascending: false });
   
   if (allError) {
@@ -115,12 +115,12 @@ async function checkDatabase() {
     console.log('✅ Found', allProfiles.length, 'user profile(s):\n');
     allProfiles.forEach((p, i) => {
       console.log('   User', i + 1 + ':');
-      console.log('      ID:', p.user_id);
-      console.log('      Email:', p.email || 'N/A');
-      console.log('      Username:', p.username || '❌ NOT SET');
+      console.log('      ID:', p.id);
+      console.log('      Display Name:', p.display_name || '❌ NOT SET');
       console.log('      Is Grower:', p.is_grower || false);
       console.log('      Farm Name:', p.grower_farm_name || 'N/A');
       console.log('      In Directory:', p.grower_listed_in_directory || false);
+      console.log('      Scan Credits:', p.scan_credits || 0);
       console.log('');
     });
   }

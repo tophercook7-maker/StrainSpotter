@@ -43,3 +43,4 @@ pm2/*.pid
 .idea
 *.iml
 GOOGLE_VISION_JSON_FOR_VERCEL.txt
+.vercel

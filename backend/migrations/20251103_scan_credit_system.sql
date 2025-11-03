@@ -44,7 +44,7 @@ BEGIN
 
   UPDATE profiles
   SET scan_credits = COALESCE(scan_credits, 0) + p_amount
-  WHERE user_id = p_user_id;
+  WHERE id = p_user_id;
 
   INSERT INTO scan_credit_transactions(user_id, amount, reason, metadata)
   VALUES (p_user_id, p_amount, p_reason, p_metadata);
@@ -67,7 +67,7 @@ BEGIN
 
   UPDATE profiles
   SET scan_credits = COALESCE(scan_credits, 0) - p_amount
-  WHERE user_id = p_user_id AND COALESCE(scan_credits, 0) >= p_amount
+  WHERE id = p_user_id AND COALESCE(scan_credits, 0) >= p_amount
   RETURNING TRUE INTO updated;
 
   IF updated THEN

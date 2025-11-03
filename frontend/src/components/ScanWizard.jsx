@@ -44,7 +44,7 @@ export default function ScanWizard({ onBack }) {
   ];
 
   const membershipTier = (currentUser?.user_metadata?.membership || currentUser?.user_metadata?.tier || '').toString().toLowerCase();
-  const metadataMembershipActive = membershipTier === 'club' || membershipTier === 'full-access' || membershipTier === 'pro';
+  const metadataMembershipActive = ['club', 'full-access', 'pro', 'owner', 'admin', 'garden', 'member'].some((token) => membershipTier.includes(token));
 
   const canUseEdgeUploads = typeof FUNCTIONS_BASE === 'string' && FUNCTIONS_BASE.length > 0 && FUNCTIONS_BASE !== `${API_BASE}/api`;
 

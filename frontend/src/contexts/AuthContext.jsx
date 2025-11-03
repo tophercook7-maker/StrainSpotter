@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { AuthContext } from './AuthContextValue.js';
+import { API_BASE } from '../config.js';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -32,7 +33,7 @@ export function AuthProvider({ children }) {
         // Ensure user record exists in public.users table when signed in
         if (session?.user?.id && (event === 'SIGNED_IN' || event === 'USER_UPDATED')) {
           try {
-            await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:5181'}/api/users/ensure`, {
+            await fetch(`${API_BASE}/api/users/ensure`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 

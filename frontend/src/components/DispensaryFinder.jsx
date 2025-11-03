@@ -11,8 +11,7 @@ import DirectionsIcon from '@mui/icons-material/Directions';
 import PhoneIcon from '@mui/icons-material/Phone';
 import LanguageIcon from '@mui/icons-material/Language';
 import StarIcon from '@mui/icons-material/Star';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5181';
+import { API_BASE } from '../config';
 
 export default function DispensaryFinder({ onBack, strainSlug }) {
   const [dispensaries, setDispensaries] = useState([]);

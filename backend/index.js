@@ -6,7 +6,12 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { supabase } from './supabaseClient.js';
-import { ensureBucketExists, supabaseAdmin } from './supabaseAdmin.js';
+import {
+  ensureBucketExists,
+  supabaseAdmin,
+  supabaseServiceRoleKey,
+  supabaseUrl
+} from './supabaseAdmin.js';
 import serverless from 'serverless-http';
 import sharp from 'sharp';
 import strainRoutes from './routes/strains.js';
@@ -79,7 +84,54 @@ try {
 }
 
 const app = express();
+app.set('trust proxy', 1); // trust Vercel/Edge proxies so rate limiting sees the real IP
 const PORT = process.env.PORT || 5181;
+const STORAGE_BASE_URL = supabaseUrl ? new URL('/storage/v1', supabaseUrl).toString().replace(/\/$/, '') : null;
+
+async function generateSignedUploadUrl(bucket, path, { upsert = false } = {}) {
+  const cleanPath = String(path || '').replace(/^\/+/, '');
+  if (!cleanPath) throw new Error('upload path required');
+
+  const storageClient = supabaseAdmin?.storage?.from(bucket);
+  if (storageClient && typeof storageClient.createSignedUploadUrl === 'function') {
+    const { data, error } = await storageClient.createSignedUploadUrl(cleanPath, { upsert });
+    if (!error && data?.signedUrl && data?.token) {
+      return data;
+    }
+    if (error) {
+      console.warn('[uploads] createSignedUploadUrl via SDK failed:', error.message);
+    }
+  }
+
+  if (!supabaseServiceRoleKey || !STORAGE_BASE_URL) {
+    throw new Error('Service role key unavailable for signed upload');
+  }
+
+  const fullPath = `${bucket}/${cleanPath}`;
+  const encoded = fullPath.split('/').map(encodeURIComponent).join('/');
+  const endpoint = `${STORAGE_BASE_URL}/object/upload/sign/${encoded}`;
+  const headers = {
+    Authorization: `Bearer ${supabaseServiceRoleKey}`,
+    'Content-Type': 'application/json'
+  };
+  if (upsert) headers['x-upsert'] = 'true';
+
+  const resp = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({}) });
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Signed upload API failed: ${resp.status} ${errText}`);
+  }
+  const payload = await resp.json();
+  if (!payload?.url) {
+    throw new Error('Signed upload response missing URL');
+  }
+  const resolved = new URL(payload.url, STORAGE_BASE_URL);
+  const token = resolved.searchParams.get('token');
+  if (!token) {
+    throw new Error('Signed upload response missing token');
+  }
+  return { signedUrl: resolved.toString(), token, path: cleanPath };
+}
 
 // Security headers
 app.use(helmet({
@@ -317,6 +369,72 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
 
     const scan = Array.isArray(insert.data) ? insert.data[0] : insert.data;
     res.json({ id: scan?.id || null, image_url: publicUrl });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// Request a signed upload URL so the client can stream large files directly to Supabase Storage
+app.post('/api/uploads/signed-url', writeLimiter, async (req, res) => {
+  try {
+    const { filename, contentType, user_id } = req.body || {};
+    if (!filename || !user_id) {
+      return res.status(400).json({ error: 'filename and user_id are required' });
+    }
+
+    await ensureStarterBundle(user_id);
+    await ensureMonthlyBundle(user_id);
+
+    const uploadOwnerId = String(user_id || req.headers['x-session-id'] || req.ip || 'anon');
+    const uploadSafeOwner = uploadOwnerId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'anon';
+    const rawName = String(filename).split('/').pop();
+    const normalizedSafeName = rawName
+      .replace(/[^A-Za-z0-9._-]+/g, '_')
+      .replace(/^[_\.\-]+/, '')
+      .slice(0, 100) || `file_${Date.now()}.jpg`;
+    const bucket = 'scans';
+    const path = `users/${uploadSafeOwner}/${Date.now()}-${normalizedSafeName}`;
+
+    const signedPayload = await generateSignedUploadUrl(bucket, path, { upsert: false });
+    const { data: publicData } = (supabaseAdmin ?? supabase).storage.from(bucket).getPublicUrl(path);
+
+    res.json({
+      bucket,
+      path,
+      token: signedPayload.token,
+      signedUrl: signedPayload.signedUrl,
+      publicUrl: publicData?.publicUrl || null,
+      contentType: contentType || 'image/jpeg'
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// Finalize signed upload: create scan record after the client uploads to storage
+app.post('/api/uploads/complete', writeLimiter, async (req, res) => {
+  try {
+    const { path, user_id, bucket } = req.body || {};
+    if (!path || !user_id) {
+      return res.status(400).json({ error: 'path and user_id are required' });
+    }
+
+    const storageBucket = bucket || 'scans';
+    const storageClient = supabaseAdmin ?? supabase;
+    const { data: publicData } = storageClient.storage.from(storageBucket).getPublicUrl(path);
+    const publicUrl = publicData?.publicUrl || null;
+
+    const insert = await storageClient
+      .from('scans')
+      .insert({ image_url: publicUrl, image_key: path, status: 'pending', user_id })
+      .select()
+      .single();
+
+    if (insert.error) {
+      return res.status(500).json({ error: insert.error.message });
+    }
+
+    res.json({ id: insert.data.id, image_url: publicUrl, key: path });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
