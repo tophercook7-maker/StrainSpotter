@@ -748,27 +748,41 @@ app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
       return res.status(400).json({ error: 'visionResult required' });
     }
 
-    // Load strain library (try primary path, fallback to enhanced or latest backup)
+    // Load strain library (try JSON file first, fallback to Supabase for Vercel)
     let strains = [];
     try {
       const dataDir = new URL('./data/', import.meta.url).pathname;
       const primary = path.join(dataDir, 'strain_library.json');
       const enhanced = path.join(dataDir, 'strain_library_enhanced.json');
+
+      // Try to load from filesystem first (local development)
       if (fs.existsSync(primary)) {
         strains = JSON.parse(fs.readFileSync(primary, 'utf8'));
+        console.log(`[VisualMatch] Loaded ${strains.length} strains from primary JSON`);
       } else if (fs.existsSync(enhanced)) {
         strains = JSON.parse(fs.readFileSync(enhanced, 'utf8'));
+        console.log(`[VisualMatch] Loaded ${strains.length} strains from enhanced JSON`);
       } else {
-        const files = fs.readdirSync(dataDir).filter(f => /^strain_library\..*\.bak\.json$/.test(f)).sort().reverse();
-        if (files.length) {
-          strains = JSON.parse(fs.readFileSync(path.join(dataDir, files[0]), 'utf8'));
-        } else {
-          throw new Error('strain library not found');
+        // Fallback to Supabase (production/Vercel)
+        console.log('[VisualMatch] JSON files not found, loading from Supabase...');
+        const { data: dbStrains, error: dbError } = await supabase
+          .from('strains')
+          .select('*');
+
+        if (dbError) {
+          throw new Error(`Supabase error: ${dbError.message}`);
         }
+
+        strains = dbStrains || [];
+        console.log(`[VisualMatch] Loaded ${strains.length} strains from Supabase`);
+      }
+
+      if (!strains || strains.length === 0) {
+        throw new Error('No strains loaded from any source');
       }
     } catch (e) {
       console.error('[VisualMatch] Could not load strain library:', e);
-      return res.status(500).json({ error: 'Strain library unavailable' });
+      return res.status(500).json({ error: 'Strain library unavailable', details: e.message });
     }
 
     // Perform visual matching

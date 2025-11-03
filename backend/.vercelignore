@@ -1,4 +1,6 @@
 # Exclude heavy data files from serverless bundle
+# Strains are loaded from Supabase in production
+data/strain_library.json
 data/strain_library_enhanced.json
 data/strain_library.*.bak.json
 data/sources/
