@@ -553,7 +553,6 @@ export default function ScanWizard({ onBack }) {
           <Box sx={{ position: 'absolute', top: 24, left: 24, zIndex: 100, display: 'flex', gap: 2 }}>
             <Button
               variant="contained"
-              color="primary"
               onClick={() => onBack ? onBack() : window.history.back()}
               sx={{
                 fontWeight: 700,
@@ -562,9 +561,10 @@ export default function ScanWizard({ onBack }) {
                 py: 1,
                 fontSize: 18,
                 boxShadow: 'none',
-                bgcolor: '#1976d2',
+                bgcolor: '#7CB342',
                 color: '#fff',
-                textTransform: 'none'
+                textTransform: 'none',
+                '&:hover': { bgcolor: '#689f38' }
               }}
             >
               ← Back to Garden
@@ -599,11 +599,11 @@ export default function ScanWizard({ onBack }) {
                 py: 1,
                 fontSize: 18,
                 boxShadow: 'none',
-                bgcolor: '#d32f2f',
+                bgcolor: '#7CB342',
                 color: '#fff',
                 textTransform: 'none',
                 '&:hover': {
-                  bgcolor: '#b71c1c'
+                  bgcolor: '#689f38'
                 }
               }}
             >
@@ -1494,7 +1494,23 @@ export default function ScanWizard({ onBack }) {
                 <Typography variant="subtitle2" color="#fff" gutterBottom>Seed Vendors:</Typography>
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                   {match.strain.seedVendors.map((vendor, idx) => (
-                    <Chip key={idx} label={vendor.name} size="small" color="info" variant="outlined" component="a" href={vendor.url} clickable />
+                    <Chip
+                      key={idx}
+                      label={vendor.name}
+                      size="small"
+                      variant="outlined"
+                      component="a"
+                      href={vendor.url}
+                      clickable
+                      sx={{
+                        borderColor: '#7CB342',
+                        color: '#9CCC65',
+                        '&:hover': {
+                          borderColor: '#9CCC65',
+                          bgcolor: 'rgba(124, 179, 66, 0.1)'
+                        }
+                      }}
+                    />
                   ))}
                 </Stack>
               </Box>
