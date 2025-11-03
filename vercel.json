@@ -1,5 +1,4 @@
 {
   "buildCommand": "cd frontend && npm ci && npm run build && rm -rf ../dist && cp -R dist ../dist",
-  "outputDirectory": "dist",
-  "ignoreCommand": "git diff --quiet @~1"
+  "outputDirectory": "dist"
 }
