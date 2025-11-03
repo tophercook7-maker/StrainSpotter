@@ -163,16 +163,23 @@ const ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS || DEFAULT_ORIGINS.join(',
 
 function isAllowedOrigin(origin) {
   if (!origin) return false;
-  if (ALLOW_ORIGINS.includes(origin)) return true;
+
+  // Check exact match first
+  if (ALLOW_ORIGINS.includes(origin)) {
+    console.log('[CORS] Allowed (exact match):', origin);
+    return true;
+  }
+
   // Allow any localhost or 127.0.0.1 with any port explicitly for dev previews
   // This permits local dev machines to call the backend regardless of port drift
   try {
     const u = new URL(origin);
     if ((u.hostname === 'localhost' || u.hostname === '127.0.0.1')) {
-      // Accept any localhost/127.0.0.1 port (no port restriction for maximum dev flexibility)
+      console.log('[CORS] Allowed (localhost):', origin);
       return true;
     }
   } catch {}
+
   // Allow Vercel preview/prod frontend domains for this project
   try {
     const { host } = new URL(origin);
@@ -182,18 +189,28 @@ function isAllowedOrigin(origin) {
         host.includes('strain-spotter') ||
         host.includes('strainspotter-frontend') ||
         host.includes('frontend-') ||
-        host.includes('tophercook7-makers-projects')
+        host.includes('tophercook7-maker')
       )
     ) {
+      console.log('[CORS] Allowed (Vercel wildcard):', origin);
       return true;
     }
   } catch {}
+
+  console.log('[CORS] Rejected:', origin);
   return false;
 }
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (isAllowedOrigin(origin)) {
+  const allowed = isAllowedOrigin(origin);
+
+  // Debug logging for CORS issues
+  if (origin && !allowed) {
+    console.log('[CORS] Rejected origin:', origin);
+  }
+
+  if (allowed) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
