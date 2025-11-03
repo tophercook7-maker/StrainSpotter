@@ -608,30 +608,33 @@ app.post('/api/scans/:id/process', writeLimiter, async (req, res, next) => {
     }
 
     const scanOwnerId = scan.user_id;
-    if (!scanOwnerId) {
-      return res.status(400).json({ error: 'Scan is not associated with a user. Please upload again while signed in.' });
-    }
 
-    await ensureStarterBundle(scanOwnerId);
+    // Only enforce credits if user is signed in
+    if (scanOwnerId) {
+      await ensureStarterBundle(scanOwnerId);
 
-    const creditResult = await consumeScanCredits(scanOwnerId, 1, { scan_id: id, stage: 'process' });
-    if (!creditResult.success) {
-      if (creditResult.code === 'STARTER_WINDOW_EXPIRED') {
-        return res.status(403).json({
-          error: 'Your starter access window has ended. Join the Garden membership or redeem a top-up pack within 3 days to keep scanning.',
-          code: 'STARTER_WINDOW_EXPIRED',
+      const creditResult = await consumeScanCredits(scanOwnerId, 1, { scan_id: id, stage: 'process' });
+      if (!creditResult.success) {
+        if (creditResult.code === 'STARTER_WINDOW_EXPIRED') {
+          return res.status(403).json({
+            error: 'Your starter access window has ended. Join the Garden membership or redeem a top-up pack within 3 days to keep scanning.',
+            code: 'STARTER_WINDOW_EXPIRED',
+            accessExpiresAt: creditResult.accessExpiresAt || null
+          });
+        }
+
+        const status = creditResult.code === 'INSUFFICIENT_SCAN_CREDITS' ? 402 : 400;
+        return res.status(status).json({
+          error: 'No scan credits remaining. Join the Garden or purchase a top-up pack to continue scanning.',
+          code: creditResult.code || 'SCAN_CREDIT_ERROR',
           accessExpiresAt: creditResult.accessExpiresAt || null
         });
       }
-
-      const status = creditResult.code === 'INSUFFICIENT_SCAN_CREDITS' ? 402 : 400;
-      return res.status(status).json({
-        error: 'No scan credits remaining. Join the Garden or purchase a top-up pack to continue scanning.',
-        code: creditResult.code || 'SCAN_CREDIT_ERROR',
-        accessExpiresAt: creditResult.accessExpiresAt || null
-      });
+      creditConsumed = true;
+    } else {
+      // Guest scan - no credit enforcement
+      console.log('[scan/process] Processing guest scan (no user_id)');
     }
-    creditConsumed = true;
 
     await writeClient.from('scans').update({ status: 'processing' }).eq('id', id);
 
