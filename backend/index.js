@@ -296,13 +296,16 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
       return res.status(400).json({ error: 'unsupported contentType' });
     }
 
-    if (!user_id) {
-      return res.status(401).json({ error: 'Sign in required to upload scans. Please log in to continue.' });
-    }
+    // Allow guest uploads - removed authentication requirement
+    // if (!user_id) {
+    //   return res.status(401).json({ error: 'Sign in required to upload scans. Please log in to continue.' });
+    // }
 
-    // Ensure starter credits exist and membership bundle is aligned before any processing
-    await ensureStarterBundle(user_id);
-    await ensureMonthlyBundle(user_id);
+    // Ensure starter credits exist and membership bundle is aligned before any processing (only if user is logged in)
+    if (user_id) {
+      await ensureStarterBundle(user_id);
+      await ensureMonthlyBundle(user_id);
+    }
 
     let buffer = Buffer.from(base64, 'base64');
 
