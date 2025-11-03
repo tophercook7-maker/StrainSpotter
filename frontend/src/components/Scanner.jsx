@@ -45,6 +45,11 @@ function Scanner({ onViewHistory, onBack }) {
   const [myRating, setMyRating] = useState(0);
   const [myComment, setMyComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [vendors, setVendors] = useState([]);
+  const [dispensaries, setDispensaries] = useState([]);
+  const [loadingVendors, setLoadingVendors] = useState(false);
+  const [loadingDispensaries, setLoadingDispensaries] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
   const fileInputRef = useRef(null);
 
   const { user: authUser } = useAuth();
@@ -58,6 +63,74 @@ function Scanner({ onViewHistory, onBack }) {
       localStorage.setItem('ss-session-id', sid);
     }
     return sid;
+  };
+
+  // Get user's location for dispensary search
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.log('[Scanner] Geolocation not available:', error.message);
+        }
+      );
+    }
+  }, []);
+
+  // Fetch vendors for a strain
+  const fetchVendorsForStrain = async (strainName) => {
+    setLoadingVendors(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/seeds-live?strain=${encodeURIComponent(strainName)}&limit=20`);
+      const data = await response.json();
+
+      // Transform results to match expected format
+      const transformedVendors = (data.results || []).map(vendor => ({
+        name: vendor.name,
+        website: vendor.website,
+        country: vendor.country,
+        rating: vendor.rating || 0,
+        verified: vendor.verified || false,
+        price: vendor.price || 'N/A',
+        seed_count: vendor.seed_count || 10,
+        in_stock: vendor.in_stock !== false
+      }));
+
+      setVendors(transformedVendors);
+    } catch (error) {
+      console.error('[Scanner] Error fetching vendors:', error);
+      setVendors([]);
+    } finally {
+      setLoadingVendors(false);
+    }
+  };
+
+  // Fetch dispensaries near user
+  const fetchDispensariesForStrain = async () => {
+    if (!userLocation) {
+      setDispensaries([]);
+      return;
+    }
+
+    setLoadingDispensaries(true);
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/dispensaries-live?lat=${userLocation.lat}&lng=${userLocation.lng}&radius=100&limit=20`
+      );
+      const data = await response.json();
+
+      setDispensaries(data.results || []);
+    } catch (error) {
+      console.error('[Scanner] Error fetching dispensaries:', error);
+      setDispensaries([]);
+    } finally {
+      setLoadingDispensaries(false);
+    }
   };
 
   const handleImageCapture = (event) => {
@@ -451,6 +524,13 @@ function Scanner({ onViewHistory, onBack }) {
         } else {
           setSuggestedStrains([]);
         }
+
+        // Fetch vendors and dispensaries for the matched strain
+        if (matchResult.name) {
+          fetchVendorsForStrain(matchResult.name);
+          fetchDispensariesForStrain();
+        }
+
         // Save the selected match to the scan record
         if (lastId && matchResult.slug) {
           try {
@@ -520,6 +600,8 @@ function Scanner({ onViewHistory, onBack }) {
     setShowResult(false);
     setError(null);
     setLastScanId(null);
+    setVendors([]);
+    setDispensaries([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -597,6 +679,13 @@ function Scanner({ onViewHistory, onBack }) {
         setMatchedStrain(strain);
         setSuggestedStrains([]);
         setError(null);
+
+        // Fetch vendors and dispensaries for the selected strain
+        if (strain.name) {
+          fetchVendorsForStrain(strain.name);
+          fetchDispensariesForStrain();
+        }
+
         // Save the selected suggestion to the scan
         if (lastScanId && slug) {
           try {
@@ -1256,11 +1345,99 @@ function Scanner({ onViewHistory, onBack }) {
                 ))}
               </Box>
 
+              {/* Seed Vendors Section */}
+              <Divider sx={{ my: 2, bgcolor: 'rgba(76, 175, 80, 0.3)' }} />
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="h6" gutterBottom color="primary.light">
+                  🌱 Where to Buy Seeds
+                </Typography>
+                {loadingVendors ? (
+                  <Typography variant="body2" color="text.secondary">Loading vendors...</Typography>
+                ) : vendors.length > 0 ? (
+                  <Stack spacing={1}>
+                    {vendors.slice(0, 5).map((vendor, idx) => (
+                      <Card key={idx} sx={{ bgcolor: 'rgba(76, 175, 80, 0.05)', border: '1px solid rgba(76, 175, 80, 0.3)' }}>
+                        <CardContent sx={{ py: 1.5 }}>
+                          <Stack direction="row" justifyContent="space-between" alignItems="center">
+                            <Box>
+                              <Typography variant="body1" fontWeight="bold" color="primary.main">
+                                {vendor.name}
+                                {vendor.verified && <Chip label="✓ Verified" size="small" sx={{ ml: 1, height: 20, fontSize: '0.7rem', bgcolor: '#4caf50', color: 'white' }} />}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {vendor.country} • {vendor.seed_count} seeds • ${vendor.price}
+                              </Typography>
+                            </Box>
+                            {vendor.website && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                href={vendor.website}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                sx={{ borderColor: '#4caf50', color: '#4caf50' }}
+                              >
+                                Visit
+                              </Button>
+                            )}
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No seed vendors found for this strain.
+                  </Typography>
+                )}
+              </Box>
+
+              {/* Dispensaries Section */}
+              <Divider sx={{ my: 2, bgcolor: 'rgba(76, 175, 80, 0.3)' }} />
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="h6" gutterBottom color="primary.light">
+                  🏪 Nearby Dispensaries
+                </Typography>
+                {!userLocation ? (
+                  <Alert severity="info" sx={{ mb: 1 }}>
+                    Enable location to find nearby dispensaries
+                  </Alert>
+                ) : loadingDispensaries ? (
+                  <Typography variant="body2" color="text.secondary">Loading dispensaries...</Typography>
+                ) : dispensaries.length > 0 ? (
+                  <Stack spacing={1}>
+                    {dispensaries.slice(0, 5).map((dispensary, idx) => (
+                      <Card key={idx} sx={{ bgcolor: 'rgba(76, 175, 80, 0.05)', border: '1px solid rgba(76, 175, 80, 0.3)' }}>
+                        <CardContent sx={{ py: 1.5 }}>
+                          <Typography variant="body1" fontWeight="bold" color="primary.main">
+                            {dispensary.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {dispensary.address && `${dispensary.address}, `}
+                            {dispensary.city}, {dispensary.state}
+                            {dispensary.distance && ` • ${dispensary.distance.toFixed(1)} mi away`}
+                          </Typography>
+                          {dispensary.phone && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              📞 {dispensary.phone}
+                            </Typography>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No dispensaries found nearby.
+                  </Typography>
+                )}
+              </Box>
+
               <Button
                 variant="contained"
                 fullWidth
                 onClick={handleReset}
-                sx={{ 
+                sx={{
                   mt: 3,
                   py: 1.5,
                   background: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
