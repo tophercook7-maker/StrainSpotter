@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
+import MobileOnlyGuard from './components/MobileOnlyGuard';
 import AgeGate from './components/AgeGate';
 import Auth from './components/Auth';
 import Scanner from './components/Scanner';
@@ -101,14 +102,15 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        {/* Global background layer - restored, no dark filter or overlay */}
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 0,
-          backgroundImage: 'url(/strainspotter-bg.jpg)',
-          backgroundSize: 'cover', backgroundPosition: 'center'
-        }} />
-        <ErrorBoundary>
-          <GuidelinesGate>
+        <MobileOnlyGuard>
+          {/* Global background layer - restored, no dark filter or overlay */}
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 0,
+            backgroundImage: 'url(/strainspotter-bg.jpg)',
+            backgroundSize: 'cover', backgroundPosition: 'center'
+          }} />
+          <ErrorBoundary>
+            <GuidelinesGate>
           {typeof window !== 'undefined' && !/localhost|127\.0\.0\.1/.test(window.location.host) && /localhost:5181/.test(import.meta.env.VITE_API_BASE || '') && (
             <div style={{ background: '#ff5555', color: '#fff', padding: '6px 12px', textAlign: 'center', fontWeight: 700 }}>
               Warning: Frontend is calling localhost API_BASE. Update VITE_API_BASE or config.js.
@@ -188,6 +190,7 @@ function App() {
           </div>
         </GuidelinesGate>
       </ErrorBoundary>
+        </MobileOnlyGuard>
       </AuthProvider>
     </ThemeProvider>
   );

@@ -532,12 +532,14 @@ export default function ScanWizard({ onBack }) {
         <MembershipLogin onSuccess={() => setMembershipComplete(true)} />
       ) : (
         <Container
-          maxWidth="md"
+          maxWidth="sm"
           sx={{
             minHeight: '100vh',
-            width: '100vw',
+            width: '100%',
+            maxWidth: { xs: '100%', sm: '600px' },
             py: 2,
             pb: 10,
+            px: { xs: 2, sm: 3 },
             background: 'none',
             backdropFilter: 'none',
             boxShadow: 'none',
@@ -547,68 +549,86 @@ export default function ScanWizard({ onBack }) {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
+            mx: 'auto'
           }}
         >
-          {/* Back and Logout buttons - left side */}
-          <Box sx={{ position: 'absolute', top: 24, left: 24, zIndex: 100, display: 'flex', gap: 2 }}>
+          {/* Back and Logout buttons - Mobile Optimized */}
+          <Box sx={{
+            position: 'absolute',
+            top: { xs: 12, sm: 24 },
+            left: { xs: 12, sm: 24 },
+            right: { xs: 12, sm: 'auto' },
+            zIndex: 100,
+            display: 'flex',
+            gap: 1,
+            flexWrap: 'wrap'
+          }}>
             <Button
               variant="contained"
+              size="small"
               onClick={() => onBack ? onBack() : window.history.back()}
               sx={{
                 fontWeight: 700,
-                borderRadius: 999,
-                px: 4,
+                borderRadius: '8px',
+                px: { xs: 2, sm: 3 },
                 py: 1,
-                fontSize: 18,
+                fontSize: { xs: '0.875rem', sm: '1rem' },
                 boxShadow: 'none',
                 bgcolor: '#7CB342',
                 color: '#fff',
                 textTransform: 'none',
-                '&:hover': { bgcolor: '#689f38' }
+                '&:active': {
+                  bgcolor: '#689f38',
+                  transform: 'scale(0.98)'
+                }
               }}
             >
-              ← Back to Garden
+              ← Back
             </Button>
 
-            <Button
-              variant="contained"
-              onClick={async () => {
-                try {
-                  await supabase.auth.signOut();
-                  setCurrentUser(null);
-                  setAlertMsg('Logged out successfully');
-                  setAlertOpen(true);
-                  // Optionally redirect to home or login page
-                  setTimeout(() => {
-                    if (onBack) {
-                      onBack();
-                    } else {
-                      window.location.href = '/';
-                    }
-                  }, 1000);
-                } catch (err) {
-                  console.error('Logout error:', err);
-                  setAlertMsg('Logout failed');
-                  setAlertOpen(true);
-                }
-              }}
-              sx={{
-                fontWeight: 700,
-                borderRadius: 999,
-                px: 4,
-                py: 1,
-                fontSize: 18,
-                boxShadow: 'none',
-                bgcolor: '#7CB342',
-                color: '#fff',
-                textTransform: 'none',
-                '&:hover': {
-                  bgcolor: '#689f38'
-                }
-              }}
-            >
-              Logout
-            </Button>
+            {currentUser && (
+              <Button
+                variant="contained"
+                size="small"
+                onClick={async () => {
+                  try {
+                    await supabase.auth.signOut();
+                    setCurrentUser(null);
+                    setAlertMsg('Logged out successfully');
+                    setAlertOpen(true);
+                    // Optionally redirect to home or login page
+                    setTimeout(() => {
+                      if (onBack) {
+                        onBack();
+                      } else {
+                        window.location.href = '/';
+                      }
+                    }, 1000);
+                  } catch (err) {
+                    console.error('Logout error:', err);
+                    setAlertMsg('Logout failed');
+                    setAlertOpen(true);
+                  }
+                }}
+                sx={{
+                  fontWeight: 700,
+                  borderRadius: '8px',
+                  px: { xs: 2, sm: 3 },
+                  py: 1,
+                  fontSize: { xs: '0.875rem', sm: '1rem' },
+                  boxShadow: 'none',
+                  bgcolor: '#7CB342',
+                  color: '#fff',
+                  textTransform: 'none',
+                  '&:active': {
+                    bgcolor: '#689f38',
+                    transform: 'scale(0.98)'
+                  }
+                }}
+              >
+                Logout
+              </Button>
+            )}
           </Box>
 
           <Typography
@@ -1273,18 +1293,20 @@ export default function ScanWizard({ onBack }) {
               </Box>
             )}
 
-            {/* Quick Action Buttons - Seeds & Dispensaries */}
+            {/* Quick Action Buttons - Seeds & Dispensaries - Mobile Optimized */}
             <Box sx={{
               display: 'flex',
-              flexDirection: { xs: 'column', sm: 'row' },
+              flexDirection: 'column',
               gap: 2,
               mt: 3,
               width: '100%',
-              justifyContent: 'center'
+              maxWidth: '400px',
+              mx: 'auto',
+              px: 2
             }}>
               <Button
                 variant="contained"
-                size="large"
+                fullWidth
                 onClick={() => {
                   if (currentUser) {
                     // Logged-in users: Navigate to in-app seed vendor finder
@@ -1296,21 +1318,17 @@ export default function ScanWizard({ onBack }) {
                   }
                 }}
                 sx={{
-                  flex: 1,
-                  maxWidth: { sm: 250 },
                   py: 2,
-                  px: 4,
-                  fontSize: '1.1rem',
+                  fontSize: '1rem',
                   fontWeight: 700,
-                  borderRadius: '50px',
+                  borderRadius: '12px',
                   background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
-                  boxShadow: '0 8px 30px rgba(124, 179, 66, 0.4)',
+                  boxShadow: '0 4px 12px rgba(124, 179, 66, 0.3)',
                   textTransform: 'none',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 12px 40px rgba(124, 179, 66, 0.6)',
-                    background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)'
+                  transition: 'all 0.2s ease',
+                  '&:active': {
+                    transform: 'scale(0.98)',
+                    boxShadow: '0 2px 8px rgba(124, 179, 66, 0.4)'
                   }
                 }}
               >
@@ -1319,7 +1337,7 @@ export default function ScanWizard({ onBack }) {
 
               <Button
                 variant="outlined"
-                size="large"
+                fullWidth
                 onClick={() => {
                   if (currentUser) {
                     // Logged-in users: Navigate to in-app dispensary finder
@@ -1331,21 +1349,18 @@ export default function ScanWizard({ onBack }) {
                   }
                 }}
                 sx={{
-                  flex: 1,
-                  maxWidth: { sm: 250 },
                   py: 2,
-                  px: 4,
-                  fontSize: '1.1rem',
+                  fontSize: '1rem',
                   fontWeight: 700,
-                  borderRadius: '50px',
-                  border: '2px solid rgba(124, 179, 66, 0.5)',
+                  borderRadius: '12px',
+                  border: '2px solid rgba(124, 179, 66, 0.6)',
                   color: '#9CCC65',
                   textTransform: 'none',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    border: '2px solid rgba(124, 179, 66, 0.8)',
-                    background: 'rgba(124, 179, 66, 0.1)',
-                    transform: 'translateY(-2px)'
+                  transition: 'all 0.2s ease',
+                  '&:active': {
+                    transform: 'scale(0.98)',
+                    background: 'rgba(124, 179, 66, 0.15)',
+                    border: '2px solid rgba(124, 179, 66, 0.8)'
                   }
                 }}
               >
