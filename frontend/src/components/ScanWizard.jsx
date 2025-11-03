@@ -229,23 +229,25 @@ export default function ScanWizard({ onBack }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!currentUser) {
-      setAlertMsg('Sign in to use AI-powered scans.');
-      setAlertOpen(true);
-      setShowMembershipDialog(true);
-      return;
-    }
+    // Allow scans without authentication - removed membership gate
+    // if (!currentUser) {
+    //   setAlertMsg('Sign in to use AI-powered scans.');
+    //   setAlertOpen(true);
+    //   setShowMembershipDialog(true);
+    //   return;
+    // }
 
-    if (disableScanning) {
-      const message = starterExpired
-        ? 'Your starter access window has ended. Join the Garden membership or purchase a top-up pack within 3 days to keep scanning.'
-        : 'You are out of scan credits. Join the Garden or purchase a top-up pack to continue scanning.';
-      setAlertMsg(message);
-      setAlertOpen(true);
-      setTopUpMessage(message);
-      setShowTopUpDialog(true);
-      return;
-    }
+    // Allow scans even if credits are low - removed credit gate
+    // if (disableScanning) {
+    //   const message = starterExpired
+    //     ? 'Your starter access window has ended. Join the Garden membership or purchase a top-up pack within 3 days to keep scanning.'
+    //     : 'You are out of scan credits. Join the Garden or purchase a top-up pack to continue scanning.';
+    //   setAlertMsg(message);
+    //   setAlertOpen(true);
+    //   setTopUpMessage(message);
+    //   setShowTopUpDialog(true);
+    //   return;
+    // }
 
     setLoading(true);
     setScanStatus("Uploading image...");
@@ -257,7 +259,7 @@ export default function ScanWizard({ onBack }) {
           const base64 = reader.result.split(',')[1];
 
           let uploadData = null;
-          if (canUseEdgeUploads) {
+          if (canUseEdgeUploads && currentUser) {
             setScanStatus('Uploading image to Supabase...');
             const edge = await uploadViaEdgeFunction({
               base64,
@@ -279,18 +281,19 @@ export default function ScanWizard({ onBack }) {
                 filename: file.name,
                 contentType: file.type,
                 base64,
-                user_id: currentUser.id
+                user_id: currentUser?.id || null
               })
             });
 
-            if (uploadResp.status === 401) {
-              const message = await parseErrorResponse(uploadResp);
-              setAlertMsg(message);
-              setAlertOpen(true);
-              setShowMembershipDialog(true);
-              setScanStatus("Sign in required");
-              return;
-            }
+            // Allow scans without authentication - removed 401 gate
+            // if (uploadResp.status === 401) {
+            //   const message = await parseErrorResponse(uploadResp);
+            //   setAlertMsg(message);
+            //   setAlertOpen(true);
+            //   setShowMembershipDialog(true);
+            //   setScanStatus("Sign in required");
+            //   return;
+            // }
 
             if (!uploadResp.ok) {
               const message = await parseErrorResponse(uploadResp);
