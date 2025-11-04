@@ -119,7 +119,7 @@ export default function Home({ onNavigate }) {
                 width: { xs: 120, md: 160 },
                 height: { xs: 120, md: 160 },
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.2) 0%, rgba(156, 204, 101, 0.1) 100%)',
+                background: 'transparent',
                 border: '3px solid rgba(124, 179, 66, 0.3)',
                 display: 'flex',
                 alignItems: 'center',
@@ -131,7 +131,7 @@ export default function Home({ onNavigate }) {
               <img
                 src="/hero.png?v=13"
                 alt="StrainSpotter"
-                style={{ width: '70%', height: '70%', objectFit: 'contain' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
               />
             </Box>
 
