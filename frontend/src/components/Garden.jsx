@@ -22,6 +22,8 @@ import PeopleIcon from '@mui/icons-material/People';
 import WarningIcon from '@mui/icons-material/Warning';
 import RateReviewIcon from '@mui/icons-material/RateReview';
 import FeedbackIcon from '@mui/icons-material/Feedback';
+import CreditBalance from './CreditBalance';
+import BuyScansModal from './BuyScansModal';
 
 export default function Garden({ onBack, onNavigate }) {
   const { user, isExpired, canLogout, loading } = useMembershipGuard();
@@ -38,6 +40,7 @@ export default function Garden({ onBack, onNavigate }) {
   const [showGrowerDirectory, setShowGrowerDirectory] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showFeedbackReader, setShowFeedbackReader] = useState(false);
+  const [showBuyScans, setShowBuyScans] = useState(false);
 
   const handleLogout = async () => {
     // Admin users can always logout
@@ -256,7 +259,11 @@ export default function Garden({ onBack, onNavigate }) {
               </Typography>
             </Box>
           </Stack>
-          <Stack direction="row" spacing={0.5}>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            {/* Credit Balance */}
+            <Box onClick={() => setShowBuyScans(true)} sx={{ cursor: 'pointer' }}>
+              <CreditBalance />
+            </Box>
             {onBack && (
               <Button
                 variant="outlined"
@@ -560,6 +567,14 @@ export default function Garden({ onBack, onNavigate }) {
         open={showFeedback}
         onClose={() => setShowFeedback(false)}
         user={user}
+      />
+
+      {/* Buy Scans Modal */}
+      <BuyScansModal
+        open={showBuyScans}
+        onClose={() => setShowBuyScans(false)}
+        currentTier="free"
+        creditsRemaining={0}
       />
     </Box>
   );

@@ -322,20 +322,32 @@ export default function ScanWizard({ onBack }) {
             headers: { "Content-Type": "application/json" }
           });
 
-          if (processResp.status === 402 || processResp.status === 403) {
+          if (processResp.status === 402) {
             let errorPayload = {};
             try {
               errorPayload = await processResp.json();
             } catch {}
-            const defaultMessage = processResp.status === 403
-              ? 'Your starter access window has ended. Join the Garden membership or redeem a top-up pack to keep scanning.'
-              : 'No scan credits remaining. Join the Garden or purchase a top-up pack to continue scanning.';
-            const message = errorPayload.error || errorPayload.message || defaultMessage;
+
+            // New credit system V2 error handling
+            const tier = errorPayload.tier || 'free';
+            const creditsRemaining = errorPayload.creditsRemaining || 0;
+            const needsUpgrade = errorPayload.needsUpgrade || false;
+
+            let message = errorPayload.message || 'No scan credits remaining.';
+
+            if (needsUpgrade) {
+              message = '🎯 You\'ve used all 10 free scans! Upgrade to Member ($4.99/mo) for 200 scans/month or buy a top-up pack!';
+            } else if (tier === 'member') {
+              message = '📊 You\'ve used all 200 scans this month! Upgrade to Premium ($14.99/mo) for 1200 scans/month or buy a top-up pack!';
+            } else if (tier === 'premium') {
+              message = '🚀 You\'ve used all 1200 scans this month! Buy a top-up pack to continue scanning.';
+            }
+
             setAlertMsg(message);
             setAlertOpen(true);
             setTopUpMessage(message);
             setShowTopUpDialog(true);
-            setScanStatus(processResp.status === 403 ? 'Starter access ended' : 'Add credits to continue');
+            setScanStatus('Out of credits');
             await loadCredits();
             return;
           }
