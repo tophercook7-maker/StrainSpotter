@@ -1,7 +1,7 @@
 /* eslint-env serviceworker */
 /* global clients */
 
-const CACHE_NAME = 'strainspotter-cache-v3-premium-skin';
+const CACHE_NAME = 'strainspotter-cache-v4-credit-system';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
