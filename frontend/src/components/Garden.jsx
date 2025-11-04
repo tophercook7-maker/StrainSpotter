@@ -12,7 +12,6 @@ import GrowCoach from './GrowCoach';
 import GrowerDirectory from './GrowerDirectory';
 import FeedbackModal from './FeedbackModal';
 import FeedbackReader from './FeedbackReader';
-import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import SpaIcon from '@mui/icons-material/Spa';
 import GroupsIcon from '@mui/icons-material/Groups';
@@ -201,7 +200,7 @@ export default function Garden({ onBack, onNavigate }) {
   return (
     <Box sx={{
       minHeight: '100vh',
-      p: 3,
+      p: 1.5,
       background: 'none'
     }}>
       {/* Expired Membership Warning */}
@@ -209,124 +208,127 @@ export default function Garden({ onBack, onNavigate }) {
         <Alert
           severity="error"
           icon={<WarningIcon />}
-          sx={{ mb: 3, fontWeight: 600 }}
+          sx={{ mb: 1.5, py: 0.5, fontSize: '0.75rem' }}
         >
-          Your membership payment is overdue. Please update your payment method to continue accessing premium features.
-          You cannot logout until payment is resolved.
+          Payment overdue. Update payment to continue.
         </Alert>
       )}
 
-      {/* Header */}
+      {/* Compact Header */}
       <Paper sx={{
-        p: 3,
-        mb: 3,
-        background: 'rgba(255,255,255,0.15)',
-        backdropFilter: 'blur(20px)',
-        border: '2px solid rgba(124, 179, 66, 0.3)',
-        borderRadius: 4
+        p: 1.5,
+        mb: 1.5,
+        background: 'rgba(255,255,255,0.12)',
+        backdropFilter: 'blur(10px)',
+        border: '1.5px solid rgba(124, 179, 66, 0.3)',
+        borderRadius: 2
       }}>
-        {/* Buttons on top left */}
-        <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
-          {onBack && (
-            <Button
-              variant="outlined"
-              onClick={onBack}
+        {/* Compact buttons and welcome in one row */}
+        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Box
               sx={{
-                color: '#fff',
-                borderColor: 'rgba(124, 179, 66, 0.6)',
-                '&:hover': { borderColor: 'rgba(124, 179, 66, 1)', bgcolor: 'rgba(124, 179, 66, 0.1)' }
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                background: 'transparent',
+                border: '1.5px solid rgba(124, 179, 66, 0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden'
               }}
             >
-              ← Home
+              <img
+                src="/hero.png?v=13"
+                alt="StrainSpotter"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            </Box>
+            <Box>
+              <Typography variant="subtitle2" sx={{ color: '#fff', fontWeight: 600, fontSize: '0.875rem', lineHeight: 1.2 }}>
+                The Garden
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.65rem' }}>
+                ✓ Member
+              </Typography>
+            </Box>
+          </Stack>
+          <Stack direction="row" spacing={0.5}>
+            {onBack && (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={onBack}
+                sx={{
+                  color: '#fff',
+                  borderColor: 'rgba(124, 179, 66, 0.5)',
+                  fontSize: '0.7rem',
+                  py: 0.5,
+                  px: 1,
+                  minWidth: 'auto',
+                  '&:hover': { borderColor: 'rgba(124, 179, 66, 1)' }
+                }}
+              >
+                Home
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleLogout}
+              sx={{
+                color: '#fff',
+                borderColor: 'rgba(124, 179, 66, 0.5)',
+                fontSize: '0.7rem',
+                py: 0.5,
+                px: 1,
+                minWidth: 'auto',
+                '&:hover': { borderColor: 'rgba(124, 179, 66, 1)' }
+              }}
+            >
+              Logout
             </Button>
-          )}
-          <Button
-            variant="outlined"
-            startIcon={<ExitToAppIcon />}
-            onClick={handleLogout}
-            sx={{
-              color: '#fff',
-              borderColor: 'rgba(124, 179, 66, 0.6)',
-              '&:hover': { borderColor: 'rgba(124, 179, 66, 1)', bgcolor: 'rgba(124, 179, 66, 0.1)' }
-            }}
-          >
-            Logout
-          </Button>
-        </Stack>
-
-        {/* Welcome section below buttons */}
-        <Stack direction="row" spacing={2} alignItems="center">
-          <Box
-            sx={{
-              width: 56,
-              height: 56,
-              borderRadius: '50%',
-              background: 'transparent',
-              border: '2px solid rgba(124, 179, 66, 0.5)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 0 20px rgba(124, 179, 66, 0.3)',
-              overflow: 'hidden'
-            }}
-          >
-            <img
-              src="/hero.png?v=13"
-              alt="StrainSpotter"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          </Box>
-          <Box>
-            <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>
-              Welcome to the Garden
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
-              {user?.user_metadata?.username || user?.email || 'Member'}
-            </Typography>
-            <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600 }}>
-              ✓ Club Member
-            </Typography>
-          </Box>
+          </Stack>
         </Stack>
       </Paper>
 
-      {/* Feature Tiles */}
-      <Grid container spacing={3}>
+      {/* Compact Feature Tiles - 3 columns on mobile */}
+      <Grid container spacing={1}>
         {tiles.map((tile) => (
-          <Grid item xs={12} sm={6} md={4} key={tile.nav}>
+          <Grid item xs={4} sm={4} md={3} key={tile.nav}>
             <Paper
               onClick={() => handleFeatureClick(tile.title, tile.nav)}
               sx={{
-                p: 4,
+                p: 1,
                 textAlign: 'center',
                 cursor: 'pointer',
-                background: 'rgba(255,255,255,0.1)',
-                backdropFilter: 'blur(20px)',
-                border: '2px solid rgba(124, 179, 66, 0.3)',
-                borderRadius: 4,
-                transition: 'all 0.3s ease',
+                background: 'rgba(255,255,255,0.08)',
+                backdropFilter: 'blur(10px)',
+                border: '1.5px solid rgba(124, 179, 66, 0.25)',
+                borderRadius: 2,
+                transition: 'all 0.2s ease',
                 '&:hover': {
-                  background: 'rgba(124, 179, 66, 0.2)',
-                  border: '2px solid rgba(124, 179, 66, 0.6)',
-                  transform: 'translateY(-4px)',
-                  boxShadow: '0 8px 24px rgba(124, 179, 66, 0.3)'
+                  background: 'rgba(124, 179, 66, 0.15)',
+                  border: '1.5px solid rgba(124, 179, 66, 0.5)',
+                  transform: 'translateY(-2px)',
                 }
               }}
             >
               <Box sx={{
-                width: 80,
-                height: 80,
-                margin: '0 auto 16px auto',
+                width: 40,
+                height: 40,
+                margin: '0 auto 6px auto',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 bgcolor: tile.color,
                 borderRadius: '50%',
-                '& svg': { fontSize: 40, color: '#fff' }
+                '& svg': { fontSize: 24, color: '#fff' }
               }}>
                 {tile.icon}
               </Box>
-              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700 }}>
+              <Typography variant="caption" sx={{ color: '#fff', fontWeight: 600, fontSize: '0.7rem', lineHeight: 1.2, display: 'block' }}>
                 {tile.title}
               </Typography>
             </Paper>
@@ -334,39 +336,32 @@ export default function Garden({ onBack, onNavigate }) {
         ))}
       </Grid>
 
-      {/* Membership Info */}
+      {/* Compact Membership Info */}
       <Paper sx={{
-        p: 3,
-        mt: 3,
-        background: 'rgba(255,255,255,0.1)',
-        backdropFilter: 'blur(20px)',
-        border: '2px solid rgba(124, 179, 66, 0.3)',
-        borderRadius: 4
+        p: 1.5,
+        mt: 1.5,
+        background: 'rgba(255,255,255,0.08)',
+        backdropFilter: 'blur(10px)',
+        border: '1.5px solid rgba(124, 179, 66, 0.25)',
+        borderRadius: 2
       }}>
-        <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: 2 }}>
-          Your Membership
-        </Typography>
-        <Stack spacing={1}>
-          <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
-            <strong>Status:</strong> Active Club Member
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
-            <strong>Plan:</strong> $4.99/month
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
-            <strong>Benefits:</strong> Unlimited scans, reviews, community access, and more
+        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+          <Typography variant="caption" sx={{ color: '#e0e0e0', fontSize: '0.7rem' }}>
+            <strong>Plan:</strong> $4.99/mo • Active Member
           </Typography>
           <Button
-            variant="outlined"
+            variant="text"
             size="small"
             sx={{
-              mt: 2,
-              color: '#fff',
-              borderColor: 'rgba(255, 82, 82, 0.6)',
-              '&:hover': { borderColor: 'rgba(255, 82, 82, 1)', bgcolor: 'rgba(255, 82, 82, 0.1)' }
+              color: '#ff5252',
+              fontSize: '0.65rem',
+              py: 0.25,
+              px: 1,
+              minWidth: 'auto',
+              '&:hover': { bgcolor: 'rgba(255, 82, 82, 0.1)' }
             }}
           >
-            Cancel Membership
+            Cancel
           </Button>
         </Stack>
       </Paper>
