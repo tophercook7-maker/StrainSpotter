@@ -160,9 +160,12 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       }
       
       try {
+        console.log('[Groups] Fetching from:', `${API_BASE}/api/groups`);
         const res = await fetch(`${API_BASE}/api/groups`);
+        console.log('[Groups] Response status:', res.status, res.statusText);
         if (res.ok) {
           const payload = await res.json();
+          console.log('[Groups] Received groups:', payload?.length || 0);
           const curated = Array.isArray(payload)
             ? payload.filter(group => ALLOWED_GROUPS.includes(group.name))
             : [];
@@ -170,7 +173,11 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           if (!adminUserId && Array.isArray(payload) && payload.length) {
             setAdminUserId(payload[0]?.admin_user_id || null);
           }
+        } else {
+          console.error('[Groups] Failed to fetch groups:', res.status, res.statusText);
         }
+      } catch (err) {
+        console.error('[Groups] Fetch error:', err);
       } finally {
         setLoading(false);
       }

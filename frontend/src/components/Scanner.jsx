@@ -333,7 +333,9 @@ function Scanner({ onViewHistory, onBack }) {
         let signedData = null;
 
         if (supabase && typeof supabase.storage?.from === 'function') {
-          const preflight = await fetch(`${API_BASE}/api/uploads/signed-url`, {
+          const preflightUrl = `${API_BASE}/api/uploads/signed-url`;
+          console.log('[Scanner] Requesting signed URL from:', preflightUrl);
+          const preflight = await fetch(preflightUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId },
             credentials: 'include',
@@ -344,6 +346,7 @@ function Scanner({ onViewHistory, onBack }) {
             })
           });
 
+          console.log('[Scanner] Preflight response:', preflight.status, preflight.statusText);
           if (preflight.status === 501) {
             useLegacyUploader = true;
           } else if (!preflight.ok) {

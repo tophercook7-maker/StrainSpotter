@@ -49,13 +49,17 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
     setError(null);
     setShowPopular(true);
     try {
-      const response = await fetch(`${API_BASE}/api/seeds-live/popular`);
+      const url = `${API_BASE}/api/seeds-live/popular`;
+      console.log('[SeedVendorFinder] Fetching from:', url);
+      const response = await fetch(url);
+      console.log('[SeedVendorFinder] Response status:', response.status, response.statusText);
       if (!response.ok) throw new Error('Failed to load popular vendors');
-      
+
       const data = await response.json();
+      console.log('[SeedVendorFinder] Received vendors:', data?.results?.length || 0);
       setVendors(data.results || []);
     } catch (err) {
-      console.error('Failed to load popular vendors:', err);
+      console.error('[SeedVendorFinder] Failed to load popular vendors:', err);
       setError('Failed to load seed vendors. Please try again.');
     } finally {
       setLoading(false);

@@ -55,13 +55,18 @@ export default function Dispensaries({ onBack }) {
       params.set('lng', userLocation.lng);
       params.set('radius', '50'); // 50 miles
     }
-    
-    fetch(`${API_BASE}/api/dispensaries?${params}`)
+
+    const url = `${API_BASE}/api/dispensaries?${params}`;
+    console.log('[Dispensaries] Fetching from:', url);
+
+    fetch(url)
       .then(res => {
+        console.log('[Dispensaries] Response status:', res.status, res.statusText);
         if (!res.ok) throw new Error('Failed to load dispensaries');
         return res.json();
       })
       .then(data => {
+        console.log('[Dispensaries] Received dispensaries:', data?.length || 0);
         // Sort by distance if location is available
         if (userLocation && Array.isArray(data)) {
           data.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));

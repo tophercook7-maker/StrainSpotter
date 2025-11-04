@@ -21,6 +21,16 @@ const resolvedForLocal = isLocalhost
 
 export const API_BASE = resolvedForLocal.replace(/\/$/, '');
 
+// Log configuration on startup for debugging
+console.log('[Config] API_BASE:', API_BASE);
+console.log('[Config] Environment variables:', {
+  VITE_API_BASE: import.meta.env.VITE_API_BASE,
+  VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+  VITE_BACKEND_URL: import.meta.env.VITE_BACKEND_URL,
+  VITE_API_URL: import.meta.env.VITE_API_URL
+});
+console.log('[Config] Window location:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+
 // Functions base (Edge Functions if provided, otherwise fall back to backend API routes)
 // This ensures uploads/processing work even if Supabase Edge Functions aren't deployed yet.
 const functionsFromEnv = import.meta.env.VITE_FUNCTIONS_BASE;
