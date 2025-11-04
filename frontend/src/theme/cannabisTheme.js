@@ -105,32 +105,62 @@ export const muiThemeOverrides = {
       styleOverrides: {
         root: {
           borderRadius: 10,
-          textTransform: 'none'
+          textTransform: 'none',
+          // Disable hover on touch devices to prevent double-tap issue
+          '@media (hover: none)': {
+            '&:hover': {
+              backgroundColor: 'inherit'
+            }
+          }
         },
         contained: {
           backgroundColor: 'rgba(124, 179, 66, 0.3)',
           border: '2px solid rgba(124, 179, 66, 0.6)',
           backdropFilter: 'blur(10px)',
           boxShadow: '0 6px 20px rgba(124, 179, 66, 0.2)',
-          '&:hover': {
+          // Only apply hover on devices with hover capability (desktop)
+          '@media (hover: hover)': {
+            '&:hover': {
+              backgroundColor: 'rgba(124, 179, 66, 0.5)',
+              border: '2px solid rgba(124, 179, 66, 0.8)'
+            }
+          },
+          // Active state for touch devices
+          '&:active': {
             backgroundColor: 'rgba(124, 179, 66, 0.5)',
-            border: '2px solid rgba(124, 179, 66, 0.8)'
+            transform: 'scale(0.98)'
           }
         },
         outlined: {
           backgroundColor: 'rgba(124, 179, 66, 0.2)',
           border: '2px solid rgba(124, 179, 66, 0.5)',
           backdropFilter: 'blur(10px)',
-          '&:hover': {
+          // Only apply hover on devices with hover capability (desktop)
+          '@media (hover: hover)': {
+            '&:hover': {
+              backgroundColor: 'rgba(124, 179, 66, 0.3)',
+              border: '2px solid rgba(124, 179, 66, 0.7)'
+            }
+          },
+          // Active state for touch devices
+          '&:active': {
             backgroundColor: 'rgba(124, 179, 66, 0.3)',
-            border: '2px solid rgba(124, 179, 66, 0.7)'
+            transform: 'scale(0.98)'
           }
         },
         text: {
           backgroundColor: 'rgba(124, 179, 66, 0.15)',
           backdropFilter: 'blur(10px)',
-          '&:hover': {
-            backgroundColor: 'rgba(124, 179, 66, 0.25)'
+          // Only apply hover on devices with hover capability (desktop)
+          '@media (hover: hover)': {
+            '&:hover': {
+              backgroundColor: 'rgba(124, 179, 66, 0.25)'
+            }
+          },
+          // Active state for touch devices
+          '&:active': {
+            backgroundColor: 'rgba(124, 179, 66, 0.25)',
+            transform: 'scale(0.98)'
           }
         }
       }

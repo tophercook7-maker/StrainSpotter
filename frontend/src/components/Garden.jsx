@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Button, Typography, Grid, Paper, Stack, Avatar, Alert, Dialog, DialogTitle, DialogContent } from '@mui/material';
+import { Box, Button, Typography, Grid, Paper, Stack, Avatar, Alert, Dialog, DialogTitle, DialogContent, Fab, Tooltip } from '@mui/material';
 import { supabase } from '../supabaseClient';
 import { useMembershipGuard } from '../hooks/useMembershipGuard';
 import ScanWizard from './ScanWizard';
@@ -7,6 +7,11 @@ import StrainBrowser from './StrainBrowser';
 import ReviewsHub from './ReviewsHub';
 import DispensaryFinder from './DispensaryFinder';
 import SeedVendorFinder from './SeedVendorFinder';
+import Groups from './Groups';
+import GrowCoach from './GrowCoach';
+import GrowerDirectory from './GrowerDirectory';
+import FeedbackModal from './FeedbackModal';
+import FeedbackReader from './FeedbackReader';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import SpaIcon from '@mui/icons-material/Spa';
@@ -17,6 +22,7 @@ import StoreIcon from '@mui/icons-material/Store';
 import PeopleIcon from '@mui/icons-material/People';
 import WarningIcon from '@mui/icons-material/Warning';
 import RateReviewIcon from '@mui/icons-material/RateReview';
+import FeedbackIcon from '@mui/icons-material/Feedback';
 
 export default function Garden({ onBack, onNavigate }) {
   const { user, isExpired, canLogout, loading } = useMembershipGuard();
@@ -28,15 +34,26 @@ export default function Garden({ onBack, onNavigate }) {
   const [showReviews, setShowReviews] = useState(false);
   const [showDispensaryFinder, setShowDispensaryFinder] = useState(false);
   const [showSeedFinder, setShowSeedFinder] = useState(false);
+  const [showGroups, setShowGroups] = useState(false);
+  const [showGrowCoach, setShowGrowCoach] = useState(false);
+  const [showGrowerDirectory, setShowGrowerDirectory] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [showFeedbackReader, setShowFeedbackReader] = useState(false);
 
   const handleLogout = async () => {
-    if (!canLogout) {
+    // Admin users can always logout
+    const isAdmin = user?.email === 'strainspotter25@gmail.com' || user?.email === 'admin@strainspotter.com';
+
+    if (!canLogout && !isAdmin) {
       setShowLogoutWarning(true);
       return;
     }
 
     try {
       await supabase.auth.signOut();
+      // Clear localStorage to reset age verification
+      localStorage.clear();
+      sessionStorage.clear();
       onBack?.();
     } catch (e) {
       console.error('Logout failed:', e);
@@ -74,10 +91,37 @@ export default function Garden({ onBack, onNavigate }) {
       return;
     }
 
+    // Special case for Community Groups
+    if (nav === 'groups') {
+      setShowGroups(true);
+      return;
+    }
+
+    // Special case for Grow Coach
+    if (nav === 'grow-coach') {
+      setShowGrowCoach(true);
+      return;
+    }
+
+    // Special case for Grower Directory
+    if (nav === 'growers') {
+      setShowGrowerDirectory(true);
+      return;
+    }
+
+    // Special case for Feedback Reader (admin only)
+    if (nav === 'feedback-reader') {
+      setShowFeedbackReader(true);
+      return;
+    }
+
     // For other features, show "coming soon" (later this could call into a navigator)
     setSelectedFeature(featureName);
     setShowComingSoon(true);
   };
+
+  // Check if user is admin (you can replace this with your actual admin email)
+  const isAdmin = user?.email === 'strainspotter25@gmail.com' || user?.email === 'admin@strainspotter.com';
 
   const tiles = [
     { title: 'AI Strain Scan', icon: <CameraAltIcon />, nav: 'scan', color: '#00e676' },
@@ -89,6 +133,17 @@ export default function Garden({ onBack, onNavigate }) {
     { title: 'Seed Vendors', icon: <MenuBookIcon />, nav: 'seeds', color: '#aed581' },
     { title: 'Dispensaries', icon: <StoreIcon />, nav: 'dispensaries', color: '#c5e1a5' },
   ];
+
+  // Add admin-only tiles
+  if (isAdmin) {
+    tiles.push({
+      title: 'Feedback Reader',
+      icon: <FeedbackIcon />,
+      nav: 'feedback-reader',
+      color: '#ff6b6b',
+      adminOnly: true
+    });
+  }
 
   if (loading) {
     return (
@@ -121,6 +176,26 @@ export default function Garden({ onBack, onNavigate }) {
   // Show SeedVendorFinder if user clicked Seed Vendors
   if (showSeedFinder) {
     return <SeedVendorFinder onBack={() => setShowSeedFinder(false)} />;
+  }
+
+  // Show Groups if user clicked Community Groups
+  if (showGroups) {
+    return <Groups onBack={() => setShowGroups(false)} />;
+  }
+
+  // Show GrowCoach if user clicked Grow Coach
+  if (showGrowCoach) {
+    return <GrowCoach onBack={() => setShowGrowCoach(false)} />;
+  }
+
+  // Show GrowerDirectory if user clicked Grower Directory
+  if (showGrowerDirectory) {
+    return <GrowerDirectory onBack={() => setShowGrowerDirectory(false)} />;
+  }
+
+  // Show FeedbackReader if admin clicked Feedback Reader
+  if (showFeedbackReader) {
+    return <FeedbackReader user={user} onBack={() => setShowFeedbackReader(false)} />;
   }
 
   return (
@@ -181,9 +256,26 @@ export default function Garden({ onBack, onNavigate }) {
 
         {/* Welcome section below buttons */}
         <Stack direction="row" spacing={2} alignItems="center">
-          <Avatar sx={{ bgcolor: '#7cb342', width: 56, height: 56 }}>
-            {user?.user_metadata?.username?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?'}
-          </Avatar>
+          <Box
+            sx={{
+              width: 56,
+              height: 56,
+              borderRadius: '50%',
+              background: 'transparent',
+              border: '2px solid rgba(124, 179, 66, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 0 20px rgba(124, 179, 66, 0.3)',
+              overflow: 'hidden'
+            }}
+          >
+            <img
+              src="/hero.png?v=13"
+              alt="StrainSpotter"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </Box>
           <Box>
             <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>
               Welcome to the Garden
@@ -303,6 +395,27 @@ export default function Garden({ onBack, onNavigate }) {
             Update Payment Method
           </Button>
           <Button
+            variant="outlined"
+            fullWidth
+            color="error"
+            sx={{ mt: 1 }}
+            onClick={async () => {
+              // Force logout regardless of membership status
+              try {
+                await supabase.auth.signOut();
+                // Clear localStorage to reset age verification
+                localStorage.clear();
+                sessionStorage.clear();
+                setShowLogoutWarning(false);
+                onBack?.();
+              } catch (e) {
+                console.error('Force logout failed:', e);
+              }
+            }}
+          >
+            Force Logout Anyway
+          </Button>
+          <Button
             variant="text"
             fullWidth
             sx={{ mt: 1 }}
@@ -351,6 +464,36 @@ export default function Garden({ onBack, onNavigate }) {
           </Button>
         </DialogContent>
       </Dialog>
+
+      {/* Floating Feedback Button */}
+      <Tooltip title="Send Feedback" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setShowFeedback(true)}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 1000,
+            background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
+            boxShadow: '0 8px 30px rgba(124, 179, 66, 0.4)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)',
+              boxShadow: '0 12px 40px rgba(124, 179, 66, 0.6)',
+              transform: 'scale(1.05)'
+            }
+          }}
+        >
+          <FeedbackIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Feedback Modal */}
+      <FeedbackModal
+        open={showFeedback}
+        onClose={() => setShowFeedback(false)}
+        user={user}
+      />
     </Box>
   );
 }

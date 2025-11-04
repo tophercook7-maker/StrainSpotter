@@ -13,10 +13,12 @@ import {
 } from '@mui/material';
 import { LocationOn, EmojiEvents } from '@mui/icons-material';
 import { API_BASE } from '../config';
+import GrowerRegistration from './GrowerRegistration';
 
-export default function GrowerDirectory({ onBack, onNavigate }) {
+export default function GrowerDirectory({ onBack }) {
   const [growers, setGrowers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showRegistration, setShowRegistration] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -120,31 +122,76 @@ export default function GrowerDirectory({ onBack, onNavigate }) {
     );
   };
 
+  // Show registration form if user clicked "Register as Grower"
+  if (showRegistration) {
+    return (
+      <GrowerRegistration
+        onBack={() => {
+          setShowRegistration(false);
+          // Refresh grower list after registration
+          (async () => {
+            try {
+              const res = await fetch(`${API_BASE}/api/growers`);
+              if (res.ok) {
+                const payload = await res.json();
+                const list = Array.isArray(payload)
+                  ? payload
+                  : Array.isArray(payload.growers)
+                    ? payload.growers
+                    : [];
+                setGrowers(list);
+              }
+            } catch (err) {
+              console.error('Error refreshing growers:', err);
+            }
+          })();
+        }}
+      />
+    );
+  }
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
         {onBack && (
           <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: '#7CB342', color: 'white', textTransform: 'none', fontWeight: 700, borderRadius: 999, '&:hover': { bgcolor: '#689f38' } }}>← Back to Garden</Button>
         )}
-        <Button 
-          variant="contained" 
+        <Button
+          variant="contained"
           color="primary"
-          onClick={() => {
-            // Navigate to grower registration component
-            if (typeof onNavigate === 'function') {
-              onNavigate('register');
-            } else {
-              window.location.hash = '#/register';
-            }
-          }}
+          onClick={() => setShowRegistration(true)}
           sx={{ textTransform: 'none', fontWeight: 600 }}
         >
           Register as Grower
         </Button>
       </Stack>
-      <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
-        Grower Directory
-      </Typography>
+      {/* Hero Image Icon */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+        <Box
+          sx={{
+            width: 60,
+            height: 60,
+            borderRadius: '50%',
+            background: 'transparent',
+            border: '2px solid rgba(124, 179, 66, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)',
+            overflow: 'hidden',
+            flexShrink: 0
+          }}
+        >
+          <img
+            src="/hero.png?v=13"
+            alt="StrainSpotter"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        </Box>
+        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+          Grower Directory
+        </Typography>
+      </Box>
 
       {loading ? (
         <Typography>Loading...</Typography>

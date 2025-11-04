@@ -3,9 +3,11 @@ import MembershipLogin from "./MembershipLogin";
 import ErrorBoundary from "./ErrorBoundary";
 import SeedVendorFinder from "./SeedVendorFinder";
 import DispensaryFinder from "./DispensaryFinder";
+import FeedbackModal from "./FeedbackModal";
 import Snackbar from '@mui/material/Snackbar';
-import { Container, Box, Button, Typography, Paper, CircularProgress, Tabs, Tab, Dialog, DialogTitle, DialogContent, Chip, Stack, TextField, IconButton, Alert, DialogActions, DialogContentText, Divider } from "@mui/material";
+import { Container, Box, Button, Typography, Paper, CircularProgress, Tabs, Tab, Dialog, DialogTitle, DialogContent, Chip, Stack, TextField, IconButton, Alert, DialogActions, DialogContentText, Divider, Fab, Tooltip } from "@mui/material";
 import CloseIcon from '@mui/icons-material/Close';
+import FeedbackIcon from '@mui/icons-material/Feedback';
 import { supabase, SUPABASE_ANON_KEY } from '../supabaseClient';
 import { API_BASE, FUNCTIONS_BASE } from '../config';
 
@@ -35,6 +37,7 @@ export default function ScanWizard({ onBack }) {
   // Navigation state for seed vendors and dispensaries
   const [showSeedVendorFinder, setShowSeedVendorFinder] = useState(false);
   const [showDispensaryFinder, setShowDispensaryFinder] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   // Auth state
   const [currentUser, setCurrentUser] = useState(null);
@@ -534,12 +537,12 @@ export default function ScanWizard({ onBack }) {
         <Container
           maxWidth="sm"
           sx={{
-            minHeight: '100vh',
+            minHeight: { xs: 'auto', sm: '100vh' },
             width: '100%',
             maxWidth: { xs: '100%', sm: '600px' },
-            py: 2,
-            pb: 10,
-            px: { xs: 2, sm: 3 },
+            py: { xs: 1, sm: 2 },
+            pb: { xs: 2, sm: 10 },
+            px: { xs: 1.5, sm: 3 },
             background: 'none',
             backdropFilter: 'none',
             boxShadow: 'none',
@@ -548,7 +551,7 @@ export default function ScanWizard({ onBack }) {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center',
+            justifyContent: { xs: 'flex-start', sm: 'center' },
             mx: 'auto'
           }}
         >
@@ -631,6 +634,30 @@ export default function ScanWizard({ onBack }) {
             )}
           </Box>
 
+          {/* Hero Image Icon */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: { xs: 1, sm: 2 }, mt: { xs: 7, sm: 0 } }}>
+            <Box
+              sx={{
+                width: { xs: 50, sm: 70 },
+                height: { xs: 50, sm: 70 },
+                borderRadius: '50%',
+                background: 'transparent',
+                border: '2px solid rgba(124, 179, 66, 0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 30px rgba(124, 179, 66, 0.5)',
+                overflow: 'hidden'
+              }}
+            >
+              <img
+                src="/hero.png?v=13"
+                alt="StrainSpotter"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            </Box>
+          </Box>
+
           <Typography
             variant="h3"
             align="center"
@@ -638,7 +665,8 @@ export default function ScanWizard({ onBack }) {
               fontWeight: 900,
               letterSpacing: 1,
               color: '#fff',
-              mb: 1,
+              mb: { xs: 0.5, sm: 1 },
+              fontSize: { xs: '1.5rem', sm: '2.5rem' },
               textShadow: '0 2px 12px #388e3c, 0 0px 2px #000',
               filter: 'drop-shadow(0 0 8px #00e676)',
               fontFamily: 'Montserrat, Arial, sans-serif'
@@ -649,10 +677,11 @@ export default function ScanWizard({ onBack }) {
           <Typography
             align="center"
             sx={{
-              mt: 2,
+              mt: { xs: 1, sm: 2 },
               color: '#fff',
-              fontSize: 22,
+              fontSize: { xs: '0.875rem', sm: '1.375rem' },
               fontWeight: 600,
+              px: { xs: 1, sm: 0 },
               textShadow: '0 1px 8px #388e3c',
               fontFamily: 'Montserrat, Arial, sans-serif'
             }}
@@ -663,39 +692,39 @@ export default function ScanWizard({ onBack }) {
           {currentUser && (
             <Paper
               sx={{
-                mt: 4,
-                mb: 3,
-                p: 3,
+                mt: { xs: 2, sm: 4 },
+                mb: { xs: 2, sm: 3 },
+                p: { xs: 2, sm: 3 },
                 width: '100%',
                 maxWidth: 720,
                 background: 'rgba(0, 0, 0, 0.45)',
-                borderRadius: 4,
+                borderRadius: { xs: 2, sm: 4 },
                 border: '1px solid rgba(124, 179, 66, 0.4)',
                 color: '#e8f5e9'
               }}
             >
               <Box>
-                <Typography variant="subtitle2" sx={{ textTransform: 'uppercase', letterSpacing: 1, color: '#c8ff9e' }}>
+                <Typography variant="subtitle2" sx={{ textTransform: 'uppercase', letterSpacing: 1, color: '#c8ff9e', fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
                   Scan Credits
                 </Typography>
-                <Typography variant="h3" sx={{ fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                <Typography variant="h3" sx={{ fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'baseline', gap: 1, fontSize: { xs: '2rem', sm: '3rem' } }}>
                   {creditsLoading ? <CircularProgress size={28} sx={{ color: '#c8ff9e' }} /> : (creditsRemaining ?? '--')}
-                  <Typography component="span" variant="h6" sx={{ color: '#c8ff9e', fontWeight: 500 }}>
+                  <Typography component="span" variant="h6" sx={{ color: '#c8ff9e', fontWeight: 500, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                     left
                   </Typography>
                 </Typography>
-                <Typography variant="body2" sx={{ color: '#d0ffd6', maxWidth: 420 }}>
+                <Typography variant="body2" sx={{ color: '#d0ffd6', maxWidth: 420, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                   {membershipActive
                     ? 'Membership perks active — we auto-refresh your bundle every month so you never lose your streak.'
                     : 'Starter bundle includes 20 scans. After 3 days you\'ll need a membership or a top-up pack to keep scanning.'}
                 </Typography>
                 {membershipActive && nextResetLabel && (
-                  <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#b2fab4' }}>
+                  <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#b2fab4', fontSize: { xs: '0.65rem', sm: '0.75rem' } }}>
                     Next monthly reset: {nextResetLabel}
                   </Typography>
                 )}
                 {!membershipActive && accessExpiresLabel && (
-                  <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#ffcc80' }}>
+                  <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#ffcc80', fontSize: { xs: '0.65rem', sm: '0.75rem' } }}>
                     Starter access expires: {accessExpiresLabel}
                   </Typography>
                 )}
@@ -755,7 +784,7 @@ export default function ScanWizard({ onBack }) {
             </Paper>
           )}
 
-          <Box sx={{ mt: 4, textAlign: 'center' }}>
+          <Box sx={{ mt: { xs: 2, sm: 4 }, textAlign: 'center', width: '100%' }}>
             <input
               type="file"
               accept="image/*"
@@ -769,15 +798,17 @@ export default function ScanWizard({ onBack }) {
               sx={{
                 fontWeight: 700,
                 borderRadius: 999,
-                px: 5,
-                py: 1.5,
-                fontSize: 20,
+                px: { xs: 3, sm: 5 },
+                py: { xs: 1.25, sm: 1.5 },
+                fontSize: { xs: '1rem', sm: '1.25rem' },
                 boxShadow: 'none',
-                mb: 2,
+                mb: { xs: 1.5, sm: 2 },
                 bgcolor: 'rgba(255,255,255,0.15)',
                 backdropFilter: 'blur(8px)',
                 color: '#388e3c',
-                textTransform: 'none'
+                textTransform: 'none',
+                width: { xs: '90%', sm: 'auto' },
+                maxWidth: { xs: '320px', sm: 'none' }
               }}
               disabled={loading}
               onClick={() => {
@@ -798,15 +829,15 @@ export default function ScanWizard({ onBack }) {
               Add Photo & Scan
             </Button>
             {disableScanning && (
-              <Typography align="center" sx={{ mt: 1, color: '#ffcc80', fontWeight: 600 }}>
+              <Typography align="center" sx={{ mt: 1, color: '#ffcc80', fontWeight: 600, fontSize: { xs: '0.75rem', sm: '1rem' } }}>
                 Add credits or join the Garden to unlock new scans.
               </Typography>
             )}
             {loading && (
-              <CircularProgress color="success" sx={{ mt: 2 }} />
+              <CircularProgress color="success" sx={{ mt: { xs: 1, sm: 2 } }} />
             )}
             {scanStatus && !loading && (
-              <Typography align="center" sx={{ mt: 2, color: '#388e3c', fontWeight: 700 }}>
+              <Typography align="center" sx={{ mt: { xs: 1, sm: 2 }, color: '#388e3c', fontWeight: 700, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
                 {scanStatus}
               </Typography>
             )}
@@ -815,26 +846,26 @@ export default function ScanWizard({ onBack }) {
           {/* Scan Results Section */}
           {match && (
           <Box sx={{
-            mt: 4,
+            mt: { xs: 2, sm: 4 },
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: 6,
-            p: 3,
+            borderRadius: { xs: 3, sm: 6 },
+            p: { xs: 2, sm: 3 },
             maxWidth: 600,
-            minHeight: 200,
+            minHeight: { xs: 'auto', sm: 200 },
             width: '100%',
             opacity: 1,
             boxShadow: 'none',
             border: 'none'
           }}>
             <Typography sx={{
-              fontSize: 32,
+              fontSize: { xs: '1.5rem', sm: '2rem' },
               fontWeight: 900,
               color: '#00e676',
-              letterSpacing: 2,
-              mb: 1,
+              letterSpacing: { xs: 1, sm: 2 },
+              mb: { xs: 0.5, sm: 1 },
               textShadow: '0 2px 12px #388e3c, 0 0px 2px #000',
               filter: 'drop-shadow(0 0 8px #00e676)',
               fontFamily: 'Montserrat, Arial, sans-serif'
@@ -842,10 +873,10 @@ export default function ScanWizard({ onBack }) {
               Strain Identified!
             </Typography>
             <Typography sx={{
-              fontSize: 26,
+              fontSize: { xs: '1.25rem', sm: '1.625rem' },
               fontWeight: 900,
               color: '#ffd600',
-              mb: 2,
+              mb: { xs: 1, sm: 2 },
               textShadow: '0 2px 8px #388e3c',
               fontFamily: 'Montserrat, Arial, sans-serif'
             }}>
@@ -857,13 +888,13 @@ export default function ScanWizard({ onBack }) {
               <Chip
                 label={match.strain.type}
                 color={match.strain.type === 'Indica' ? 'primary' : match.strain.type === 'Sativa' ? 'success' : 'secondary'}
-                sx={{ mb: 2, fontSize: 16, fontWeight: 700 }}
+                sx={{ mb: { xs: 1, sm: 2 }, fontSize: { xs: '0.875rem', sm: '1rem' }, fontWeight: 700 }}
               />
             )}
 
             {/* THC/CBD */}
             {(match.strain?.thc || match.strain?.cbd) && (
-              <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+              <Stack direction="row" spacing={{ xs: 1, sm: 2 }} sx={{ mb: { xs: 2, sm: 3 } }}>
                 {match.strain.thc && (
                   <Chip
                     label={`THC: ${match.strain.thc}%`}
@@ -872,7 +903,7 @@ export default function ScanWizard({ onBack }) {
                       color: '#fff',
                       fontWeight: 700,
                       border: '2px solid rgba(255, 152, 0, 0.6)',
-                      fontSize: 14
+                      fontSize: { xs: '0.75rem', sm: '0.875rem' }
                     }}
                   />
                 )}
@@ -884,7 +915,7 @@ export default function ScanWizard({ onBack }) {
                       color: '#fff',
                       fontWeight: 700,
                       border: '2px solid rgba(33, 150, 243, 0.6)',
-                      fontSize: 14
+                      fontSize: { xs: '0.75rem', sm: '0.875rem' }
                     }}
                   />
                 )}
@@ -893,7 +924,7 @@ export default function ScanWizard({ onBack }) {
 
             {/* Description */}
             {match.strain?.description && (
-              <Typography variant="body1" sx={{ color: '#fff', mb: 3, fontSize: 16, lineHeight: 1.6 }}>
+              <Typography variant="body1" sx={{ color: '#fff', mb: { xs: 2, sm: 3 }, fontSize: { xs: '0.875rem', sm: '1rem' }, lineHeight: 1.6, px: { xs: 1, sm: 0 } }}>
                 {match.strain.description}
               </Typography>
             )}
@@ -901,14 +932,15 @@ export default function ScanWizard({ onBack }) {
             {/* Plant Health Analysis */}
             {plantHealth && (
               <Box sx={{
-                mb: 3,
-                p: 3,
+                mb: { xs: 2, sm: 3 },
+                p: { xs: 2, sm: 3 },
                 bgcolor: 'rgba(0, 0, 0, 0.4)',
-                borderRadius: 3,
+                borderRadius: { xs: 2, sm: 3 },
                 border: `2px solid ${plantHealth.healthStatus.color}`,
-                boxShadow: `0 0 20px ${plantHealth.healthStatus.color}40`
+                boxShadow: `0 0 20px ${plantHealth.healthStatus.color}40`,
+                width: '100%'
               }}>
-                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: { xs: 1.5, sm: 2 }, display: 'flex', alignItems: 'center', gap: 1, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                   🌿 Plant Analysis
                 </Typography>
 
@@ -1373,15 +1405,16 @@ export default function ScanWizard({ onBack }) {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 2,
-              mt: 3,
+              gap: { xs: 1.5, sm: 2 },
+              mt: { xs: 2, sm: 3 },
               background: 'rgba(30,30,30,0.25)',
               backdropFilter: 'blur(16px) saturate(180%)',
-              borderRadius: 6,
-              px: 4,
-              py: 3,
+              borderRadius: { xs: 3, sm: 6 },
+              px: { xs: 2, sm: 4 },
+              py: { xs: 2, sm: 3 },
               boxShadow: '0 4px 32px 0 rgba(0,0,0,0.12)',
-              border: '1px solid rgba(255,255,255,0.18)'
+              border: '1px solid rgba(255,255,255,0.18)',
+              width: '100%'
             }}>
               <input
                 type="file"
@@ -1395,21 +1428,26 @@ export default function ScanWizard({ onBack }) {
               <Button
                 variant="contained"
                 color="success"
+                fullWidth
                 sx={{
                   fontWeight: 700,
                   borderRadius: 999,
-                  px: 5,
-                  py: 1.5,
-                  fontSize: 18,
+                  px: { xs: 3, sm: 5 },
+                  py: { xs: 1.25, sm: 1.5 },
+                  fontSize: { xs: '0.95rem', sm: '1.125rem' },
                   boxShadow: 'none',
                   bgcolor: 'rgba(124, 179, 66, 0.3)',
                   border: '2px solid rgba(124, 179, 66, 0.6)',
                   backdropFilter: 'blur(10px)',
                   color: '#fff',
                   textTransform: 'none',
+                  maxWidth: { xs: '100%', sm: '400px' },
                   '&:hover': {
                     bgcolor: 'rgba(124, 179, 66, 0.5)',
                     border: '2px solid rgba(124, 179, 66, 0.8)'
+                  },
+                  '&:active': {
+                    transform: 'scale(0.98)'
                   }
                 }}
                 onClick={() => fileInputRef.current?.click()}
@@ -1418,65 +1456,11 @@ export default function ScanWizard({ onBack }) {
                 Scan Another Strain
               </Button>
 
-              {/* Navigation Buttons */}
-              <Stack direction="row" spacing={2}>
-                <Button
-                  variant="outlined"
-                  sx={{
-                    fontWeight: 700,
-                    borderRadius: 999,
-                    px: 4,
-                    py: 1,
-                    fontSize: 16,
-                    boxShadow: 'none',
-                    bgcolor: 'rgba(124, 179, 66, 0.2)',
-                    border: '2px solid rgba(124, 179, 66, 0.5)',
-                    backdropFilter: 'blur(10px)',
-                    color: '#fff',
-                    textTransform: 'none',
-                    '&:hover': {
-                      bgcolor: 'rgba(124, 179, 66, 0.3)',
-                      border: '2px solid rgba(124, 179, 66, 0.7)'
-                    }
-                  }}
-                  onClick={() => window.location.href = '/'}
-                >
-                  🏠 Home
-                </Button>
-                <Button
-                  variant="outlined"
-                  sx={{
-                    fontWeight: 700,
-                    borderRadius: 999,
-                    px: 4,
-                    py: 1,
-                    fontSize: 16,
-                    boxShadow: 'none',
-                    bgcolor: 'rgba(124, 179, 66, 0.2)',
-                    border: '2px solid rgba(124, 179, 66, 0.5)',
-                    backdropFilter: 'blur(10px)',
-                    color: '#fff',
-                    textTransform: 'none',
-                    '&:hover': {
-                      bgcolor: 'rgba(124, 179, 66, 0.3)',
-                      border: '2px solid rgba(124, 179, 66, 0.7)'
-                    }
-                  }}
-                  onClick={() => {
-                    setMatch(null);
-                    setResult(null);
-                    setScanStatus('');
-                  }}
-                >
-                  ← Back to Scanner
-                </Button>
-              </Stack>
-
               {loading && (
-                <CircularProgress color="success" sx={{ mt: 2 }} />
+                <CircularProgress color="success" sx={{ mt: { xs: 1, sm: 2 } }} />
               )}
               {scanStatus && !loading && (
-                <Typography align="center" sx={{ mt: 2, color: '#00e676', fontWeight: 700 }}>{scanStatus}</Typography>
+                <Typography align="center" sx={{ mt: { xs: 1, sm: 2 }, color: '#00e676', fontWeight: 700, fontSize: { xs: '0.875rem', sm: '1rem' } }}>{scanStatus}</Typography>
               )}
             </Box>
             {match.strain?.labTestResults && match.strain.labTestResults.length > 0 && (
@@ -1752,6 +1736,36 @@ export default function ScanWizard({ onBack }) {
             onClose={() => setAlertOpen(false)}
             message={alertMsg}
             anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          />
+
+          {/* Floating Feedback Button */}
+          <Tooltip title="Send Feedback" placement="left">
+            <Fab
+              color="primary"
+              onClick={() => setShowFeedback(true)}
+              sx={{
+                position: 'fixed',
+                bottom: 24,
+                right: 24,
+                zIndex: 1000,
+                background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
+                boxShadow: '0 8px 30px rgba(124, 179, 66, 0.4)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)',
+                  boxShadow: '0 12px 40px rgba(124, 179, 66, 0.6)',
+                  transform: 'scale(1.05)'
+                }
+              }}
+            >
+              <FeedbackIcon />
+            </Fab>
+          </Tooltip>
+
+          {/* Feedback Modal */}
+          <FeedbackModal
+            open={showFeedback}
+            onClose={() => setShowFeedback(false)}
+            user={currentUser}
           />
         </Container>
       )}

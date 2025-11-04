@@ -78,9 +78,17 @@ async function runScanDiagnostic(req, res) {
       const writeClient = supabaseAdmin ?? supabase;
 
       const testUrl = req.query.url || EXAMPLE_IMAGES[0];
+      // Use a test user_id for diagnostic scans (required for image_key generation)
+      const TEST_USER_ID = '00000000-0000-0000-0000-000000000001';
+
       const insert = await writeClient
         .from('scans')
-        .insert({ image_url: testUrl, status: 'pending' })
+        .insert({
+          image_url: testUrl,
+          status: 'pending',
+          user_id: TEST_USER_ID,
+          image_key: `users/diagnostic/${Date.now()}-test.jpg`
+        })
         .select()
         .single();
 

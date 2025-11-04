@@ -497,9 +497,34 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             ← Back to Garden
           </Button>
         )}
-        <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
-          Groups & Chat
-        </Typography>
+
+        {/* Hero Image Icon */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+          <Box
+            sx={{
+              width: 60,
+              height: 60,
+              borderRadius: '50%',
+              background: 'transparent',
+              border: '2px solid rgba(124, 179, 66, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)',
+              overflow: 'hidden',
+              flexShrink: 0
+            }}
+          >
+            <img
+              src="/hero.png?v=13"
+              alt="StrainSpotter"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </Box>
+          <Typography variant="h4" sx={{ fontWeight: 700 }}>
+            Groups & Chat
+          </Typography>
+        </Box>
 
         <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', md: 'row' } }}>
           {/* Groups list */}

@@ -30,6 +30,7 @@ import Guidelines from './components/Guidelines';
 import GuidelinesGate from './components/GuidelinesGate';
 import ErrorViewer from './components/ErrorViewer';
 import ErrorBoundary from './components/ErrorBoundary';
+import EmergencyLogout from './components/EmergencyLogout';
 
 import PasswordReset from './components/PasswordReset';
 // Apply full marijuana-themed design with cannabis leaf icon and hero.png
@@ -48,7 +49,9 @@ function App() {
     // Handle Supabase auth redirect hashes for recovery/magic link
     if (typeof window !== 'undefined' && window.location.hash) {
       const hash = window.location.hash;
-      if (/type=recovery/.test(hash)) {
+      if (hash === '#/emergency-logout') {
+        setCurrentView('emergency-logout');
+      } else if (/type=recovery/.test(hash)) {
         setCurrentView('reset');
         // DON'T clear hash yet - Supabase needs it to establish the recovery session
         // The PasswordReset component will handle it
@@ -186,6 +189,9 @@ function App() {
             )}
             {currentView === 'errors' && (
               <ErrorViewer onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'emergency-logout' && (
+              <EmergencyLogout />
             )}
           </div>
         </GuidelinesGate>

@@ -68,6 +68,9 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  /* Remove 300ms tap delay on mobile */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 body {
@@ -76,6 +79,15 @@ body {
   min-height: 100vh;
   background: var(--bg-primary);
   overflow-x: hidden;
+  /* Prevent double-tap zoom on mobile */
+  touch-action: manipulation;
+}
+
+/* Fix button touch responsiveness */
+button, a, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
 }
 
 a {

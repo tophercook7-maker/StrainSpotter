@@ -171,17 +171,23 @@ function isAllowedOrigin(origin) {
     return true;
   }
 
-  // Allow any localhost or 127.0.0.1 with any port explicitly for dev previews
+  // In production, be strict - only allow exact matches
+  if (process.env.NODE_ENV === 'production') {
+    console.log('[CORS] Rejected (production mode, no exact match):', origin);
+    return false;
+  }
+
+  // Development mode: Allow localhost and 127.0.0.1 with any port
   // This permits local dev machines to call the backend regardless of port drift
   try {
     const u = new URL(origin);
     if ((u.hostname === 'localhost' || u.hostname === '127.0.0.1')) {
-      console.log('[CORS] Allowed (localhost):', origin);
+      console.log('[CORS] Allowed (localhost dev):', origin);
       return true;
     }
   } catch {}
 
-  // Allow Vercel preview/prod frontend domains for this project
+  // Development mode: Allow Vercel preview/prod frontend domains for this project
   try {
     const { host } = new URL(origin);
     if (
@@ -193,7 +199,7 @@ function isAllowedOrigin(origin) {
         host.includes('tophercook7-maker')
       )
     ) {
-      console.log('[CORS] Allowed (Vercel wildcard):', origin);
+      console.log('[CORS] Allowed (Vercel wildcard dev):', origin);
       return true;
     }
   } catch {}
@@ -275,8 +281,32 @@ function errorHandler(err, req, res, next) {
   });
 }
 
-// Rate limiter for write-heavy endpoints
-const writeLimiter = rateLimit({ windowMs: 60 * 1000, max: 30 }); // 30 req/min per IP
+// Rate limiters for different endpoint types
+const writeLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // 30 requests per minute per IP
+  message: 'Too many requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Stricter limiter for expensive scan processing
+const scanProcessLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // 20 scans per hour per IP
+  message: 'Scan limit reached. Please try again in an hour.',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// General API rate limiter (applied to all /api routes)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per 15 minutes per IP
+  message: 'Too many API requests, please slow down.',
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 // --- Health ---
 app.get('/health', async (req, res, next) => {
@@ -574,7 +604,7 @@ app.get('/api/scans/:id', async (req, res, next) => {
 });
 
 // POST /api/scans/:id/process - Vision annotate and save
-app.post('/api/scans/:id/process', writeLimiter, async (req, res, next) => {
+app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) => {
   // Use service role for all scan operations when available
   const readClient = supabaseAdmin ?? supabase;
   const writeClient = supabaseAdmin ?? supabase;
@@ -852,6 +882,9 @@ app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
 });
 
 // --- Mount Route Modules ---
+// Apply general rate limiting to all /api routes
+app.use('/api', apiLimiter);
+
 // app.use('/api/stripe', stripeWebhook); // Removed: not using Stripe
 app.use('/api/health', healthRoutes);
 app.use('/api', strainRoutes);

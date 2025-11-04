@@ -970,11 +970,37 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
         </Button>
       )}
 
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-        <MenuBook sx={{ color: '#7CB342' }} />
-        <Typography variant="h5" fontWeight={900} sx={{ color: '#000' }}>
-          Grow Coach
-        </Typography>
+      <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }}>
+        {/* Hero Image Icon */}
+        <Box
+          sx={{
+            width: 50,
+            height: 50,
+            borderRadius: '50%',
+            background: 'transparent',
+            border: '2px solid rgba(124, 179, 66, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)',
+            overflow: 'hidden',
+            flexShrink: 0
+          }}
+        >
+          <img
+            src="/hero.png?v=13"
+            alt="StrainSpotter"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        </Box>
+        <Box>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <MenuBook sx={{ color: '#7CB342' }} />
+            <Typography variant="h5" fontWeight={900} sx={{ color: '#000' }}>
+              Grow Coach
+            </Typography>
+          </Stack>
+        </Box>
       </Stack>
       <Typography variant="body2" sx={{ mb: 2, color: '#000' }}>
         Complete, step-by-step guidance from seed selection to curing, tailored for consistent mobile use. Follow the tabs in order and log every action so StrainSpotter AI can spot trends early.

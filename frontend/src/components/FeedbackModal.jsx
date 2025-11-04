@@ -10,22 +10,35 @@ export default function FeedbackModal({ open, onClose, user }) {
 
   const handleSubmit = async () => {
     if (!input.trim()) return;
+
+    // Check if user is logged in
+    if (!user || !user.id) {
+      setError('Please log in to submit feedback.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
       const res = await fetch(`${API_BASE}/api/feedback/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: input, user_id: user?.id || null })
+        body: JSON.stringify({ content: input, user_id: user.id })
       });
+
       if (res.ok) {
         setSuccess(true);
         setInput('');
+        setTimeout(() => {
+          setSuccess(false);
+          onClose();
+        }, 2000);
       } else {
-        setError('Failed to send feedback.');
+        const data = await res.json();
+        setError(data.error || 'Failed to send feedback.');
       }
-    } catch {
-      setError('Network error.');
+    } catch (err) {
+      setError('Network error. Please try again.');
     }
     setSubmitting(false);
   };
@@ -46,24 +59,38 @@ export default function FeedbackModal({ open, onClose, user }) {
         borderRadius: 3
       }}>
         <Typography variant="h6" sx={{ mb: 2, color: 'black', fontWeight: 700 }}>Send Feedback</Typography>
-        <TextField
-          multiline
-          minRows={3}
-          maxRows={6}
-          fullWidth
-          placeholder="Share your thoughts, suggestions, or issues..."
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          sx={{ mb: 2, background: 'rgba(255,255,255,0.10)', borderRadius: 2, input: { color: 'black' } }}
-        />
-        {error && <Typography color="error" sx={{ mb: 1 }}>{error}</Typography>}
-        {success && <Typography color="success.main" sx={{ mb: 1 }}>Thank you for your feedback!</Typography>}
-        <Stack direction="row" spacing={2}>
-          <Button variant="contained" onClick={handleSubmit} disabled={submitting || !input.trim()} sx={{ fontWeight: 700, background: '#4caf50', color: 'black' }}>
-            {submitting ? 'Sending…' : 'Send'}
-          </Button>
-          <Button variant="outlined" onClick={onClose} sx={{ fontWeight: 700, color: 'black', borderColor: '#4caf50' }}>Cancel</Button>
-        </Stack>
+
+        {!user || !user.id ? (
+          <Box>
+            <Typography sx={{ mb: 2, color: 'black' }}>
+              Please log in to submit feedback. This helps us follow up with you if needed.
+            </Typography>
+            <Button variant="outlined" onClick={onClose} sx={{ fontWeight: 700, color: 'black', borderColor: '#4caf50' }}>
+              Close
+            </Button>
+          </Box>
+        ) : (
+          <>
+            <TextField
+              multiline
+              minRows={3}
+              maxRows={6}
+              fullWidth
+              placeholder="Share your thoughts, suggestions, or issues..."
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              sx={{ mb: 2, background: 'rgba(255,255,255,0.10)', borderRadius: 2, input: { color: 'black' } }}
+            />
+            {error && <Typography color="error" sx={{ mb: 1 }}>{error}</Typography>}
+            {success && <Typography color="success.main" sx={{ mb: 1 }}>Thank you for your feedback!</Typography>}
+            <Stack direction="row" spacing={2}>
+              <Button variant="contained" onClick={handleSubmit} disabled={submitting || !input.trim()} sx={{ fontWeight: 700, background: '#4caf50', color: 'black' }}>
+                {submitting ? 'Sending…' : 'Send'}
+              </Button>
+              <Button variant="outlined" onClick={onClose} sx={{ fontWeight: 700, color: 'black', borderColor: '#4caf50' }}>Cancel</Button>
+            </Stack>
+          </>
+        )}
       </Box>
     </Modal>
   );

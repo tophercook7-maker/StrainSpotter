@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { Box, Button, Typography, Stack, Container, Grid, Card, CardContent, Chip } from '@mui/material';
+import { Box, Button, Typography, Stack, Container, Grid, Card, CardContent, Chip, Fab, Tooltip } from '@mui/material';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import SpaIcon from '@mui/icons-material/Spa';
 import LocalFloristIcon from '@mui/icons-material/LocalFlorist';
 import ScienceIcon from '@mui/icons-material/Science';
 import SpeedIcon from '@mui/icons-material/Speed';
 import VerifiedIcon from '@mui/icons-material/Verified';
+import FeedbackIcon from '@mui/icons-material/Feedback';
 import ScanWizard from './ScanWizard';
 import GardenGate from './GardenGate';
 import Garden from './Garden';
+import FeedbackModal from './FeedbackModal';
 
 // Modern UI Overhaul - Phase 1
 
@@ -16,6 +18,7 @@ export default function Home({ onNavigate }) {
   const [showScan, setShowScan] = useState(false);
   const [showGarden, setShowGarden] = useState(false);
   const [inGarden, setInGarden] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   if (showScan) {
     return <ScanWizard onBack={() => setShowScan(false)} />;
@@ -419,6 +422,36 @@ export default function Home({ onNavigate }) {
           </Stack>
         </Stack>
       </Container>
+
+      {/* Floating Feedback Button */}
+      <Tooltip title="Send Feedback" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setShowFeedback(true)}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 1000,
+            background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
+            boxShadow: '0 8px 30px rgba(124, 179, 66, 0.4)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)',
+              boxShadow: '0 12px 40px rgba(124, 179, 66, 0.6)',
+              transform: 'scale(1.05)'
+            }
+          }}
+        >
+          <FeedbackIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Feedback Modal */}
+      <FeedbackModal
+        open={showFeedback}
+        onClose={() => setShowFeedback(false)}
+        user={null}
+      />
     </Box>
   );
 }

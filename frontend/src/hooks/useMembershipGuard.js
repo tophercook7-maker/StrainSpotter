@@ -54,8 +54,10 @@ export function useMembershipGuard() {
     return () => subscription.unsubscribe();
   }, [checkMembership]);
 
-  // User can only logout if they're not a member or if membership is not expired
-  const canLogout = !isMember || !isExpired;
+  // Admin users can always logout
+  // Regular users can only logout if they're not a member or if membership is not expired
+  const isAdmin = user?.email === 'strainspotter25@gmail.com' || user?.email === 'admin@strainspotter.com';
+  const canLogout = isAdmin || !isMember || !isExpired;
 
   return {
     user,

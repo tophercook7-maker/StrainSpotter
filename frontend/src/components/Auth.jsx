@@ -215,7 +215,30 @@ export default function Auth({ onBack }) {
       <Card sx={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(12px)', border: '2px solid rgba(0,0,0,0.12)', boxShadow: 'none' }}>
         <CardContent>
           <Stack spacing={2}>
-            <Typography variant="h5" sx={{ color: 'black', fontSize: '2rem', fontWeight: 700 }}>Account</Typography>
+            {/* Hero Image Branding */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <Box
+                sx={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  background: 'transparent',
+                  border: '2px solid rgba(124, 179, 66, 0.5)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 0 30px rgba(124, 179, 66, 0.4)',
+                  overflow: 'hidden'
+                }}
+              >
+                <img
+                  src="/hero.png?v=13"
+                  alt="StrainSpotter"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              </Box>
+            </Box>
+            <Typography variant="h5" sx={{ color: 'black', fontSize: '2rem', fontWeight: 700, textAlign: 'center' }}>Account</Typography>
             {user ? (
               <>
                 <Typography variant="body2">Signed in as {user.email}</Typography>

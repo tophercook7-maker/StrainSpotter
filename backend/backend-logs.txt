@@ -1,0 +1,19 @@
+
+> strainspotter-backend@0.1.0 start
+> node index.js
+
+{"tag":"data","strains":35137,"testMappings":200}
+[boot] SUPABASE_URL present = true
+[boot] GOOGLE_APPLICATION_CREDENTIALS set = true
+[boot] Service role client active = true
+[strainspotter] backend listening on http://localhost:5181
+[boot] Storage bucket 'scans' present.
+[FEEDBACK] Query result: { groups: [], error: null }
+[FEEDBACK] No Feedback group found, creating...
+[FEEDBACK] Error creating group: {
+  code: '23505',
+  details: 'Key (name)=(Feedback) already exists.',
+  hint: null,
+  message: 'duplicate key value violates unique constraint "idx_groups_name_unique"'
+}
+[FEEDBACK] Duplicate key error, fetching existing group...
