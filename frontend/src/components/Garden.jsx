@@ -214,14 +214,16 @@ export default function Garden({ onBack, onNavigate }) {
         </Alert>
       )}
 
-      {/* Compact Header */}
+      {/* Premium Glassmorphism Header */}
       <Paper sx={{
         p: 1.5,
         mb: 1.5,
-        background: 'rgba(255,255,255,0.12)',
-        backdropFilter: 'blur(10px)',
-        border: '1.5px solid rgba(124, 179, 66, 0.3)',
-        borderRadius: 2
+        background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.15) 0%, rgba(156, 204, 101, 0.1) 100%)',
+        backdropFilter: 'blur(20px)',
+        border: '1.5px solid rgba(124, 179, 66, 0.4)',
+        borderRadius: 3,
+        boxShadow: '0 4px 20px rgba(124, 179, 66, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+        transition: 'all 0.15s ease'
       }}>
         {/* Compact buttons and welcome in one row */}
         <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
@@ -261,13 +263,25 @@ export default function Garden({ onBack, onNavigate }) {
                 size="small"
                 onClick={onBack}
                 sx={{
-                  color: '#fff',
+                  color: '#CDDC39',
                   borderColor: 'rgba(124, 179, 66, 0.5)',
                   fontSize: '0.7rem',
                   py: 0.5,
                   px: 1,
                   minWidth: 'auto',
-                  '&:hover': { borderColor: 'rgba(124, 179, 66, 1)' }
+                  background: 'rgba(124, 179, 66, 0.1)',
+                  backdropFilter: 'blur(5px)',
+                  transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    borderColor: 'rgba(124, 179, 66, 1)',
+                    background: 'rgba(124, 179, 66, 0.2)',
+                    transform: 'scale(1.05)',
+                    color: '#fff'
+                  },
+                  '&:active': {
+                    transform: 'scale(0.95)',
+                    transition: 'all 0.05s ease'
+                  }
                 }}
               >
                 Home
@@ -278,13 +292,25 @@ export default function Garden({ onBack, onNavigate }) {
               size="small"
               onClick={handleLogout}
               sx={{
-                color: '#fff',
+                color: '#CDDC39',
                 borderColor: 'rgba(124, 179, 66, 0.5)',
                 fontSize: '0.7rem',
                 py: 0.5,
                 px: 1,
                 minWidth: 'auto',
-                '&:hover': { borderColor: 'rgba(124, 179, 66, 1)' }
+                background: 'rgba(124, 179, 66, 0.1)',
+                backdropFilter: 'blur(5px)',
+                transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                '&:hover': {
+                  borderColor: 'rgba(124, 179, 66, 1)',
+                  background: 'rgba(124, 179, 66, 0.2)',
+                  transform: 'scale(1.05)',
+                  color: '#fff'
+                },
+                '&:active': {
+                  transform: 'scale(0.95)',
+                  transition: 'all 0.05s ease'
+                }
               }}
             >
               Logout
@@ -293,7 +319,7 @@ export default function Garden({ onBack, onNavigate }) {
         </Stack>
       </Paper>
 
-      {/* Compact Feature Tiles - 3 columns on mobile */}
+      {/* Premium Feature Tiles - 3 columns on mobile */}
       <Grid container spacing={1}>
         {tiles.map((tile) => (
           <Grid item xs={4} sm={4} md={3} key={tile.nav}>
@@ -303,15 +329,37 @@ export default function Garden({ onBack, onNavigate }) {
                 p: 1,
                 textAlign: 'center',
                 cursor: 'pointer',
-                background: 'rgba(255,255,255,0.08)',
-                backdropFilter: 'blur(10px)',
-                border: '1.5px solid rgba(124, 179, 66, 0.25)',
-                borderRadius: 2,
-                transition: 'all 0.2s ease',
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(124, 179, 66, 0.08) 100%)',
+                backdropFilter: 'blur(15px)',
+                border: '1.5px solid rgba(124, 179, 66, 0.3)',
+                borderRadius: 3,
+                transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: '-50%',
+                  left: '-50%',
+                  width: '200%',
+                  height: '200%',
+                  background: 'radial-gradient(circle, rgba(124, 179, 66, 0.1) 0%, transparent 70%)',
+                  opacity: 0,
+                  transition: 'opacity 0.15s ease'
+                },
                 '&:hover': {
-                  background: 'rgba(124, 179, 66, 0.15)',
-                  border: '1.5px solid rgba(124, 179, 66, 0.5)',
-                  transform: 'translateY(-2px)',
+                  background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.2) 0%, rgba(156, 204, 101, 0.15) 100%)',
+                  border: '1.5px solid rgba(124, 179, 66, 0.6)',
+                  transform: 'translateY(-4px) scale(1.05)',
+                  boxShadow: '0 8px 24px rgba(124, 179, 66, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                  '&::before': {
+                    opacity: 1
+                  }
+                },
+                '&:active': {
+                  transform: 'translateY(-2px) scale(1.02)',
+                  transition: 'all 0.05s ease'
                 }
               }}
             >
@@ -322,13 +370,23 @@ export default function Garden({ onBack, onNavigate }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                bgcolor: tile.color,
+                background: `linear-gradient(135deg, ${tile.color} 0%, ${tile.color}dd 100%)`,
                 borderRadius: '50%',
-                '& svg': { fontSize: 24, color: '#fff' }
+                boxShadow: `0 4px 12px ${tile.color}66, inset 0 1px 0 rgba(255, 255, 255, 0.3)`,
+                transition: 'all 0.15s ease',
+                '& svg': { fontSize: 24, color: '#fff', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }
               }}>
                 {tile.icon}
               </Box>
-              <Typography variant="caption" sx={{ color: '#fff', fontWeight: 600, fontSize: '0.7rem', lineHeight: 1.2, display: 'block' }}>
+              <Typography variant="caption" sx={{
+                color: '#fff',
+                fontWeight: 600,
+                fontSize: '0.7rem',
+                lineHeight: 1.2,
+                display: 'block',
+                textShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
+                transition: 'all 0.15s ease'
+              }}>
                 {tile.title}
               </Typography>
             </Paper>
@@ -336,18 +394,24 @@ export default function Garden({ onBack, onNavigate }) {
         ))}
       </Grid>
 
-      {/* Compact Membership Info */}
+      {/* Premium Membership Info */}
       <Paper sx={{
         p: 1.5,
         mt: 1.5,
-        background: 'rgba(255,255,255,0.08)',
-        backdropFilter: 'blur(10px)',
-        border: '1.5px solid rgba(124, 179, 66, 0.25)',
-        borderRadius: 2
+        background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.12) 0%, rgba(156, 204, 101, 0.08) 100%)',
+        backdropFilter: 'blur(15px)',
+        border: '1.5px solid rgba(124, 179, 66, 0.3)',
+        borderRadius: 3,
+        boxShadow: '0 2px 12px rgba(124, 179, 66, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+        transition: 'all 0.15s ease'
       }}>
         <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-          <Typography variant="caption" sx={{ color: '#e0e0e0', fontSize: '0.7rem' }}>
-            <strong>Plan:</strong> $4.99/mo • Active Member
+          <Typography variant="caption" sx={{
+            color: '#e8e8e8',
+            fontSize: '0.7rem',
+            textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+          }}>
+            <strong style={{ color: '#CDDC39' }}>Plan:</strong> $4.99/mo • Active Member
           </Typography>
           <Button
             variant="text"
@@ -358,7 +422,15 @@ export default function Garden({ onBack, onNavigate }) {
               py: 0.25,
               px: 1,
               minWidth: 'auto',
-              '&:hover': { bgcolor: 'rgba(255, 82, 82, 0.1)' }
+              transition: 'all 0.15s ease',
+              '&:hover': {
+                bgcolor: 'rgba(255, 82, 82, 0.15)',
+                transform: 'scale(1.05)'
+              },
+              '&:active': {
+                transform: 'scale(0.95)',
+                transition: 'all 0.05s ease'
+              }
             }}
           >
             Cancel
