@@ -528,29 +528,29 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           </Box>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.25rem' }}>
             Groups & Chat
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', md: 'row' } }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', md: 'row' } }}>
           {/* Groups list */}
           <Card sx={{
-            flex: { xs: '1 1 auto', md: '0 0 300px' },
+            flex: { xs: '1 1 auto', md: '0 0 280px' },
             bgcolor: 'rgba(255,255,255,0.9)',
             color: '#1f3320',
-          boxShadow: '0 18px 50px rgba(0,0,0,0.3)',
-          backdropFilter: 'blur(12px)',
-          borderRadius: 4,
+          boxShadow: '0 12px 30px rgba(0,0,0,0.25)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: 3,
           border: '1px solid rgba(255,255,255,0.18)'
         }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+          <CardContent sx={{ p: 2 }}>
+            <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600, fontSize: '1rem' }}>
               Groups
             </Typography>
-            <Stack spacing={2}>
-              <Typography variant="body2" sx={{ mb: 1, color: 'rgba(22,34,22,0.8)' }}>
-                {userId ? 'Select one of our curated community groups below to jump into the conversation.' : 'Sign in to join the community groups.'}
+            <Stack spacing={1.5}>
+              <Typography variant="caption" sx={{ mb: 0.5, color: 'rgba(22,34,22,0.8)', fontSize: '0.75rem' }}>
+                {userId ? 'Select a group to join the conversation.' : 'Sign in to join groups.'}
               </Typography>
               
               {!userId && (

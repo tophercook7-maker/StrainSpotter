@@ -803,51 +803,32 @@ function Scanner({ onViewHistory, onBack }) {
         </Box>
       )}
 
-      <Container maxWidth="sm" sx={{ py: 4 }}>
-        {/* Hero Card */}
-        <Card 
-          sx={{ 
-            mb: 3,
+      <Container maxWidth="sm" sx={{ py: 2, px: 2 }}>
+        {/* Compact Hero Card */}
+        <Card
+          sx={{
+            mb: 2,
             overflow: 'hidden',
-            border: '2px solid #4caf50',
-            bgcolor: 'rgba(0,0,0,0)'
+            border: '1.5px solid #4caf50',
+            bgcolor: 'rgba(0,0,0,0.7)',
+            backdropFilter: 'blur(10px)'
           }}
         >
-          <Box sx={{ position: 'relative', height: 220 }}>
-            <Box
-              sx={{
-                position: 'absolute',
-                inset: 0,
-                backgroundImage: 'url(/hero.png)',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                filter: 'saturate(1.1)'
-              }}
-            />
-            <Box
-              sx={{
-                position: 'absolute',
-                inset: 0,
-                background:
-                  'linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0.7) 100%)'
-              }}
-            />
-          </Box>
-          <CardContent sx={{ background: 'linear-gradient(135deg, #2d5a2d 0%, #1f3a1f 100%)' }}>
+          <CardContent sx={{ p: 2, background: 'linear-gradient(135deg, #2d5a2d 0%, #1f3a1f 100%)' }}>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
               <CannabisLeafIcon />
-              <Typography variant="h4" fontWeight="bold" color="primary.light">
+              <Typography variant="h6" fontWeight="bold" color="primary.light">
                 Identify Your Strain
               </Typography>
             </Stack>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
-              Snap a photo of your cannabis bud, product, or packaging and let AI identify the strain.
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Snap a photo and let AI identify the strain.
             </Typography>
-            <Alert severity="info" icon={false} sx={{ mt: 2, bgcolor: 'rgba(76, 175, 80, 0.1)' }}>
-              <Typography variant="caption" fontWeight="bold" color="primary.light">
+            <Alert severity="info" icon={false} sx={{ py: 0.5, px: 1, bgcolor: 'rgba(76, 175, 80, 0.1)' }}>
+              <Typography variant="caption" fontWeight="bold" color="primary.light" sx={{ fontSize: '0.7rem' }}>
                 How It Works:
               </Typography>
-              <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
+              <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.25, fontSize: '0.65rem' }}>
                 Our AI analyzes visual characteristics (colors, structure, labels, text) and matches 
                 them against 35,000+ strains. For best results, photograph buds in good lighting 
                 or include product labels with strain names.
@@ -978,92 +959,73 @@ function Scanner({ onViewHistory, onBack }) {
             <>
               <Button
                 variant="contained"
-                size="large"
+                size="medium"
                 fullWidth
                 onClick={handleScan}
                 disabled={loading || !currentUserId}
-                sx={{ 
-                  py: 3,
-                  fontSize: '1.1rem',
+                sx={{
+                  py: 1.5,
+                  fontSize: '0.9rem',
                   background: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
                 }}
               >
                 {loading ? (
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <CircularProgress size={24} color="inherit" />
-                    <Box component="span">{loadingStatus || 'Processing...'}</Box>
+                    <CircularProgress size={20} color="inherit" />
+                    <Box component="span" sx={{ fontSize: '0.85rem' }}>{loadingStatus || 'Processing...'}</Box>
                   </Stack>
                 ) : (
-                  '🔬 Scan & Identify Strain'
+                  '🔬 Scan & Identify'
                 )}
               </Button>
-              <Button
-                variant="text"
-                size="large"
-                fullWidth
-                onClick={() => fileInputRef.current?.click()}
-                disabled={loading}
-                sx={{ color: 'primary.light' }}
-              >
-                Add Another Photo
-              </Button>
-              
-              <Button
-                variant="outlined"
-                size="large"
-                fullWidth
-                onClick={handleReset}
-                disabled={loading}
-                sx={{ borderColor: '#4caf50', color: '#4caf50' }}
-              >
-                Start Over
-              </Button>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="text"
+                  size="small"
+                  fullWidth
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={loading}
+                  sx={{ color: 'primary.light', fontSize: '0.8rem' }}
+                >
+                  Add Photo
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  fullWidth
+                  onClick={handleReset}
+                  disabled={loading}
+                  sx={{ borderColor: '#4caf50', color: '#4caf50', fontSize: '0.8rem' }}
+                >
+                  Reset
+                </Button>
+              </Stack>
             </>
           )}
         </Stack>
 
-        {/* How it Works */}
+        {/* Compact How it Works */}
         {imagePreviews.length === 0 && (
-          <Card sx={{ mt: 4, bgcolor: 'background.paper' }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom color="primary.light">
-                📋 How Visual Matching Works
+          <Card sx={{ mt: 2, bgcolor: 'background.paper' }}>
+            <CardContent sx={{ p: 2 }}>
+              <Typography variant="subtitle2" gutterBottom color="primary.light" sx={{ fontSize: '0.875rem' }}>
+                📋 How It Works
               </Typography>
-              <Stack spacing={2}>
+              <Stack spacing={1}>
                 <Box>
-                  <Typography variant="body1" fontWeight="bold" color="text.primary">
-                    1. Capture Image
+                  <Typography variant="caption" fontWeight="bold" color="text.primary" sx={{ fontSize: '0.75rem' }}>
+                    1. Capture • 2. AI Analysis • 3. Match
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Photo of bud (good lighting, neutral background) or product packaging with visible text
-                  </Typography>
-                </Box>
-                <Box>
-                  <Typography variant="body1" fontWeight="bold" color="text.primary">
-                    2. AI Visual Analysis
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Analyzes colors, structure, text, labels, and compares to similar images online
-                  </Typography>
-                </Box>
-                <Box>
-                  <Typography variant="body1" fontWeight="bold" color="text.primary">
-                    3. Intelligent Matching
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Scores 35,000+ strains based on visual characteristics and returns top matches with confidence ratings
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.7rem', mt: 0.5 }}>
+                    Photo → AI analyzes colors, structure, text → Matches against 35K+ strains
                   </Typography>
                 </Box>
               </Stack>
-              <Alert severity="warning" sx={{ mt: 2 }}>
-                <Typography variant="caption">
-                  <strong>Note:</strong> Visual matching is based on AI analysis of characteristics. 
-                  Images with visible strain names/labels will produce the most accurate results.
+              <Alert severity="warning" sx={{ mt: 1, py: 0.5, px: 1 }}>
+                <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>
+                  <strong>Tip:</strong> Images with visible strain names/labels produce best results.
                 </Typography>
               </Alert>
-              <Box sx={{ mt: 2 }}>
-                <TipsContent />
-              </Box>
             </CardContent>
           </Card>
         )}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Button, Typography, Stack, Container, Grid, Card, CardContent, Chip, Fab, Tooltip } from '@mui/material';
+import { Box, Button, Typography, Stack, Container, Grid, Card, Fab } from '@mui/material';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import SpaIcon from '@mui/icons-material/Spa';
 import LocalFloristIcon from '@mui/icons-material/LocalFlorist';
@@ -12,7 +12,7 @@ import GardenGate from './GardenGate';
 import Garden from './Garden';
 import FeedbackModal from './FeedbackModal';
 
-// Modern UI Overhaul - Phase 1
+// Compact Mobile-First UI - No Scrolling
 
 export default function Home({ onNavigate }) {
   const [showScan, setShowScan] = useState(false);
@@ -43,39 +43,6 @@ export default function Home({ onNavigate }) {
     />;
   }
 
-  const features = [
-    {
-      icon: <CameraAltIcon sx={{ fontSize: 40 }} />,
-      title: 'AI-Powered Scanning',
-      description: 'Upload a photo and get instant strain identification using advanced computer vision'
-    },
-    {
-      icon: <ScienceIcon sx={{ fontSize: 40 }} />,
-      title: 'Scientific Analysis',
-      description: 'Detailed breakdown of cannabinoids, terpenes, and genetic lineage'
-    },
-    {
-      icon: <SpeedIcon sx={{ fontSize: 40 }} />,
-      title: 'Instant Results',
-      description: 'Get comprehensive strain data in seconds, not hours'
-    },
-    {
-      icon: <LocalFloristIcon sx={{ fontSize: 40 }} />,
-      title: '35,000+ Strains',
-      description: 'Access our massive database of cannabis genetics and strain information'
-    },
-    {
-      icon: <SpaIcon sx={{ fontSize: 40 }} />,
-      title: 'Find Vendors',
-      description: 'Discover where to buy seeds from trusted vendors worldwide'
-    },
-    {
-      icon: <VerifiedIcon sx={{ fontSize: 40 }} />,
-      title: 'Verified Data',
-      description: 'Curated strain information from reliable sources and grower reviews'
-    }
-  ];
-
   return (
     <Box
       sx={{
@@ -88,7 +55,7 @@ export default function Home({ onNavigate }) {
         backgroundAttachment: 'fixed',
         backgroundRepeat: 'no-repeat',
         position: 'relative',
-        overflow: 'hidden',
+        overflow: 'auto',
         '&::before': {
           content: '""',
           position: 'absolute',
@@ -96,355 +63,297 @@ export default function Home({ onNavigate }) {
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.4)',
+          background: 'rgba(0, 0, 0, 0.5)',
           pointerEvents: 'none',
           zIndex: 0
         }
       }}
     >
-      {/* Hero Section */}
-      <Box
-        sx={{
-          position: 'relative',
-          minHeight: { xs: '90vh', md: '100vh' },
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'transparent'
-        }}
-      >
-        <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1, py: { xs: 8, md: 12 } }}>
-          <Stack spacing={6} alignItems="center" textAlign="center">
-            {/* Logo/Icon */}
-            <Box
-              className="animate-fade-in"
-              sx={{
-                width: { xs: 120, md: 160 },
-                height: { xs: 120, md: 160 },
-                borderRadius: '50%',
-                background: 'transparent',
-                border: '3px solid rgba(124, 179, 66, 0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 0 60px rgba(124, 179, 66, 0.3)',
-                animation: 'glow 3s ease-in-out infinite alternate'
-              }}
-            >
-              <img
-                src="/hero.png?v=13"
-                alt="StrainSpotter"
-                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
-              />
-            </Box>
+      {/* Compact Mobile-First Hero */}
+      <Container maxWidth="sm" sx={{ position: 'relative', zIndex: 1, py: 2, px: 2 }}>
+        <Stack spacing={2} alignItems="center" textAlign="center">
+          {/* Compact Logo */}
+          <Box
+            sx={{
+              width: 60,
+              height: 60,
+              borderRadius: '50%',
+              background: 'transparent',
+              border: '2px solid rgba(124, 179, 66, 0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 0 20px rgba(124, 179, 66, 0.3)',
+              mt: 1
+            }}
+          >
+            <img
+              src="/hero.png?v=13"
+              alt="StrainSpotter"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+            />
+          </Box>
 
-            {/* Headline */}
-            <Stack spacing={2} className="animate-slide-up">
-              <Typography
-                variant="h1"
-                sx={{
-                  fontFamily: 'Poppins, sans-serif',
-                  fontWeight: 900,
-                  background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  fontSize: { xs: '2.5rem', sm: '3.5rem', md: '4.5rem' },
-                  lineHeight: 1.1,
-                  letterSpacing: '-0.02em'
-                }}
-              >
-                StrainSpotter
-              </Typography>
+          {/* Compact Title */}
+          <Typography
+            variant="h5"
+            sx={{
+              fontFamily: 'Poppins, sans-serif',
+              fontWeight: 800,
+              background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              fontSize: '1.75rem',
+              lineHeight: 1.2
+            }}
+          >
+            StrainSpotter
+          </Typography>
 
-              <Typography
-                variant="h2"
-                sx={{
-                  color: '#ffffff',
-                  fontWeight: 700,
-                  fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' },
-                  maxWidth: 800,
-                  mx: 'auto'
-                }}
-              >
-                AI-Powered Cannabis Strain Identification
-              </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              color: '#b0b0b0',
+              fontSize: '0.875rem',
+              maxWidth: 300,
+              lineHeight: 1.4
+            }}
+          >
+            AI-Powered Cannabis Identification
+          </Typography>
 
-              <Typography
-                variant="body1"
-                sx={{
-                  color: '#b0b0b0',
-                  fontSize: { xs: '1.1rem', md: '1.25rem' },
-                  maxWidth: 600,
-                  mx: 'auto',
-                  lineHeight: 1.8
-                }}
-              >
-                Upload a photo of your cannabis and get instant strain identification,
-                genetic analysis, and vendor recommendations powered by advanced AI.
-              </Typography>
-            </Stack>
-
-            {/* CTA Buttons */}
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={3}
-              sx={{ mt: 4 }}
-              className="animate-slide-up"
-            >
+          {/* Compact Action Grid - 2x3 */}
+          <Grid container spacing={1.5} sx={{ mt: 1, maxWidth: 400 }}>
+            {/* Row 1 */}
+            <Grid item xs={6}>
               <Button
                 variant="contained"
-                size="large"
+                fullWidth
                 onClick={() => setShowScan(true)}
                 startIcon={<CameraAltIcon />}
                 sx={{
-                  px: 6,
-                  py: 2,
-                  fontSize: '1.1rem',
-                  fontWeight: 700,
-                  borderRadius: '50px',
+                  py: 1.5,
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  borderRadius: '12px',
                   background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
-                  boxShadow: '0 8px 30px rgba(124, 179, 66, 0.4)',
-                  textTransform: 'none',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 12px 40px rgba(124, 179, 66, 0.6)',
-                    background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)'
-                  }
+                  boxShadow: '0 4px 12px rgba(124, 179, 66, 0.3)',
+                  textTransform: 'none'
                 }}
               >
-                Start AI Scan
+                Scan
               </Button>
-
+            </Grid>
+            <Grid item xs={6}>
               <Button
                 variant="outlined"
-                size="large"
-                onClick={() => setShowGarden(true)}
-                startIcon={<SpaIcon />}
+                fullWidth
+                onClick={() => onNavigate('strains')}
+                startIcon={<LocalFloristIcon />}
                 sx={{
-                  px: 6,
-                  py: 2,
-                  fontSize: '1.1rem',
-                  fontWeight: 700,
-                  borderRadius: '50px',
-                  border: '2px solid rgba(124, 179, 66, 0.5)',
+                  py: 1.5,
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  borderRadius: '12px',
+                  border: '1.5px solid rgba(124, 179, 66, 0.5)',
                   color: '#9CCC65',
-                  textTransform: 'none',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    border: '2px solid rgba(124, 179, 66, 0.8)',
-                    background: 'rgba(124, 179, 66, 0.1)',
-                    transform: 'translateY(-2px)'
-                  }
+                  textTransform: 'none'
                 }}
               >
-                Enter the Garden
+                Browse
               </Button>
-            </Stack>
+            </Grid>
 
-            {/* Trust Badges */}
-            <Stack
-              direction="row"
-              spacing={2}
-              flexWrap="wrap"
-              justifyContent="center"
-              sx={{ mt: 4 }}
-            >
-              <Chip
-                label="35,000+ Strains"
+            {/* Row 2 */}
+            <Grid item xs={6}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => onNavigate('dispensaries')}
+                startIcon={<SpaIcon />}
                 sx={{
-                  bgcolor: 'rgba(124, 179, 66, 0.15)',
-                  color: '#9CCC65',
+                  py: 1.5,
+                  fontSize: '0.875rem',
                   fontWeight: 600,
-                  border: '1px solid rgba(124, 179, 66, 0.3)'
+                  borderRadius: '12px',
+                  border: '1.5px solid rgba(124, 179, 66, 0.5)',
+                  color: '#9CCC65',
+                  textTransform: 'none'
                 }}
-              />
-              <Chip
-                label="AI-Powered"
+              >
+                Dispensaries
+              </Button>
+            </Grid>
+            <Grid item xs={6}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => onNavigate('seeds')}
+                startIcon={<ScienceIcon />}
                 sx={{
-                  bgcolor: 'rgba(124, 179, 66, 0.15)',
-                  color: '#9CCC65',
+                  py: 1.5,
+                  fontSize: '0.875rem',
                   fontWeight: 600,
-                  border: '1px solid rgba(124, 179, 66, 0.3)'
-                }}
-              />
-              <Chip
-                label="Instant Results"
-                sx={{
-                  bgcolor: 'rgba(124, 179, 66, 0.15)',
+                  borderRadius: '12px',
+                  border: '1.5px solid rgba(124, 179, 66, 0.5)',
                   color: '#9CCC65',
-                  fontWeight: 600,
-                  border: '1px solid rgba(124, 179, 66, 0.3)'
+                  textTransform: 'none'
                 }}
-              />
-            </Stack>
-          </Stack>
-        </Container>
-      </Box>
+              >
+                Seeds
+              </Button>
+            </Grid>
 
-      {/* Features Section */}
-      <Container maxWidth="lg" sx={{ py: { xs: 8, md: 12 }, position: 'relative', zIndex: 1 }}>
-        <Stack spacing={6}>
-          {/* Section Header */}
-          <Stack spacing={2} textAlign="center">
-            <Typography
-              variant="h2"
-              sx={{
-                fontFamily: 'Poppins, sans-serif',
-                fontWeight: 800,
-                color: '#ffffff',
-                fontSize: { xs: '2rem', md: '3rem' }
-              }}
-            >
-              Why Choose StrainSpotter?
-            </Typography>
-            <Typography
-              variant="body1"
-              sx={{
-                color: '#b0b0b0',
-                fontSize: '1.1rem',
-                maxWidth: 600,
-                mx: 'auto'
-              }}
-            >
-              The most advanced cannabis strain identification platform powered by AI
-            </Typography>
-          </Stack>
-
-          {/* Features Grid */}
-          <Grid container spacing={4}>
-            {features.map((feature, index) => (
-              <Grid item xs={12} sm={6} md={4} key={index}>
-                <Card
-                  className="animate-fade-in"
-                  sx={{
-                    height: '100%',
-                    background: 'rgba(44, 44, 44, 0.6)',
-                    backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(124, 179, 66, 0.2)',
-                    borderRadius: 3,
-                    transition: 'all 0.3s ease',
-                    '&:hover': {
-                      transform: 'translateY(-8px)',
-                      border: '1px solid rgba(124, 179, 66, 0.5)',
-                      boxShadow: '0 12px 40px rgba(124, 179, 66, 0.2)'
-                    }
-                  }}
-                >
-                  <CardContent sx={{ p: 4 }}>
-                    <Stack spacing={2} alignItems="center" textAlign="center">
-                      <Box
-                        sx={{
-                          width: 80,
-                          height: 80,
-                          borderRadius: '50%',
-                          background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.2) 0%, rgba(156, 204, 101, 0.1) 100%)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#9CCC65'
-                        }}
-                      >
-                        {feature.icon}
-                      </Box>
-                      <Typography
-                        variant="h6"
-                        sx={{
-                          fontWeight: 700,
-                          color: '#ffffff'
-                        }}
-                      >
-                        {feature.title}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: '#b0b0b0',
-                          lineHeight: 1.7
-                        }}
-                      >
-                        {feature.description}
-                      </Typography>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
+            {/* Row 3 */}
+            <Grid item xs={6}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => onNavigate('groups')}
+                startIcon={<VerifiedIcon />}
+                sx={{
+                  py: 1.5,
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  borderRadius: '12px',
+                  border: '1.5px solid rgba(124, 179, 66, 0.5)',
+                  color: '#9CCC65',
+                  textTransform: 'none'
+                }}
+              >
+                Groups
+              </Button>
+            </Grid>
+            <Grid item xs={6}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => setShowGarden(true)}
+                startIcon={<SpeedIcon />}
+                sx={{
+                  py: 1.5,
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  borderRadius: '12px',
+                  border: '1.5px solid rgba(124, 179, 66, 0.5)',
+                  color: '#9CCC65',
+                  textTransform: 'none'
+                }}
+              >
+                Garden
+              </Button>
+            </Grid>
           </Grid>
 
-          {/* Bottom CTA */}
-          <Stack
-            spacing={3}
-            alignItems="center"
-            sx={{
-              mt: 8,
-              p: 6,
-              borderRadius: 4,
-              background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.1) 0%, rgba(0, 0, 0, 0.3) 100%)',
-              border: '1px solid rgba(124, 179, 66, 0.3)'
-            }}
-          >
-            <Typography
-              variant="h4"
-              sx={{
-                fontWeight: 700,
-                color: '#ffffff',
-                textAlign: 'center'
-              }}
-            >
-              Ready to identify your strain?
-            </Typography>
-            <Button
-              variant="contained"
-              size="large"
-              onClick={() => setShowScan(true)}
-              startIcon={<CameraAltIcon />}
-              sx={{
-                px: 8,
-                py: 2.5,
-                fontSize: '1.2rem',
-                fontWeight: 700,
-                borderRadius: '50px',
-                background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
-                boxShadow: '0 8px 30px rgba(124, 179, 66, 0.4)',
-                textTransform: 'none',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 12px 40px rgba(124, 179, 66, 0.6)',
-                  background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)'
-                }
-              }}
-            >
-              Start Your Free Scan Now
-            </Button>
-          </Stack>
+          {/* Compact Feature Cards - 2 columns */}
+          <Grid container spacing={1.5} sx={{ mt: 1 }}>
+            <Grid item xs={6}>
+              <Card
+                sx={{
+                  background: 'rgba(44, 44, 44, 0.7)',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(124, 179, 66, 0.2)',
+                  borderRadius: 2,
+                  p: 1.5
+                }}
+              >
+                <Stack spacing={0.5} alignItems="center" textAlign="center">
+                  <CameraAltIcon sx={{ fontSize: 28, color: '#9CCC65' }} />
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: '#fff', fontSize: '0.75rem' }}>
+                    AI Scanning
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#b0b0b0', fontSize: '0.65rem', lineHeight: 1.3 }}>
+                    Instant ID
+                  </Typography>
+                </Stack>
+              </Card>
+            </Grid>
+            <Grid item xs={6}>
+              <Card
+                sx={{
+                  background: 'rgba(44, 44, 44, 0.7)',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(124, 179, 66, 0.2)',
+                  borderRadius: 2,
+                  p: 1.5
+                }}
+              >
+                <Stack spacing={0.5} alignItems="center" textAlign="center">
+                  <LocalFloristIcon sx={{ fontSize: 28, color: '#9CCC65' }} />
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: '#fff', fontSize: '0.75rem' }}>
+                    35K+ Strains
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#b0b0b0', fontSize: '0.65rem', lineHeight: 1.3 }}>
+                    Huge Database
+                  </Typography>
+                </Stack>
+              </Card>
+            </Grid>
+            <Grid item xs={6}>
+              <Card
+                sx={{
+                  background: 'rgba(44, 44, 44, 0.7)',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(124, 179, 66, 0.2)',
+                  borderRadius: 2,
+                  p: 1.5
+                }}
+              >
+                <Stack spacing={0.5} alignItems="center" textAlign="center">
+                  <SpaIcon sx={{ fontSize: 28, color: '#9CCC65' }} />
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: '#fff', fontSize: '0.75rem' }}>
+                    Find Vendors
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#b0b0b0', fontSize: '0.65rem', lineHeight: 1.3 }}>
+                    Trusted Sources
+                  </Typography>
+                </Stack>
+              </Card>
+            </Grid>
+            <Grid item xs={6}>
+              <Card
+                sx={{
+                  background: 'rgba(44, 44, 44, 0.7)',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(124, 179, 66, 0.2)',
+                  borderRadius: 2,
+                  p: 1.5
+                }}
+              >
+                <Stack spacing={0.5} alignItems="center" textAlign="center">
+                  <VerifiedIcon sx={{ fontSize: 28, color: '#9CCC65' }} />
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: '#fff', fontSize: '0.75rem' }}>
+                    Verified Data
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#b0b0b0', fontSize: '0.65rem', lineHeight: 1.3 }}>
+                    Accurate Info
+                  </Typography>
+                </Stack>
+              </Card>
+            </Grid>
+          </Grid>
         </Stack>
       </Container>
 
-      {/* Floating Feedback Button */}
-      <Tooltip title="Send Feedback" placement="left">
-        <Fab
-          color="primary"
-          onClick={() => setShowFeedback(true)}
-          sx={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            zIndex: 1000,
-            background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
-            boxShadow: '0 8px 30px rgba(124, 179, 66, 0.4)',
-            '&:hover': {
-              background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)',
-              boxShadow: '0 12px 40px rgba(124, 179, 66, 0.6)',
-              transform: 'scale(1.05)'
-            }
-          }}
-        >
-          <FeedbackIcon />
-        </Fab>
-      </Tooltip>
+      {/* Compact Feedback Button */}
+      <Fab
+        color="primary"
+        size="small"
+        onClick={() => setShowFeedback(true)}
+        sx={{
+          position: 'fixed',
+          bottom: 16,
+          right: 16,
+          zIndex: 1000,
+          background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
+          boxShadow: '0 4px 12px rgba(124, 179, 66, 0.3)',
+          width: 48,
+          height: 48
+        }}
+      >
+        <FeedbackIcon fontSize="small" />
+      </Fab>
 
       {/* Feedback Modal */}
       <FeedbackModal
