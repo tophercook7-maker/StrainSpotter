@@ -129,7 +129,7 @@ export default function Home({ onNavigate }) {
               }}
             >
               <img
-                src="/hero.png?v=12"
+                src="/hero.png?v=13"
                 alt="StrainSpotter"
                 style={{ width: '70%', height: '70%', objectFit: 'contain' }}
               />
