@@ -27,9 +27,10 @@
       },
       "package": "com.strainspotter.app",
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ],
       "edgeToEdgeEnabled": true
     },
@@ -67,8 +68,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "your-project-id-here"
+        "projectId": "8218a1b2-e62d-47da-aa53-6da4db16b1aa"
       }
-    }
+    },
+    "owner": "topher1"
   }
 }

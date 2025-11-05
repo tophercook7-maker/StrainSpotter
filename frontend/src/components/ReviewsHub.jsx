@@ -310,22 +310,28 @@ export default function ReviewsHub({ onBack, currentUser }) {
       )}
 
       {/* Edit Dialog */}
-      <Dialog 
-        open={editDialog} 
+      <Dialog
+        open={editDialog}
         onClose={() => setEditDialog(false)}
         maxWidth="sm"
         fullWidth
+        fullScreen
         PaperProps={{
           sx: {
             background: 'rgba(30, 30, 30, 0.95)',
             backdropFilter: 'blur(20px)',
             border: '2px solid rgba(124, 179, 66, 0.5)',
-            borderRadius: 3
+            borderRadius: { xs: 0, sm: 3 },
+            m: 0,
+            maxHeight: '100vh'
           }
         }}
       >
-        <DialogTitle sx={{ color: '#fff', borderBottom: '1px solid rgba(124, 179, 66, 0.3)' }}>
-          Edit Review
+        <DialogTitle sx={{ color: '#fff', borderBottom: '1px solid rgba(124, 179, 66, 0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">Edit Review</Typography>
+          <IconButton onClick={() => setEditDialog(false)} sx={{ color: '#fff' }}>
+            <ArrowBackIcon />
+          </IconButton>
         </DialogTitle>
         <DialogContent sx={{ pt: 3 }}>
           <Stack spacing={3}>

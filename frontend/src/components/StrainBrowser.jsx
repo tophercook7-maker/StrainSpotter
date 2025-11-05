@@ -870,11 +870,29 @@ export default function StrainBrowser({ onBack }) {
         </>
       )}
 
-      <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} maxWidth="md" fullWidth slotProps={{ paper: { sx: { background: 'linear-gradient(135deg, rgba(30, 30, 30, 0.98) 0%, rgba(20, 20, 20, 0.98) 100%)', backdropFilter: 'blur(20px)', border: '2px solid rgba(124, 179, 66, 0.3)', borderRadius: 4 } } }}>
+      <Dialog
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        maxWidth="md"
+        fullWidth
+        fullScreen
+        slotProps={{
+          paper: {
+            sx: {
+              background: 'linear-gradient(135deg, rgba(30, 30, 30, 0.98) 0%, rgba(20, 20, 20, 0.98) 100%)',
+              backdropFilter: 'blur(20px)',
+              border: '2px solid rgba(124, 179, 66, 0.3)',
+              borderRadius: { xs: 0, sm: 4 },
+              m: 0,
+              maxHeight: '100vh'
+            }
+          }
+        }}
+      >
         <DialogTitle sx={{ color: '#fff', fontWeight: 700, borderBottom: '1px solid rgba(124, 179, 66, 0.3)' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
             <Box>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>{selectedStrain?.name}</Typography>
+              <Typography variant="h5" sx={{ fontWeight: 700, fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>{selectedStrain?.name}</Typography>
               <Chip label={selectedStrain?.type || 'Unknown'} size="small" sx={{ bgcolor: getTypeColor(selectedStrain?.type), color: '#fff', fontWeight: 600, mt: 1 }} />
             </Box>
             <IconButton onClick={() => setDetailsOpen(false)} sx={{ color: '#fff' }}><CloseIcon /></IconButton>

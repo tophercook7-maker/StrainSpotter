@@ -450,15 +450,33 @@ export default function ScanWizard({ onBack }) {
     if (!match || !match.strain) return null;
     const { strain } = match;
     return (
-      <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{strain.name} Details</DialogTitle>
-        <Tabs value={detailsTab} onChange={(_e, v) => setDetailsTab(v)}>
-          <Tab label="Overview" />
-          <Tab label="Dispensaries" />
-          <Tab label="Seeds" />
-          <Tab label="Care Guide" />
+      <Dialog
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        maxWidth="md"
+        fullWidth
+        fullScreen
+        PaperProps={{
+          sx: {
+            bgcolor: 'rgba(0,0,0,0.95)',
+            m: 0,
+            maxHeight: '100vh'
+          }
+        }}
+      >
+        <DialogTitle sx={{ borderBottom: '1px solid rgba(124,179,66,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">{strain.name} Details</Typography>
+          <IconButton onClick={() => setDetailsOpen(false)} sx={{ color: '#fff' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <Tabs value={detailsTab} onChange={(_e, v) => setDetailsTab(v)} sx={{ borderBottom: '1px solid rgba(124,179,66,0.2)' }}>
+          <Tab label="Overview" sx={{ color: '#c8ff9e' }} />
+          <Tab label="Dispensaries" sx={{ color: '#c8ff9e' }} />
+          <Tab label="Seeds" sx={{ color: '#c8ff9e' }} />
+          <Tab label="Care Guide" sx={{ color: '#c8ff9e' }} />
         </Tabs>
-        <DialogContent>
+        <DialogContent sx={{ bgcolor: 'rgba(0,0,0,0.95)' }}>
           {detailsTab === 0 && (
             <Box>
               <Typography variant="subtitle1" fontWeight={700}>Overview</Typography>
@@ -1588,11 +1606,22 @@ export default function ScanWizard({ onBack }) {
             onClose={() => setShowTopUpDialog(false)}
             maxWidth="sm"
             fullWidth
+            fullScreen
+            PaperProps={{
+              sx: {
+                bgcolor: '#111',
+                m: 0,
+                maxHeight: '100vh'
+              }
+            }}
           >
-            <DialogTitle sx={{ bgcolor: '#111', color: '#c8ff9e', fontWeight: 700 }}>
-              Keep Your Scans Going
+            <DialogTitle sx={{ bgcolor: '#111', color: '#c8ff9e', fontWeight: 700, borderBottom: '1px solid rgba(124,179,66,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="h6">Keep Your Scans Going</Typography>
+              <IconButton onClick={() => setShowTopUpDialog(false)} sx={{ color: '#c8ff9e' }}>
+                <CloseIcon />
+              </IconButton>
             </DialogTitle>
-            <DialogContent sx={{ bgcolor: '#111', color: '#fff' }}>
+            <DialogContent sx={{ bgcolor: '#111', color: '#fff', pt: 3 }}>
               {topUpMessage && (
                 <DialogContentText sx={{ color: '#e0ffe3', mb: 2 }}>
                   {topUpMessage}
@@ -1704,13 +1733,22 @@ export default function ScanWizard({ onBack }) {
             onClose={() => setShowMembershipDialog(false)}
             maxWidth="sm"
             fullWidth
+            fullScreen
+            PaperProps={{
+              sx: {
+                bgcolor: 'rgba(0, 0, 0, 0.95)',
+                m: 0,
+                maxHeight: '100vh'
+              }
+            }}
           >
             <DialogTitle sx={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               bgcolor: 'rgba(0, 0, 0, 0.9)',
-              color: '#00e676'
+              color: '#00e676',
+              borderBottom: '1px solid rgba(124,179,66,0.3)'
             }}>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
                 🌿 Garden Membership Access

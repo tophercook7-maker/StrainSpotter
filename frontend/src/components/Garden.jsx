@@ -455,14 +455,25 @@ export default function Garden({ onBack, onNavigate }) {
       </Paper>
 
       {/* Logout Warning Dialog */}
-      <Dialog open={showLogoutWarning} onClose={() => setShowLogoutWarning(false)}>
-        <DialogTitle sx={{ bgcolor: '#ff5252', color: '#fff' }}>
+      <Dialog
+        open={showLogoutWarning}
+        onClose={() => setShowLogoutWarning(false)}
+        fullScreen
+        PaperProps={{
+          sx: {
+            bgcolor: '#1a1a1a',
+            m: 0,
+            maxHeight: '100vh'
+          }
+        }}
+      >
+        <DialogTitle sx={{ bgcolor: '#ff5252', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
           <Stack direction="row" spacing={1} alignItems="center">
             <WarningIcon />
             <span>Cannot Logout</span>
           </Stack>
         </DialogTitle>
-        <DialogContent sx={{ mt: 2 }}>
+        <DialogContent sx={{ mt: 2, bgcolor: '#1a1a1a', color: '#fff' }}>
           <Typography variant="body1" sx={{ mb: 2 }}>
             Your membership payment is overdue. You must resolve your payment before you can logout.
           </Typography>
@@ -513,19 +524,22 @@ export default function Garden({ onBack, onNavigate }) {
       <Dialog
         open={showComingSoon}
         onClose={() => setShowComingSoon(false)}
+        fullScreen
         PaperProps={{
           sx: {
             background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.95) 0%, rgba(104, 159, 56, 0.95) 100%)',
             backdropFilter: 'blur(20px)',
-            borderRadius: 4,
-            border: '2px solid rgba(255, 255, 255, 0.2)'
+            borderRadius: { xs: 0, sm: 4 },
+            border: '2px solid rgba(255, 255, 255, 0.2)',
+            m: 0,
+            maxHeight: '100vh'
           }
         }}
       >
-        <DialogTitle sx={{ color: '#fff', fontWeight: 700 }}>
+        <DialogTitle sx={{ color: '#fff', fontWeight: 700, borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
           🚧 Coming Soon!
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', p: 4 }}>
           <Typography sx={{ color: '#fff', mb: 2 }}>
             <strong>{selectedFeature}</strong> is currently under development.
           </Typography>
