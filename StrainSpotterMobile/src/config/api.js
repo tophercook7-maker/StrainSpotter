@@ -1,6 +1,6 @@
 // Backend API configuration
-// Use Render backend (always available)
-export const API_BASE_URL = 'https://strainspotter-backend.onrender.com';
+// Use Render backend (redeployed with new scan endpoint)
+export const API_BASE_URL = 'https://strainspotter.onrender.com';
 
 // API endpoints
 export const API_ENDPOINTS = {
