@@ -36,6 +36,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   const [groups, setGroups] = useState([]);
   const [userId, setUserId] = useState(userIdProp || authUser?.id || null);
   const [selectedGroup, setSelectedGroup] = useState(null);
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [members, setMembers] = useState([]);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -204,6 +205,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
 
   const selectGroup = async (g) => {
     setSelectedGroup(g);
+    setGroupDialogOpen(true);
     await loadMessages(g.id);
     const currentMembers = await loadMembers(g.id);
     const alreadyMember = userId ? currentMembers.some(m => m.user_id === userId) : false;
@@ -399,7 +401,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     return (
       <Button
         key={group.id}
-        variant={selectedGroup?.id === group.id ? 'contained' : 'outlined'}
+        variant="outlined"
         onClick={() => selectGroup(group)}
         fullWidth
         sx={{
@@ -409,7 +411,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           p: 2,
           borderRadius: 3,
           borderColor: 'rgba(124,179,66,0.35)',
-          bgcolor: selectedGroup?.id === group.id ? 'rgba(124,179,66,0.25)' : 'rgba(255,255,255,0.8)',
+          bgcolor: 'rgba(255,255,255,0.8)',
           color: '#1f3320',
           '&:hover': {
             bgcolor: 'rgba(124,179,66,0.3)'
@@ -533,12 +535,10 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', md: 'row' } }}>
-          {/* Groups list */}
-          <Card sx={{
-            flex: { xs: '1 1 auto', md: '0 0 280px' },
-            bgcolor: 'rgba(255,255,255,0.9)',
-            color: '#1f3320',
+        {/* Groups list - Full width */}
+        <Card sx={{
+          bgcolor: 'rgba(255,255,255,0.9)',
+          color: '#1f3320',
           boxShadow: '0 12px 30px rgba(0,0,0,0.25)',
           backdropFilter: 'blur(10px)',
           borderRadius: 3,
@@ -550,9 +550,9 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             </Typography>
             <Stack spacing={1.5}>
               <Typography variant="caption" sx={{ mb: 0.5, color: 'rgba(22,34,22,0.8)', fontSize: '0.75rem' }}>
-                {userId ? 'Select a group to join the conversation.' : 'Sign in to join groups.'}
+                {userId ? 'Tap a group to open the chat.' : 'Sign in to join groups.'}
               </Typography>
-              
+
               {!userId && (
                 <Button
                   variant="contained"
@@ -581,145 +581,178 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           </CardContent>
         </Card>
 
-        {/* Chat area */}
-        <Card sx={{
-          flex: 1,
-          bgcolor: 'rgba(255,255,255,0.9)',
-          color: '#1f3320',
-          boxShadow: '0 18px 50px rgba(0,0,0,0.3)',
-          backdropFilter: 'blur(12px)',
-          borderRadius: 4,
-          border: '1px solid rgba(255,255,255,0.18)'
+      {/* Group Chat Dialog */}
+      <Dialog
+        open={groupDialogOpen}
+        onClose={() => setGroupDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        fullScreen
+        PaperProps={{
+          sx: {
+            bgcolor: 'rgba(255,255,255,0.95)',
+            backdropFilter: 'blur(20px)',
+            m: 0,
+            maxHeight: '100vh',
+            display: 'flex',
+            flexDirection: 'column'
+          }
+        }}
+      >
+        <DialogTitle sx={{
+          borderBottom: '1px solid rgba(124,179,66,0.3)',
+          bgcolor: 'rgba(124,179,66,0.1)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          p: 2
         }}>
-          <CardContent>
-            {!selectedGroup ? (
-              <Typography variant="body2" color="text.secondary">
-                Select a group to view messages.
-              </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            {selectedGroup?.name}
+          </Typography>
+          <Stack direction="row" spacing={1}>
+            {isMember ? (
+              <Button size="small" variant="outlined" color="error" onClick={leaveGroup}>
+                Leave
+              </Button>
             ) : (
-              <Stack spacing={2}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Typography variant="h6">{selectedGroup.name}</Typography>
-                  {isMember ? (
-                    <Button size="small" variant="outlined" color="error" onClick={leaveGroup}>Leave</Button>
-                  ) : (
-                    <Button size="small" variant="contained" onClick={() => joinGroup()}>Join</Button>
-                  )}
-                </Stack>
-                {!guidelinesAccepted && (
-                  <Alert
-                    severity="warning"
-                    icon={false}
-                    sx={{
-                      background: 'rgba(255,193,7,0.18)',
-                      color: '#3f2c02',
-                      border: '1px solid rgba(255,193,7,0.4)'
-                    }}
-                  >
-                    By participating, you agree to our{' '}
-                    <MuiLink component="button" onClick={() => onNavigate && onNavigate('guidelines')} sx={{ fontWeight: 700 }}>
-                      Community Guidelines
-                    </MuiLink>.
-                  </Alert>
-                )}
-                <Alert
-                  severity="info"
-                  icon={false}
-                  sx={{
-                    background: 'rgba(124,179,66,0.12)',
-                    color: '#102A12',
-                    border: '1px solid rgba(124,179,66,0.4)'
-                  }}
-                >
-                  Groups keep the 100 most recent messages so conversations stay tidy. Older threads roll off automatically.
-                </Alert>
-                <Typography variant="caption" color="text.secondary">
-                  {members.length} member{members.length !== 1 ? 's' : ''}
-                  {members.length > 0 && ': '}
-                  {members.slice(0, 5).map(m => m.users?.username || 'Unknown').join(', ')}
-                  {members.length > 5 && '...'}
-                </Typography>
-                <List sx={{ maxHeight: 400, overflow: 'auto' }}>
-                  {messages.length === 0 ? (
-                    <ListItem>
+              <Button size="small" variant="contained" onClick={() => joinGroup()}>
+                Join
+              </Button>
+            )}
+            <Button size="small" onClick={() => setGroupDialogOpen(false)}>
+              Close
+            </Button>
+          </Stack>
+        </DialogTitle>
+
+        <DialogContent sx={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          p: 2,
+          overflow: 'hidden'
+        }}>
+          <Stack spacing={1.5} sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            {!guidelinesAccepted && (
+              <Alert
+                severity="warning"
+                icon={false}
+                sx={{
+                  background: 'rgba(255,193,7,0.18)',
+                  color: '#3f2c02',
+                  border: '1px solid rgba(255,193,7,0.4)',
+                  flexShrink: 0
+                }}
+              >
+                By participating, you agree to our{' '}
+                <MuiLink component="button" onClick={() => onNavigate && onNavigate('guidelines')} sx={{ fontWeight: 700 }}>
+                  Community Guidelines
+                </MuiLink>.
+              </Alert>
+            )}
+
+            <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+              {members.length} member{members.length !== 1 ? 's' : ''}
+              {members.length > 0 && ': '}
+              {members.slice(0, 5).map(m => m.users?.username || 'Unknown').join(', ')}
+              {members.length > 5 && '...'}
+            </Typography>
+
+            {/* Messages - Scrollable */}
+            <Box sx={{
+              flex: 1,
+              overflow: 'auto',
+              minHeight: 0,
+              border: '1px solid rgba(124,179,66,0.2)',
+              borderRadius: 2,
+              p: 1,
+              bgcolor: 'rgba(255,255,255,0.5)'
+            }}>
+              <List sx={{ p: 0 }}>
+                {messages.length === 0 ? (
+                  <ListItem>
+                    <ListItemText
+                      secondary={
+                        <Typography variant="body2" color="text.secondary">
+                          Be the first to say hello! Share what brings you here or ask a quick question to get the conversation rolling.
+                        </Typography>
+                      }
+                    />
+                  </ListItem>
+                ) : (
+                  messages.map((m) => (
+                    <ListItem
+                      key={m.id}
+                      alignItems="flex-start"
+                      sx={{
+                        alignItems: 'flex-start',
+                        bgcolor: isAdminMessage(m) ? 'rgba(124,179,66,0.12)' : 'transparent',
+                        borderLeft: isAdminMessage(m) ? '4px solid rgba(124,179,66,0.8)' : '4px solid transparent',
+                        mb: 1,
+                        borderRadius: 2,
+                        pr: 6
+                      }}
+                      secondaryAction={
+                        <Tooltip title="Report this message">
+                          <IconButton
+                            edge="end"
+                            size="small"
+                            onClick={() => {
+                              setReportingMessage(m);
+                              setReportDialogOpen(true);
+                            }}
+                          >
+                            <FlagIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      }
+                    >
+                      {renderMessageAuthor(m)}
                       <ListItemText
+                        primary={
+                          <Typography variant="body2" sx={{ color: '#112516' }}>
+                            {m.content}
+                          </Typography>
+                        }
                         secondary={
-                          <Typography variant="body2" color="text.secondary">
-                            Be the first to say hello! Share what brings you here or ask a quick question to get the conversation rolling.
+                          <Typography variant="caption" color="text.secondary">
+                            {(m.users?.username || 'Member')} • {new Date(m.created_at).toLocaleString()}
+                            {m.optimistic ? ' • sending…' : ''}
                           </Typography>
                         }
                       />
                     </ListItem>
-                  ) : (
-                    messages.map((m) => (
-                      <ListItem 
-                        key={m.id}
-                        alignItems="flex-start"
-                        sx={{
-                          alignItems: 'flex-start',
-                          bgcolor: isAdminMessage(m) ? 'rgba(124,179,66,0.12)' : 'transparent',
-                          borderLeft: isAdminMessage(m) ? '4px solid rgba(124,179,66,0.8)' : '4px solid transparent',
-                          mb: 1,
-                          borderRadius: 2,
-                          pr: 6
-                        }}
-                        secondaryAction={
-                          <Tooltip title="Report this message">
-                            <IconButton 
-                              edge="end" 
-                              size="small"
-                              onClick={() => {
-                                setReportingMessage(m);
-                                setReportDialogOpen(true);
-                              }}
-                            >
-                              <FlagIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        }
-                      >
-                        {renderMessageAuthor(m)}
-                        <ListItemText
-                          primary={
-                            <Typography variant="body2" sx={{ color: '#112516' }}>
-                              {m.content}
-                            </Typography>
-                          }
-                          secondary={
-                            <Typography variant="caption" color="text.secondary">
-                              {(m.users?.username || 'Member')} • {new Date(m.created_at).toLocaleString()}
-                              {m.optimistic ? ' • sending…' : ''}
-                            </Typography>
-                          }
-                        />
-                      </ListItem>
-                    ))
-                  )}
-                </List>
-                {isMember ? (
-                  <Stack direction="row" spacing={1}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      placeholder="Type a message..."
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                    />
-                    <Button variant="contained" onClick={sendMessage}>
-                      Send
-                    </Button>
-                  </Stack>
-                ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    Join this group to send messages.
-                  </Typography>
+                  ))
                 )}
+              </List>
+            </Box>
+
+            {/* Message Input - Fixed at bottom */}
+            {isMember ? (
+              <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Type a message..."
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                  multiline
+                  maxRows={3}
+                />
+                <Button variant="contained" onClick={sendMessage} sx={{ minWidth: '80px' }}>
+                  Send
+                </Button>
               </Stack>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', flexShrink: 0 }}>
+                Join this group to send messages.
+              </Typography>
             )}
-          </CardContent>
-        </Card>
-      </Box>
+          </Stack>
+        </DialogContent>
+      </Dialog>
 
       {/* Report Dialog */}
       <Dialog open={reportDialogOpen} onClose={() => setReportDialogOpen(false)} maxWidth="sm" fullWidth>
