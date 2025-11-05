@@ -40,13 +40,38 @@ router.get('/', async (req, res) => {
 
   // Check Google Vision credentials
   let googleVisionConfigured = false;
+  let visionMethod = 'none';
   try {
-    const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    if (credPath) {
+    // Check for inline JSON credentials (preferred for Render/Vercel)
+    if (process.env.GOOGLE_VISION_JSON) {
+      try {
+        JSON.parse(process.env.GOOGLE_VISION_JSON);
+        googleVisionConfigured = true;
+        visionMethod = 'inline-json';
+      } catch (parseErr) {
+        console.warn(JSON.stringify({ tag: 'health', warning: 'GOOGLE_VISION_JSON is invalid JSON' }));
+      }
+    }
+    // Check for file path credentials
+    else if (process.env.GOOGLE_VISION_CREDENTIALS_PATH) {
+      const credPath = process.env.GOOGLE_VISION_CREDENTIALS_PATH;
       const resolved = path.isAbsolute(credPath)
         ? credPath
         : path.resolve(process.cwd(), credPath);
       googleVisionConfigured = fs.existsSync(resolved);
+      visionMethod = googleVisionConfigured ? 'file-path' : 'file-not-found';
+      if (!googleVisionConfigured) {
+        console.warn(JSON.stringify({ tag: 'health', warning: 'Google Vision credentials file not found', details: resolved }));
+      }
+    }
+    // Check for default credentials file
+    else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      const resolved = path.isAbsolute(credPath)
+        ? credPath
+        : path.resolve(process.cwd(), credPath);
+      googleVisionConfigured = fs.existsSync(resolved);
+      visionMethod = googleVisionConfigured ? 'default-file' : 'default-file-not-found';
       if (!googleVisionConfigured) {
         console.warn(JSON.stringify({ tag: 'health', warning: 'Google Vision credentials not found', details: resolved }));
       }
@@ -74,8 +99,10 @@ router.get('/', async (req, res) => {
   const rlsPermissive = await checkRLS();
 
   res.json({
+    ok: supabaseConfigured && googleVisionConfigured,
     supabaseConfigured,
     googleVisionConfigured,
+    visionMethod,
     bucketExists,
     rlsPermissive
   });
