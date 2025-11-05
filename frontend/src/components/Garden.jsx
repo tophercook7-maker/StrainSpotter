@@ -44,9 +44,11 @@ export default function Garden({ onBack, onNavigate }) {
 
   const handleLogout = async () => {
     // Admin users can always logout
-    const isAdmin = user?.email === 'strainspotter25@gmail.com' || user?.email === 'admin@strainspotter.com';
+    const isAdminUser = user?.email === 'topher.cook7@gmail.com' ||
+                        user?.email === 'strainspotter25@gmail.com' ||
+                        user?.email === 'admin@strainspotter.com';
 
-    if (!canLogout && !isAdmin) {
+    if (!canLogout && !isAdminUser) {
       setShowLogoutWarning(true);
       return;
     }
@@ -122,8 +124,10 @@ export default function Garden({ onBack, onNavigate }) {
     setShowComingSoon(true);
   };
 
-  // Check if user is admin (you can replace this with your actual admin email)
-  const isAdmin = user?.email === 'strainspotter25@gmail.com' || user?.email === 'admin@strainspotter.com';
+  // Check if user is admin
+  const isAdmin = user?.email === 'topher.cook7@gmail.com' ||
+                  user?.email === 'strainspotter25@gmail.com' ||
+                  user?.email === 'admin@strainspotter.com';
 
   const tiles = [
     { title: 'AI Strain Scan', icon: <CameraAltIcon />, nav: 'scan', color: '#00e676' },
