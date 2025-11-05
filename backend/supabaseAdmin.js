@@ -5,18 +5,20 @@ import dotenv from 'dotenv';
 dotenv.config({ path: new URL('../env/.env.local', import.meta.url).pathname });
 
 const url = process.env.SUPABASE_URL;
-const serviceRoleKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_SERVICE_KEY ||
-  process.env.SUPABASE_SERVICE_ROLE ||
-  process.env.SUPABASE_SERVICE_ROLE_KEY_B64; // optional alias
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+console.log('[supabaseAdmin] URL present:', !!url);
+console.log('[supabaseAdmin] Service role key present:', !!serviceRoleKey);
+console.log('[supabaseAdmin] Service role key length:', serviceRoleKey?.length || 0);
 
 export const supabaseAdmin = serviceRoleKey && url
   ? createClient(url, serviceRoleKey, { auth: { persistSession: false } })
   : null;
 
-export const supabaseServiceRoleKey = serviceRoleKey || null;
-export const supabaseUrl = url || null;
+console.log('[supabaseAdmin] Admin client created:', !!supabaseAdmin);
+
+export const supabaseUrl = url;
+export const supabaseServiceRoleKey = serviceRoleKey;
 
 export async function ensureBucketExists(bucketName, { public: isPublic = true } = {}) {
   if (!supabaseAdmin) return { ok: false, skipped: true, reason: 'no-service-role' };
