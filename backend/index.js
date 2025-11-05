@@ -529,6 +529,49 @@ app.get('/api/scans', async (req, res, next) => {
   }
 });
 
+// POST /api/scans - Create scan from base64 image data
+app.post('/api/scans', async (req, res, next) => {
+  const writeClient = supabaseAdmin ?? supabase;
+  try {
+    const { imageData } = req.body || {};
+    if (!imageData) return res.status(400).json({ error: 'imageData required' });
+
+    // Upload base64 image to Supabase storage
+    const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    const fileName = `scan-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
+
+    const { data: uploadData, error: uploadError } = await writeClient.storage
+      .from('scans')
+      .upload(fileName, buffer, {
+        contentType: 'image/jpeg',
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      return res.status(500).json({ error: 'Failed to upload image' });
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = writeClient.storage
+      .from('scans')
+      .getPublicUrl(fileName);
+
+    // Create scan record
+    const insert = await writeClient.from('scans').insert({
+      image_url: publicUrl,
+      status: 'pending'
+    }).select().single();
+
+    if (insert.error) return res.status(400).json({ error: insert.error.message });
+    res.json({ scanId: insert.data.id, image_url: publicUrl });
+  } catch (e) {
+    console.error('Scan creation error:', e);
+    next(e);
+  }
+});
+
 // POST /api/scans/from-url { url }
 app.post('/api/scans/from-url', async (req, res, next) => {
   const writeClient = supabaseAdmin ?? supabase;
