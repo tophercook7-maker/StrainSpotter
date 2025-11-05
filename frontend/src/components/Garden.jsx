@@ -330,14 +330,14 @@ export default function Garden({ onBack, onNavigate }) {
         </Stack>
       </Paper>
 
-      {/* Premium Feature Tiles - 3 columns on mobile */}
-      <Grid container spacing={1}>
+      {/* Premium Feature Tiles - 2 columns on mobile for larger buttons */}
+      <Grid container spacing={2}>
         {tiles.map((tile) => (
-          <Grid item xs={4} sm={4} md={3} key={tile.nav}>
+          <Grid item xs={6} sm={4} md={3} key={tile.nav}>
             <Paper
               onClick={() => handleFeatureClick(tile.title, tile.nav)}
               sx={{
-                p: 1,
+                p: 2.5,
                 textAlign: 'center',
                 cursor: 'pointer',
                 background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(124, 179, 66, 0.08) 100%)',
@@ -348,6 +348,11 @@ export default function Garden({ onBack, onNavigate }) {
                 boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
                 position: 'relative',
                 overflow: 'hidden',
+                minHeight: '130px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
                 '&::before': {
                   content: '""',
                   position: 'absolute',
@@ -375,25 +380,25 @@ export default function Garden({ onBack, onNavigate }) {
               }}
             >
               <Box sx={{
-                width: 40,
-                height: 40,
-                margin: '0 auto 6px auto',
+                width: 60,
+                height: 60,
+                margin: '0 auto 12px auto',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 background: `linear-gradient(135deg, ${tile.color} 0%, ${tile.color}dd 100%)`,
                 borderRadius: '50%',
-                boxShadow: `0 4px 12px ${tile.color}66, inset 0 1px 0 rgba(255, 255, 255, 0.3)`,
+                boxShadow: `0 6px 16px ${tile.color}66, inset 0 1px 0 rgba(255, 255, 255, 0.3)`,
                 transition: 'all 0.15s ease',
-                '& svg': { fontSize: 24, color: '#fff', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }
+                '& svg': { fontSize: 34, color: '#fff', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }
               }}>
                 {tile.icon}
               </Box>
-              <Typography variant="caption" sx={{
+              <Typography variant="body2" sx={{
                 color: '#fff',
                 fontWeight: 600,
-                fontSize: '0.7rem',
-                lineHeight: 1.2,
+                fontSize: '0.9rem',
+                lineHeight: 1.3,
                 display: 'block',
                 textShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
                 transition: 'all 0.15s ease'
