@@ -207,8 +207,8 @@ export default function Garden({ onBack, onNavigate }) {
   return (
     <Box sx={{
       minHeight: '100vh',
-      pt: 'max(env(safe-area-inset-top), 16px)',
-      pb: 'max(env(safe-area-inset-bottom), 16px)',
+      pt: 'calc(env(safe-area-inset-top) + 24px)',
+      pb: 'calc(env(safe-area-inset-bottom) + 12px)',
       px: 1.5,
       background: 'none'
     }}>
