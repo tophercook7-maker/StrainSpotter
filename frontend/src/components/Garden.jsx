@@ -130,14 +130,14 @@ export default function Garden({ onBack, onNavigate }) {
                   user?.email === 'admin@strainspotter.com';
 
   const tiles = [
-    { title: 'AI Strain Scan', icon: <CameraAltIcon />, nav: 'scan', color: '#00e676' },
-    { title: 'Strain Browser', icon: <SpaIcon />, nav: 'strains', color: '#7cb342' },
-    { title: 'Reviews Hub', icon: <RateReviewIcon />, nav: 'reviews', color: '#ffd600' },
-    { title: 'Community Groups', icon: <GroupsIcon />, nav: 'groups', color: '#66bb6a' },
-    { title: 'Grow Coach', icon: <LocalFloristIcon />, nav: 'grow-coach', color: '#9ccc65' },
-    { title: 'Grower Directory', icon: <PeopleIcon />, nav: 'growers', color: '#8bc34a' },
-    { title: 'Seed Vendors', icon: <MenuBookIcon />, nav: 'seeds', color: '#aed581' },
-    { title: 'Dispensaries', icon: <StoreIcon />, nav: 'dispensaries', color: '#c5e1a5' },
+    { title: 'AI Strain Scan', icon: <CameraAltIcon />, nav: 'scan', color: '#00e676', description: 'Identify any strain instantly' },
+    { title: 'Strain Browser', icon: <SpaIcon />, nav: 'strains', color: '#7cb342', description: 'Explore 1000+ strains' },
+    { title: 'Reviews Hub', icon: <RateReviewIcon />, nav: 'reviews', color: '#ffd600', description: 'Read & share experiences' },
+    { title: 'Community Groups', icon: <GroupsIcon />, nav: 'groups', color: '#66bb6a', description: 'Connect with growers' },
+    { title: 'Grow Coach', icon: <LocalFloristIcon />, nav: 'grow-coach', color: '#9ccc65', description: 'Expert growing tips' },
+    { title: 'Grower Directory', icon: <PeopleIcon />, nav: 'growers', color: '#8bc34a', description: 'Find local cultivators' },
+    { title: 'Seed Vendors', icon: <MenuBookIcon />, nav: 'seeds', color: '#aed581', description: 'Trusted seed sources' },
+    { title: 'Dispensaries', icon: <StoreIcon />, nav: 'dispensaries', color: '#c5e1a5', description: 'Find nearby shops' },
   ];
 
   // Add admin-only tiles
@@ -147,6 +147,7 @@ export default function Garden({ onBack, onNavigate }) {
       icon: <FeedbackIcon />,
       nav: 'feedback-reader',
       color: '#ff6b6b',
+      description: 'Admin feedback tool',
       adminOnly: true
     });
   }
@@ -207,9 +208,9 @@ export default function Garden({ onBack, onNavigate }) {
   return (
     <Box sx={{
       minHeight: '100vh',
-      pt: 'calc(env(safe-area-inset-top) + 24px)',
+      pt: 'calc(env(safe-area-inset-top) + 60px)',
       pb: 'calc(env(safe-area-inset-bottom) + 12px)',
-      px: 1.5,
+      px: 2,
       background: 'none'
     }}>
       {/* Expired Membership Warning */}
@@ -257,10 +258,10 @@ export default function Garden({ onBack, onNavigate }) {
               />
             </Box>
             <Box>
-              <Typography variant="subtitle2" sx={{ color: '#fff', fontWeight: 600, fontSize: '1rem', lineHeight: 1.2 }}>
+              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, fontSize: '1.25rem', lineHeight: 1.2 }}>
                 The Garden
               </Typography>
-              <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.75rem' }}>
+              <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.85rem' }}>
                 ✓ Member
               </Typography>
             </Box>
@@ -332,14 +333,43 @@ export default function Garden({ onBack, onNavigate }) {
         </Stack>
       </Paper>
 
-      {/* Premium Feature Tiles - 2 columns on mobile for larger buttons */}
-      <Grid container spacing={2}>
+      {/* Welcome & Info Section */}
+      <Paper sx={{
+        p: 2,
+        mb: 2,
+        background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.08) 0%, rgba(156, 204, 101, 0.05) 100%)',
+        backdropFilter: 'blur(15px)',
+        border: '1.5px solid rgba(124, 179, 66, 0.25)',
+        borderRadius: 3,
+        boxShadow: '0 2px 12px rgba(0, 0, 0, 0.2)'
+      }}>
+        <Typography variant="h6" sx={{
+          color: '#CDDC39',
+          fontWeight: 700,
+          fontSize: '1.1rem',
+          mb: 1,
+          textShadow: '0 1px 3px rgba(0, 0, 0, 0.5)'
+        }}>
+          Welcome to The Garden 🌿
+        </Typography>
+        <Typography variant="body2" sx={{
+          color: '#e8e8e8',
+          fontSize: '0.85rem',
+          lineHeight: 1.6,
+          textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+        }}>
+          Your premium cannabis companion. Identify strains instantly, track your favorites, find nearby dispensaries, and connect with the community. Every feature is designed to enhance your cannabis experience.
+        </Typography>
+      </Paper>
+
+      {/* Premium Feature Tiles - Smaller, more compact */}
+      <Grid container spacing={1.5}>
         {tiles.map((tile) => (
           <Grid item xs={6} sm={4} md={3} key={tile.nav}>
             <Paper
               onClick={() => handleFeatureClick(tile.title, tile.nav)}
               sx={{
-                p: 2.5,
+                p: 1.5,
                 textAlign: 'center',
                 cursor: 'pointer',
                 background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(124, 179, 66, 0.08) 100%)',
@@ -350,7 +380,7 @@ export default function Garden({ onBack, onNavigate }) {
                 boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
                 position: 'relative',
                 overflow: 'hidden',
-                minHeight: '130px',
+                minHeight: '110px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
@@ -382,30 +412,40 @@ export default function Garden({ onBack, onNavigate }) {
               }}
             >
               <Box sx={{
-                width: 60,
-                height: 60,
-                margin: '0 auto 12px auto',
+                width: 44,
+                height: 44,
+                margin: '0 auto 8px auto',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 background: `linear-gradient(135deg, ${tile.color} 0%, ${tile.color}dd 100%)`,
                 borderRadius: '50%',
-                boxShadow: `0 6px 16px ${tile.color}66, inset 0 1px 0 rgba(255, 255, 255, 0.3)`,
+                boxShadow: `0 4px 12px ${tile.color}66, inset 0 1px 0 rgba(255, 255, 255, 0.3)`,
                 transition: 'all 0.15s ease',
-                '& svg': { fontSize: 34, color: '#fff', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }
+                '& svg': { fontSize: 26, color: '#fff', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }
               }}>
                 {tile.icon}
               </Box>
               <Typography variant="body2" sx={{
                 color: '#fff',
                 fontWeight: 600,
-                fontSize: '0.9rem',
-                lineHeight: 1.3,
+                fontSize: '0.8rem',
+                lineHeight: 1.2,
+                mb: 0.5,
                 display: 'block',
                 textShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
                 transition: 'all 0.15s ease'
               }}>
                 {tile.title}
+              </Typography>
+              <Typography variant="caption" sx={{
+                color: '#b0b0b0',
+                fontSize: '0.65rem',
+                lineHeight: 1.3,
+                display: 'block',
+                textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
+              }}>
+                {tile.description}
               </Typography>
             </Paper>
           </Grid>
