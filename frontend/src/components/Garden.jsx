@@ -207,7 +207,9 @@ export default function Garden({ onBack, onNavigate }) {
   return (
     <Box sx={{
       minHeight: '100vh',
-      p: 1.5,
+      pt: 'max(env(safe-area-inset-top), 16px)',
+      pb: 'max(env(safe-area-inset-bottom), 16px)',
+      px: 1.5,
       background: 'none'
     }}>
       {/* Expired Membership Warning */}
@@ -255,10 +257,10 @@ export default function Garden({ onBack, onNavigate }) {
               />
             </Box>
             <Box>
-              <Typography variant="subtitle2" sx={{ color: '#fff', fontWeight: 600, fontSize: '0.875rem', lineHeight: 1.2 }}>
+              <Typography variant="subtitle2" sx={{ color: '#fff', fontWeight: 600, fontSize: '1rem', lineHeight: 1.2 }}>
                 The Garden
               </Typography>
-              <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.65rem' }}>
+              <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.75rem' }}>
                 ✓ Member
               </Typography>
             </Box>
