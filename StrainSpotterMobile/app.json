@@ -57,7 +57,8 @@
           "sounds": []
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-updates"
     ],
     "notification": {
       "icon": "./assets/icon.png",

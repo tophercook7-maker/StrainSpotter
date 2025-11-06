@@ -16,6 +16,12 @@ import { registerForPushNotificationsAsync } from './src/services/notificationSe
 // Check for OTA updates
 async function checkForUpdates() {
   try {
+    // Only check for updates if not in development and updates are enabled
+    if (!Updates.isEnabled) {
+      console.log('⚠️ Updates not enabled (development mode or not configured)');
+      return;
+    }
+
     const update = await Updates.checkForUpdateAsync();
     if (update.isAvailable) {
       console.log('📥 Update available! Downloading...');
@@ -26,7 +32,7 @@ async function checkForUpdates() {
       console.log('✅ App is up to date');
     }
   } catch (error) {
-    console.error('Update check failed:', error);
+    console.error('⚠️ Update check failed (non-critical):', error);
   }
 }
 
