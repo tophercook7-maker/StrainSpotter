@@ -70,6 +70,12 @@
         "projectId": "8218a1b2-e62d-47da-aa53-6da4db16b1aa"
       }
     },
-    "owner": "topher1"
+    "owner": "topher1",
+    "updates": {
+      "url": "https://u.expo.dev/8218a1b2-e62d-47da-aa53-6da4db16b1aa"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }

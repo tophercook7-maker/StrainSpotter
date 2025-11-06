@@ -1,16 +1,34 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
+import * as Updates from 'expo-updates';
 import { theme } from './src/config/theme';
 import { supabase } from './src/config/supabase';
 import AppNavigator from './src/navigation/AppNavigator';
 import LoadingScreen from './src/screens/LoadingScreen';
 import { initializeDatabase } from './src/services/offlineStorage';
 import { registerForPushNotificationsAsync } from './src/services/notificationService';
+
+// Check for OTA updates
+async function checkForUpdates() {
+  try {
+    const update = await Updates.checkForUpdateAsync();
+    if (update.isAvailable) {
+      console.log('📥 Update available! Downloading...');
+      await Updates.fetchUpdateAsync();
+      console.log('✅ Update downloaded! Reloading...');
+      await Updates.reloadAsync();
+    } else {
+      console.log('✅ App is up to date');
+    }
+  } catch (error) {
+    console.error('Update check failed:', error);
+  }
+}
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
@@ -52,17 +70,36 @@ export default function App() {
     const initializeApp = async () => {
       try {
         console.log('🌿 Initializing StrainSpotter...');
+        console.log('Environment:', __DEV__ ? 'Development' : 'Production');
 
-        // Initialize offline database
-        await initializeDatabase();
-        console.log('✅ Database initialized');
+        // Check for OTA updates (non-blocking)
+        if (!__DEV__) {
+          checkForUpdates().catch(err => {
+            console.warn('Update check failed:', err);
+          });
+        }
+
+        // Initialize offline database with timeout (non-critical)
+        console.log('Initializing database...');
+        try {
+          const dbTimeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Database initialization timeout')), 5000)
+          );
+          await Promise.race([initializeDatabase(), dbTimeout]);
+          console.log('✅ Database initialized');
+        } catch (dbError) {
+          console.warn('⚠️ Database initialization failed (non-critical):', dbError);
+          // Continue without database - app will still work
+        }
 
         // Register for push notifications (non-blocking)
+        console.log('Registering for push notifications...');
         registerForPushNotificationsAsync().catch(err => {
           console.warn('Push notifications not available:', err);
         });
 
         // Get initial session
+        console.log('Loading session...');
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) {
           console.error('Session error:', sessionError);
@@ -70,10 +107,12 @@ export default function App() {
         setSession(session);
         console.log('✅ Session loaded:', session ? 'Logged in' : 'Not logged in');
 
+        console.log('✅ App initialization complete!');
         setLoading(false);
       } catch (err) {
         console.error('❌ Initialization error:', err);
-        setError(err.message);
+        console.error('Error stack:', err.stack);
+        setError(err.message || 'Unknown error occurred');
         setLoading(false);
       }
     };

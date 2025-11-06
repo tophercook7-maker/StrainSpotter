@@ -12,7 +12,7 @@ jobs:
   build-android:
     name: Build Android APK
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: 🌿 Checkout code
         uses: actions/checkout@v4
@@ -38,7 +38,7 @@ jobs:
         working-directory: StrainSpotterMobile
         run: eas build --platform android --profile production --non-interactive --no-wait
 
-      - name: ✅ Build started
+      - name: ✅ Android build started
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🤖 Android APK build started on EAS!"
@@ -50,6 +50,48 @@ jobs:
           echo "⏱️  Build will take 10-15 minutes"
           echo "📥 Download APK when ready from the link above"
           echo ""
-          echo "🌿 StrainSpotter mobile app building! ✨"
+
+  build-ios:
+    name: Build iOS IPA
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🌿 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: StrainSpotterMobile/package-lock.json
+
+      - name: 🔧 Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 📥 Install dependencies
+        working-directory: StrainSpotterMobile
+        run: npm ci
+
+      - name: 🍎 Build iOS IPA
+        working-directory: StrainSpotterMobile
+        run: eas build --platform ios --profile production --non-interactive --no-wait
+
+      - name: ✅ iOS build started
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🍎 iOS IPA build started on EAS!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "📱 Check build status at:"
+          echo "   https://expo.dev/accounts/topher1/projects/strainspotter/builds"
+          echo ""
+          echo "⏱️  Build will take 15-20 minutes"
+          echo "📥 Download IPA when ready from the link above"
+          echo ""
+          echo "🌿 StrainSpotter mobile apps building! ✨"
           echo ""
 
