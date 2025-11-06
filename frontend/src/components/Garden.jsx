@@ -208,7 +208,7 @@ export default function Garden({ onBack, onNavigate }) {
   return (
     <Box sx={{
       minHeight: '100vh',
-      pt: 'calc(env(safe-area-inset-top) + 60px)',
+      pt: 2,
       pb: 'calc(env(safe-area-inset-bottom) + 12px)',
       px: 2,
       background: 'none'
@@ -237,14 +237,14 @@ export default function Garden({ onBack, onNavigate }) {
       }}>
         {/* Compact buttons and welcome in one row */}
         <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1.5} alignItems="center">
             <Box
               sx={{
-                width: 36,
-                height: 36,
+                width: 48,
+                height: 48,
                 borderRadius: '50%',
                 background: 'transparent',
-                border: '1.5px solid rgba(124, 179, 66, 0.5)',
+                border: '2px solid rgba(124, 179, 66, 0.6)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -258,11 +258,11 @@ export default function Garden({ onBack, onNavigate }) {
               />
             </Box>
             <Box>
-              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, fontSize: '1.25rem', lineHeight: 1.2 }}>
+              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, fontSize: '1.4rem', lineHeight: 1.2, mb: 0.25 }}>
                 The Garden
               </Typography>
-              <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.85rem' }}>
-                ✓ Member
+              <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.75rem' }}>
+                {isAdmin ? '✓ Admin' : '✓ Member'}
               </Typography>
             </Box>
           </Stack>
@@ -369,18 +369,18 @@ export default function Garden({ onBack, onNavigate }) {
             <Paper
               onClick={() => handleFeatureClick(tile.title, tile.nav)}
               sx={{
-                p: 1.5,
+                p: 1.25,
                 textAlign: 'center',
                 cursor: 'pointer',
                 background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(124, 179, 66, 0.08) 100%)',
                 backdropFilter: 'blur(15px)',
                 border: '1.5px solid rgba(124, 179, 66, 0.3)',
-                borderRadius: 3,
+                borderRadius: 2.5,
                 transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
                 boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
                 position: 'relative',
                 overflow: 'hidden',
-                minHeight: '110px',
+                minHeight: '95px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
@@ -412,26 +412,26 @@ export default function Garden({ onBack, onNavigate }) {
               }}
             >
               <Box sx={{
-                width: 44,
-                height: 44,
-                margin: '0 auto 8px auto',
+                width: 38,
+                height: 38,
+                margin: '0 auto 6px auto',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 background: `linear-gradient(135deg, ${tile.color} 0%, ${tile.color}dd 100%)`,
                 borderRadius: '50%',
-                boxShadow: `0 4px 12px ${tile.color}66, inset 0 1px 0 rgba(255, 255, 255, 0.3)`,
+                boxShadow: `0 3px 10px ${tile.color}66, inset 0 1px 0 rgba(255, 255, 255, 0.3)`,
                 transition: 'all 0.15s ease',
-                '& svg': { fontSize: 26, color: '#fff', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }
+                '& svg': { fontSize: 22, color: '#fff', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }
               }}>
                 {tile.icon}
               </Box>
               <Typography variant="body2" sx={{
                 color: '#fff',
                 fontWeight: 600,
-                fontSize: '0.8rem',
+                fontSize: '0.75rem',
                 lineHeight: 1.2,
-                mb: 0.5,
+                mb: 0.4,
                 display: 'block',
                 textShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
                 transition: 'all 0.15s ease'
@@ -440,7 +440,7 @@ export default function Garden({ onBack, onNavigate }) {
               </Typography>
               <Typography variant="caption" sx={{
                 color: '#b0b0b0',
-                fontSize: '0.65rem',
+                fontSize: '0.6rem',
                 lineHeight: 1.3,
                 display: 'block',
                 textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
