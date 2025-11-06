@@ -45,11 +45,22 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
   }, [strainSlug]);
 
   useEffect(() => {
-    // Get user's location
+    // Get user's location with timeout
     if (navigator.geolocation) {
       setLocationStatus('detecting');
+
+      // Set a timeout in case geolocation hangs (common in simulators)
+      const timeoutId = setTimeout(() => {
+        console.warn('Location request timed out, using fallback');
+        setLocationStatus('denied');
+        const fallback = { lat: 37.7749, lng: -122.4194 };
+        setUserLocation(fallback);
+        searchDispensaries(fallback.lat, fallback.lng, initialRadiusRef.current);
+      }, 5000); // 5 second timeout
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          clearTimeout(timeoutId);
           const location = {
             lat: position.coords.latitude,
             lng: position.coords.longitude
@@ -59,12 +70,18 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
           searchDispensaries(location.lat, location.lng, initialRadiusRef.current);
         },
         (error) => {
+          clearTimeout(timeoutId);
           console.error('Location access denied:', error);
           setLocationStatus('denied');
           // Fallback to San Francisco
           const fallback = { lat: 37.7749, lng: -122.4194 };
           setUserLocation(fallback);
           searchDispensaries(fallback.lat, fallback.lng, initialRadiusRef.current);
+        },
+        {
+          timeout: 5000,
+          maximumAge: 0,
+          enableHighAccuracy: false
         }
       );
     } else {
