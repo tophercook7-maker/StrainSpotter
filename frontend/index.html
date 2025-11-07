@@ -11,6 +11,11 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>StrainSpotter</title>
+
+    <!-- Load React from CDN to ensure it's available globally before Vite bundle -->
+    <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+
     <style>
       /* Global field background so translucent UI shows it */
       html, body, #root { height: 100%; }
@@ -30,11 +35,34 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      // Only register service worker in production (avoid dev fetch issues)
+      // Debug logging
+      console.log('=== StrainSpotter index.html loaded ===');
+      console.log('Protocol:', window.location.protocol);
+      console.log('Hostname:', window.location.hostname);
+      console.log('Pathname:', window.location.pathname);
+      console.log('User Agent:', navigator.userAgent);
+      console.log('React loaded from CDN:', typeof window.React);
+      console.log('ReactDOM loaded from CDN:', typeof window.ReactDOM);
+
+      // Add global error handler
+      window.addEventListener('error', (e) => {
+        console.error('Global error:', e.message, e.filename, e.lineno, e.colno);
+        console.error('Error object:', e.error);
+        alert('Error: ' + e.message + ' at ' + e.filename + ':' + e.lineno);
+      });
+
+      window.addEventListener('unhandledrejection', (e) => {
+        console.error('Unhandled promise rejection:', e.reason);
+        alert('Promise rejection: ' + e.reason);
+      });
+
+      // Only register service worker in web (not in Capacitor)
       const isLocalDev = ['localhost', '127.0.0.1'].includes(location.hostname);
-      if ('serviceWorker' in navigator && !isLocalDev) {
+      const isCapacitor = window.location.protocol === 'capacitor:';
+      console.log('isCapacitor:', isCapacitor);
+      if ('serviceWorker' in navigator && !isLocalDev && !isCapacitor) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js').then(reg => {
+          navigator.serviceWorker.register('./service-worker.js').then(reg => {
             // Listen for updates
             reg.onupdatefound = () => {
               const installingWorker = reg.installing;
@@ -48,6 +76,16 @@
           });
         });
       }
+
+      // Check if root div exists
+      setTimeout(() => {
+        const root = document.getElementById('root');
+        console.log('Root element:', root);
+        console.log('Root innerHTML:', root ? root.innerHTML : 'ROOT NOT FOUND');
+        if (!root || !root.innerHTML) {
+          alert('App failed to mount! Check console.');
+        }
+      }, 3000);
     </script>
   </body>
 </html>

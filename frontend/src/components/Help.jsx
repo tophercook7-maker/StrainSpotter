@@ -5,7 +5,7 @@ export default function Help({ onNavigate, onBack }) {
   const tiles = [
     { key: 'scanner', title: 'Scanner', emoji: '📷', blurb: 'Snap bud or label for AI match' },
     { key: 'history', title: 'Scan History', emoji: '🕘', blurb: 'Revisit past scans & results' },
-    { key: 'strains', title: 'Strain Browser', emoji: '🌿', blurb: 'Explore 35k+ strains' },
+    { key: 'strains', title: 'Strain Browser', emoji: 'hero', blurb: 'Explore 35k+ strains' },
     { key: 'dispensaries', title: 'Dispensaries', emoji: '🛍️', blurb: 'Find nearby shops' },
     { key: 'seeds', title: 'Seeds', emoji: '🌱', blurb: 'Where to buy seed packs' },
     { key: 'grow-coach', title: 'Grow Coach', emoji: '📘', blurb: 'Step‑by‑step grow guide' },
@@ -51,13 +51,21 @@ export default function Help({ onNavigate, onBack }) {
         }
       }}
     >
-      <Box sx={{ 
-        fontSize: { xs: 20, sm: 22 }, 
-        lineHeight: 1,
-        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
-      }} aria-hidden>
-        {emoji}
-      </Box>
+      {emoji === 'hero' ? (
+        <Box component="img" src="/hero.png?v=13" alt="" sx={{
+          width: { xs: 20, sm: 22 },
+          height: { xs: 20, sm: 22 },
+          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2)) drop-shadow(0 0 4px rgba(124, 179, 66, 0.6))'
+        }} />
+      ) : (
+        <Box sx={{
+          fontSize: { xs: 20, sm: 22 },
+          lineHeight: 1,
+          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
+        }} aria-hidden>
+          {emoji}
+        </Box>
+      )}
       <Typography 
         variant="subtitle2" 
         sx={{ 

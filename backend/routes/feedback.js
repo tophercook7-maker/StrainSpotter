@@ -190,7 +190,7 @@ router.delete('/messages/:messageId', async (req, res) => {
     const { admin_user_id } = req.body;
 
     // Verify admin user
-    const ADMIN_EMAILS = ['strainspotter25@gmail.com', 'admin@strainspotter.com'];
+    const ADMIN_EMAILS = ['strainspotter25@gmail.com', 'admin@strainspotter.com', 'topher.cook7@gmail.com', 'andrewbeck209@gmail.com'];
 
     if (!admin_user_id) {
       return res.status(401).json({ error: 'Authentication required' });

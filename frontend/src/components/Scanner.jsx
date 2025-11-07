@@ -70,6 +70,7 @@ function Scanner({ onViewHistory, onBack }) {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          console.log('[Scanner] Location obtained successfully');
           setUserLocation({
             lat: position.coords.latitude,
             lng: position.coords.longitude
@@ -77,8 +78,20 @@ function Scanner({ onViewHistory, onBack }) {
         },
         (error) => {
           console.log('[Scanner] Geolocation not available:', error.message);
+          // Don't crash - just continue without location
+          // Fallback to San Francisco for dispensary search
+          setUserLocation({ lat: 37.7749, lng: -122.4194 });
+        },
+        {
+          timeout: 5000,
+          maximumAge: 300000, // 5 min cache
+          enableHighAccuracy: false
         }
       );
+    } else {
+      console.log('[Scanner] Geolocation not supported');
+      // Fallback location
+      setUserLocation({ lat: 37.7749, lng: -122.4194 });
     }
   }, []);
 
@@ -814,31 +827,32 @@ function Scanner({ onViewHistory, onBack }) {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh' }}>
-      {/* Back to Home button */}
-      {onBack && (
-        <Box sx={{ position: 'fixed', top: 60, left: 16, zIndex: 1000 }}>
-          <Button
-            onClick={onBack}
-            size="small"
-            variant="contained"
-            sx={{
-              bgcolor: 'white',
-              color: 'black',
-              textTransform: 'none',
-              fontWeight: 700,
-              borderRadius: 999,
-              px: 1.5,
-              minWidth: 0,
-              '&:hover': { bgcolor: 'grey.100' }
-            }}
-          >
-            Home
-          </Button>
-        </Box>
-      )}
-
-      <Container maxWidth="sm" sx={{ py: 2, px: 2 }}>
+    <Box sx={{ minHeight: '100vh', paddingTop: '300px' }}>
+      <Container maxWidth="sm" sx={{ pb: 2, px: 2 }}>
+        {/* Back to Home button - at the very top */}
+        {onBack && (
+          <Box sx={{ mb: 2 }}>
+            <Button
+              onClick={onBack}
+              size="large"
+              variant="contained"
+              fullWidth
+              sx={{
+                bgcolor: '#7cb342',
+                color: 'white',
+                textTransform: 'none',
+                fontWeight: 700,
+                borderRadius: 2,
+                py: 1.5,
+                fontSize: '1.1rem',
+                boxShadow: '0 4px 12px rgba(124, 179, 66, 0.4)',
+                '&:hover': { bgcolor: '#689f38' }
+              }}
+            >
+              ← Back to Home
+            </Button>
+          </Box>
+        )}
         {/* Compact Hero Card */}
         <Card
           sx={{
@@ -966,7 +980,7 @@ function Scanner({ onViewHistory, onBack }) {
         )}
 
         {/* Action Buttons */}
-        <Stack spacing={2}>
+        <Stack spacing={2} sx={{ mt: imagePreviews.length === 0 ? '120px' : 0 }}>
           <input
             ref={fileInputRef}
             type="file"

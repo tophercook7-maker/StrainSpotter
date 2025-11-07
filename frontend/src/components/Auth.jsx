@@ -130,7 +130,7 @@ export default function Auth({ onBack }) {
       }
 
       setError(null);
-      setInfo('🌿 Account created with a cannabis-themed profile! You can now sign in.');
+      setInfo('Account created with a cannabis-themed profile! You can now sign in.');
     }
   }
 

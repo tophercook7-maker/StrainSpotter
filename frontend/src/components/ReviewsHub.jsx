@@ -183,7 +183,13 @@ export default function ReviewsHub({ onBack, currentUser }) {
   );
 
   return (
-    <Box sx={{ minHeight: '100vh', p: 2, background: 'none' }}>
+    <Box sx={{
+      minHeight: '100vh',
+      pt: 'calc(env(safe-area-inset-top) + 32px)',
+      px: 2,
+      pb: 2,
+      background: 'none'
+    }}>
       {/* Header */}
       {onBack && (
         <Button

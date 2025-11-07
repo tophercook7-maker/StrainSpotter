@@ -33,18 +33,29 @@ export default function Dispensaries({ onBack }) {
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          console.log('[Dispensaries] Location obtained successfully');
           setUserLocation({
             lat: position.coords.latitude,
             lng: position.coords.longitude
           });
         },
         (err) => {
-          console.warn('Location access denied:', err);
+          console.warn('[Dispensaries] Location access denied:', err.message);
           setLocationError('Location access denied. Showing all dispensaries.');
+          // Set fallback location
+          setUserLocation({ lat: 37.7749, lng: -122.4194 });
+        },
+        {
+          timeout: 5000,
+          maximumAge: 300000, // 5 min cache
+          enableHighAccuracy: false
         }
       );
     } else {
+      console.log('[Dispensaries] Geolocation not supported');
       setLocationError('Geolocation not supported. Showing all dispensaries.');
+      // Set fallback location
+      setUserLocation({ lat: 37.7749, lng: -122.4194 });
     }
   }, []);
 

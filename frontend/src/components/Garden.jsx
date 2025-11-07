@@ -46,7 +46,8 @@ export default function Garden({ onBack, onNavigate }) {
     // Admin users can always logout
     const isAdminUser = user?.email === 'topher.cook7@gmail.com' ||
                         user?.email === 'strainspotter25@gmail.com' ||
-                        user?.email === 'admin@strainspotter.com';
+                        user?.email === 'admin@strainspotter.com' ||
+                        user?.email === 'andrewbeck209@gmail.com';
 
     if (!canLogout && !isAdminUser) {
       setShowLogoutWarning(true);
@@ -127,7 +128,8 @@ export default function Garden({ onBack, onNavigate }) {
   // Check if user is admin
   const isAdmin = user?.email === 'topher.cook7@gmail.com' ||
                   user?.email === 'strainspotter25@gmail.com' ||
-                  user?.email === 'admin@strainspotter.com';
+                  user?.email === 'admin@strainspotter.com' ||
+                  user?.email === 'andrewbeck209@gmail.com';
 
   const tiles = [
     { title: 'AI Strain Scan', icon: <CameraAltIcon />, nav: 'scan', color: '#00e676', description: 'Identify any strain instantly' },
@@ -208,7 +210,7 @@ export default function Garden({ onBack, onNavigate }) {
   return (
     <Box sx={{
       minHeight: '100vh',
-      pt: 2,
+      paddingTop: '120px',  // Fixed padding to clear the notch
       pb: 'calc(env(safe-area-inset-bottom) + 12px)',
       px: 2,
       background: 'none'
@@ -262,7 +264,7 @@ export default function Garden({ onBack, onNavigate }) {
                 The Garden
               </Typography>
               <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.75rem' }}>
-                {isAdmin ? '✓ Admin' : '✓ Member'}
+                {isAdmin ? '✓ Member • Admin & Moderator' : '✓ Member'}
               </Typography>
             </Box>
           </Stack>
@@ -350,7 +352,10 @@ export default function Garden({ onBack, onNavigate }) {
           mb: 1,
           textShadow: '0 1px 3px rgba(0, 0, 0, 0.5)'
         }}>
-          Welcome to The Garden 🌿
+          <Stack direction="row" alignItems="center" spacing={1} justifyContent="center">
+            <span>Welcome to The Garden</span>
+            <Box component="img" src="/hero.png?v=13" alt="" sx={{ width: 20, height: 20, borderRadius: '50%', filter: 'drop-shadow(0 0 4px rgba(124, 179, 66, 0.6))' }} />
+          </Stack>
         </Typography>
         <Typography variant="body2" sx={{
           color: '#e8e8e8',
@@ -362,14 +367,14 @@ export default function Garden({ onBack, onNavigate }) {
         </Typography>
       </Paper>
 
-      {/* Premium Feature Tiles - Smaller, more compact */}
-      <Grid container spacing={1.5}>
+      {/* Premium Feature Tiles - 2 per row, bigger */}
+      <Grid container spacing={2}>
         {tiles.map((tile) => (
-          <Grid item xs={6} sm={4} md={3} key={tile.nav}>
+          <Grid item xs={6} key={tile.nav}>
             <Paper
               onClick={() => handleFeatureClick(tile.title, tile.nav)}
               sx={{
-                p: 1.25,
+                p: 2,
                 textAlign: 'center',
                 cursor: 'pointer',
                 background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(124, 179, 66, 0.08) 100%)',
@@ -380,7 +385,7 @@ export default function Garden({ onBack, onNavigate }) {
                 boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
                 position: 'relative',
                 overflow: 'hidden',
-                minHeight: '95px',
+                minHeight: '120px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
@@ -412,9 +417,9 @@ export default function Garden({ onBack, onNavigate }) {
               }}
             >
               <Box sx={{
-                width: 38,
-                height: 38,
-                margin: '0 auto 6px auto',
+                width: 48,
+                height: 48,
+                margin: '0 auto 8px auto',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -422,16 +427,16 @@ export default function Garden({ onBack, onNavigate }) {
                 borderRadius: '50%',
                 boxShadow: `0 3px 10px ${tile.color}66, inset 0 1px 0 rgba(255, 255, 255, 0.3)`,
                 transition: 'all 0.15s ease',
-                '& svg': { fontSize: 22, color: '#fff', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }
+                '& svg': { fontSize: 28, color: '#fff', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }
               }}>
                 {tile.icon}
               </Box>
               <Typography variant="body2" sx={{
                 color: '#fff',
-                fontWeight: 600,
-                fontSize: '0.75rem',
+                fontWeight: 700,
+                fontSize: '0.9rem',
                 lineHeight: 1.2,
-                mb: 0.4,
+                mb: 0.5,
                 display: 'block',
                 textShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
                 transition: 'all 0.15s ease'
@@ -440,7 +445,7 @@ export default function Garden({ onBack, onNavigate }) {
               </Typography>
               <Typography variant="caption" sx={{
                 color: '#b0b0b0',
-                fontSize: '0.6rem',
+                fontSize: '0.7rem',
                 lineHeight: 1.3,
                 display: 'block',
                 textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'

@@ -250,7 +250,11 @@ export default function GardenGate({ onSuccess, onBack }) {
         {mode === 'welcome' && (
           <>
             <Typography variant="h3" sx={{ mb: 2, color: '#fff', fontWeight: 900 }}>
-              🌿 Enter the Garden
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Box component="img" src="/hero.png?v=13" alt="" sx={{ width: 20, height: 20, filter: 'drop-shadow(0 0 4px rgba(124, 179, 66, 0.6))' }} />
+                <span>Enter the Garden</span>
+                <Box component="img" src="/hero.png?v=13" alt="" sx={{ width: 20, height: 20, filter: 'drop-shadow(0 0 4px rgba(124, 179, 66, 0.6))' }} />
+              </Stack>
             </Typography>
             <Typography variant="body1" sx={{ mb: 4, color: '#e0e0e0' }}>
               Join the StrainSpotter community to access exclusive features, unlimited scans, and connect with growers worldwide.

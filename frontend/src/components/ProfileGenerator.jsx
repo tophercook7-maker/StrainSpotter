@@ -140,7 +140,10 @@ export default function ProfileGenerator({ user, onProfileGenerated }) {
         <Box sx={{ textAlign: 'center' }}>
           <LocalFloristIcon sx={{ fontSize: 60, color: 'success.main', mb: 2 }} />
           <Typography variant="h4" gutterBottom>
-            Welcome to StrainSpotter! 🌿
+            <Stack direction="row" alignItems="center" spacing={1} justifyContent="center">
+              <span>Welcome to StrainSpotter!</span>
+              <Box component="img" src="/hero.png?v=13" alt="" sx={{ width: 20, height: 20, filter: 'drop-shadow(0 0 4px rgba(124, 179, 66, 0.6))' }} />
+            </Stack>
           </Typography>
           <Typography variant="body1" color="text.secondary">
             We've generated a cannabis-themed profile for you

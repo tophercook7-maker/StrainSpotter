@@ -9,7 +9,8 @@ import { supabaseAdmin } from '../supabaseAdmin.js';
 const ADMIN_EMAILS = [
   'strainspotter25@gmail.com',
   'admin@strainspotter.com',
-  'topher.cook7@gmail.com' // Topher is also an admin
+  'topher.cook7@gmail.com', // Topher is also an admin
+  'andrewbeck209@gmail.com' // Andrew Beck is also an admin
 ];
 
 /**

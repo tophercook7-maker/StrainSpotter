@@ -1,83 +1,58 @@
-{\rtf1\ansi\ansicpg1252\cocoartf2822
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;}
-{\*\expandedcolortbl;;}
-\margl1440\margr1440\vieww11520\viewh8400\viewkind0
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+/* ===== Glass theme overrides ===== */
 
-\f0\fs24 \cf0 /* Full-screen cannabis field background */\
-html, body \{\
-  height: 100%;\
-  margin: 0;\
-\}\
-body \{\
-  background: url("/bg-cannabis.jpg") center/cover no-repeat fixed, #0b3d1b;\
-  color: #0f172a;\
-\}\
-\
-#root > div \{\
-  padding-top: 36px;\
-\}\
-\
-.card-like \{\
-  background: rgba(255,255,255,0.92);\
-  backdrop-filter: blur(4px);\
-  border: 1px solid #e2e8f0;\
-  border-radius: 16px;\
-  padding: 16px;\
-\}\
-/* ===== Glass theme overrides (keep at the very bottom) ===== */\
-\
-/* Global background image (uses public/bg.png if present) */\
-body\{\
-  background:\
-    linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.15)),\
-    url("/bg.png") center/cover no-repeat,\
-    #0b3d21 !important;\
-  color:#f3f4f6; /* light text */\
-\}\
-\
-/* Generic \'93glass card\'94 look for most panels/rectangles */\
-.card, .Card, [data-card],\
-section, article, .panel, .sheet, .content, .container,\
-header, footer, nav,\
-.modal, .dialog, [role="dialog"],\
-[data-age-gate], .age-gate, .gate \{\
-  background: rgba(15, 23, 42, 0.28) !important;   /* semi-transparent */\
-  backdrop-filter: blur(10px) saturate(120%);\
-  -webkit-backdrop-filter: blur(10px) saturate(120%);\
-  border: 1px solid rgba(255,255,255,0.12);\
-  border-radius: 16px;\
-  box-shadow: 0 10px 30px rgba(0,0,0,.25);\
-\}\
-\
-/* Tabs/buttons\'97make them glassy too */\
-.tabbar button, .tabs button, [data-tabs] button,\
-button \{\
-  background: rgba(255,255,255,0.16) !important;\
-  color:#f8fafc !important;\
-  border: 1px solid rgba(255,255,255,0.18) !important;\
-  backdrop-filter: blur(8px);\
-  -webkit-backdrop-filter: blur(8px);\
-\}\
-.tabbar .active, .tabs .active, [data-tabs] .active,\
-button.primary \{\
-  background: rgba(34,197,94,0.22) !important;\
-  border-color: rgba(34,197,94,0.35) !important;\
-\}\
-\
-/* Inputs\'97transparent with subtle borders */\
-input[type="text"], input[type="search"], input[type="file"], textarea \{\
-  background: rgba(255,255,255,0.10) !important;\
-  color:#f1f5f9 !important;\
-  border:1px solid rgba(255,255,255,0.20) !important;\
-\}\
-\
-/* Ensure the top content isn\'92t glued to the status bar */\
-body\{ padding-top: calc(env(safe-area-inset-top, 0px) + 16px) !important; \}\
-\
-/* Make lists/results translucent */\
-.results .result \{\
-  background: rgba(15, 23, 42, 0.26) !important;\
-  border: 1px solid rgba(255,255,255,0.10) !important;\
-\}}
+/* Global background image (uses public/bg.png if present) */
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background:
+    linear-gradient(180deg, #0a2f1a 0%, #0b3d21 50%, #0a2f1a 100%) !important;
+  color: #f3f4f6; /* light text */
+  padding-top: calc(env(safe-area-inset-top, 0px) + 16px) !important;
+}
+
+/* Generic "glass card" look for most panels/rectangles */
+.card, .Card, [data-card],
+section, article, .panel, .sheet, .content, .container,
+header, footer, nav,
+.modal, .dialog, [role="dialog"],
+[data-age-gate], .age-gate, .gate {
+  background: rgba(15, 23, 42, 0.28) !important;   /* semi-transparent */
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+}
+
+/* Tabs/buttons—make them glassy too */
+.tabbar button, .tabs button, [data-tabs] button,
+button {
+  background: rgba(255,255,255,0.16) !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(255,255,255,0.18) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.tabbar .active, .tabs .active, [data-tabs] .active,
+button.primary {
+  background: rgba(34,197,94,0.22) !important;
+  border-color: rgba(34,197,94,0.35) !important;
+}
+
+/* Inputs—transparent with subtle borders */
+input[type="text"], input[type="search"], input[type="file"], textarea {
+  background: rgba(255,255,255,0.10) !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(255,255,255,0.20) !important;
+}
+
+/* Make lists/results translucent */
+.results .result {
+  background: rgba(15, 23, 42, 0.26) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+}}

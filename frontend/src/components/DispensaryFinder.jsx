@@ -56,7 +56,7 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
         const fallback = { lat: 37.7749, lng: -122.4194 };
         setUserLocation(fallback);
         searchDispensaries(fallback.lat, fallback.lng, initialRadiusRef.current);
-      }, 5000); // 5 second timeout
+      }, 10000); // 10 second timeout (increased from 5)
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -71,7 +71,7 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
         },
         (error) => {
           clearTimeout(timeoutId);
-          console.error('Location access denied:', error);
+          console.error('Location access error:', error);
           setLocationStatus('denied');
           // Fallback to San Francisco
           const fallback = { lat: 37.7749, lng: -122.4194 };
@@ -79,9 +79,9 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
           searchDispensaries(fallback.lat, fallback.lng, initialRadiusRef.current);
         },
         {
-          timeout: 5000,
+          timeout: 10000, // 10 second timeout (increased from 5)
           maximumAge: 0,
-          enableHighAccuracy: false
+          enableHighAccuracy: true // Changed to true for better accuracy
         }
       );
     } else {
@@ -105,7 +105,13 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', p: 2, background: 'none' }}>
+    <Box sx={{
+      minHeight: '100vh',
+      pt: 'calc(env(safe-area-inset-top) + 32px)',
+      px: 2,
+      pb: 2,
+      background: 'none'
+    }}>
       {/* Header */}
       {onBack && (
         <Button
@@ -141,8 +147,8 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
         </Alert>
       )}
       {locationStatus === 'denied' && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          Location access denied. Showing results for San Francisco, CA.
+        <Alert severity="info" icon={<StoreIcon />} sx={{ mb: 2, bgcolor: 'rgba(124, 179, 66, 0.15)', color: '#fff', border: '1px solid rgba(124, 179, 66, 0.4)' }}>
+          Using San Francisco, CA as default location. Enable location access in your device settings to see nearby dispensaries.
         </Alert>
       )}
 

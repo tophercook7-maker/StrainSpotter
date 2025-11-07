@@ -948,7 +948,8 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
     <Container
       maxWidth="md"
       sx={{
-        py: 3,
+        pt: 'calc(env(safe-area-inset-top) + 40px)',
+        pb: 3,
         px: { xs: 2, sm: 3 },
         background: 'rgba(248,252,248,0.96)',
         backdropFilter: 'blur(20px)',

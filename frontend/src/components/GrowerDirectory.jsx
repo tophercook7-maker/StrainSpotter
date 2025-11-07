@@ -151,7 +151,10 @@ export default function GrowerDirectory({ onBack }) {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{
+      pt: 'calc(env(safe-area-inset-top) + 48px)',
+      pb: 4
+    }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
         {onBack && (
           <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: '#7CB342', color: 'white', textTransform: 'none', fontWeight: 700, borderRadius: 999, '&:hover': { bgcolor: '#689f38' } }}>← Back to Garden</Button>

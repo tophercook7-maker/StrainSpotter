@@ -44,7 +44,7 @@ export default function StrainBrowser({ onBack }) {
   const [allStrainsLoaded, setAllStrainsLoaded] = useState(false);
 
   // New state for enhancements
-  const [sortBy, setSortBy] = useState('name'); // name, thc, rating
+  const [sortBy, setSortBy] = useState('type'); // type, name, thc, rating
   const [thcRange, setThcRange] = useState([0, 35]); // THC% range filter
   const [favorites, setFavorites] = useState([]); // Array of favorite strain slugs
   const [showFilters, setShowFilters] = useState(false);
@@ -59,19 +59,27 @@ export default function StrainBrowser({ onBack }) {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          console.log('[StrainBrowser] Location obtained successfully');
           setUserLocation({
             lat: position.coords.latitude,
             lng: position.coords.longitude
           });
           setLoadingLocation(false);
         },
-        () => {
+        (error) => {
+          console.log('[StrainBrowser] Location denied or unavailable:', error.message);
           // Fallback to San Francisco if location denied
           setUserLocation({ lat: 37.7749, lng: -122.4194 });
           setLoadingLocation(false);
+        },
+        {
+          timeout: 5000,
+          maximumAge: 300000, // 5 min cache
+          enableHighAccuracy: false
         }
       );
     } else {
+      console.log('[StrainBrowser] Geolocation not supported');
       // Fallback if geolocation not supported
       setUserLocation({ lat: 37.7749, lng: -122.4194 });
       setLoadingLocation(false);
@@ -186,7 +194,21 @@ export default function StrainBrowser({ onBack }) {
   // Sort strains
   const sortStrains = useCallback((strainsToSort) => {
     const sorted = [...strainsToSort];
+    const typeOrder = { 'indica': 1, 'sativa': 2, 'hybrid': 3 };
+
     switch (sortBy) {
+      case 'type': {
+        // Sort by type: Indica > Sativa > Hybrid > Unknown
+        return sorted.sort((a, b) => {
+          const aType = (a.type || 'unknown').toLowerCase();
+          const bType = (b.type || 'unknown').toLowerCase();
+          const aOrder = typeOrder[aType] || 4;
+          const bOrder = typeOrder[bType] || 4;
+          if (aOrder !== bOrder) return aOrder - bOrder;
+          // If same type, sort by name
+          return (a.name || '').localeCompare(b.name || '');
+        });
+      }
       case 'name':
         return sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       case 'thc':
@@ -246,6 +268,7 @@ export default function StrainBrowser({ onBack }) {
   useEffect(() => {
     setDisplayedStrains(filteredStrains.slice(0, STRAINS_PER_PAGE));
     setPage(0);
+    setHasMore(filteredStrains.length > STRAINS_PER_PAGE);
   }, [filteredStrains]);
 
   // Infinite scroll observer - load more displayed strains from filtered list
@@ -650,13 +673,53 @@ export default function StrainBrowser({ onBack }) {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', p: 2, background: 'none' }}>
+    <Box sx={{
+      minHeight: '100vh',
+      pt: 'calc(env(safe-area-inset-top) + 60px)',
+      px: 2,
+      pb: 2,
+      background: 'none'
+    }}>
       {onBack && (
         <Button size="small" variant="outlined" onClick={onBack} sx={{ color: '#fff', borderColor: 'rgba(124, 179, 66, 0.6)', fontSize: '0.875rem', mb: 2, '&:hover': { borderColor: 'rgba(124, 179, 66, 1)', bgcolor: 'rgba(124, 179, 66, 0.1)' } }}>
           ← Back
         </Button>
       )}
-      <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700, mb: 2 }}>🌿 Strain Browser</Typography>
+
+      {/* Hero Section */}
+      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+        <Box
+          sx={{
+            width: { xs: 80, sm: 100 },
+            height: { xs: 80, sm: 100 },
+            borderRadius: '50%',
+            background: 'transparent',
+            border: '2px solid rgba(124, 179, 66, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 0 30px rgba(124, 179, 66, 0.5)',
+            overflow: 'hidden',
+            animation: 'pulse 3s ease-in-out infinite',
+            '@keyframes pulse': {
+              '0%': { boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)' },
+              '50%': { boxShadow: '0 0 40px rgba(124, 179, 66, 0.7)' },
+              '100%': { boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)' }
+            }
+          }}
+        >
+          <img
+            src="/hero.png?v=13"
+            alt="StrainSpotter"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        </Box>
+      </Box>
+
+      <Stack direction="row" alignItems="center" justifyContent="center" spacing={1} sx={{ mb: 2 }}>
+        <Box component="img" src="/hero.png?v=13" alt="" sx={{ width: 24, height: 24, borderRadius: '50%', filter: 'drop-shadow(0 0 4px rgba(124, 179, 66, 0.6))' }} />
+        <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>Strain Browser</Typography>
+      </Stack>
 
       <Paper sx={{ p: 2, mb: 2, background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '1px solid rgba(124, 179, 66, 0.3)', borderRadius: 2 }}>
         <Grid container spacing={1.5}>
@@ -664,12 +727,28 @@ export default function StrainBrowser({ onBack }) {
             <TextField
               fullWidth
               size="small"
-              placeholder="Search strains..."
+              placeholder="Search strains by name, effects, flavors..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  filterStrains();
+                }
+              }}
               slotProps={{
                 input: {
                   startAdornment: (<InputAdornment position="start"><SearchIcon sx={{ color: '#7cb342', fontSize: 20 }} /></InputAdornment>),
+                  endAdornment: searchQuery && (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        onClick={() => setSearchQuery('')}
+                        sx={{ color: '#fff', padding: '4px' }}
+                      >
+                        <CloseIcon sx={{ fontSize: 18 }} />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
                   sx: { color: '#fff', fontSize: '0.875rem', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.5)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.8)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#7cb342' } }
                 }
               }}
@@ -690,6 +769,7 @@ export default function StrainBrowser({ onBack }) {
             <FormControl fullWidth size="small">
               <InputLabel sx={{ color: '#fff', fontSize: '0.875rem' }}>Sort</InputLabel>
               <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} label="Sort" sx={{ color: '#fff', fontSize: '0.875rem', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.5)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(124, 179, 66, 0.8)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#7cb342' } }}>
+                <MenuItem value="type">Type (I→S→H)</MenuItem>
                 <MenuItem value="name">Name</MenuItem>
                 <MenuItem value="thc">THC %</MenuItem>
                 <MenuItem value="rating">Rating</MenuItem>
@@ -796,75 +876,145 @@ export default function StrainBrowser({ onBack }) {
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress sx={{ color: '#7cb342' }} /></Box>
       ) : (
         <>
-          <Grid container spacing={2}>
-            {displayedStrains.map((strain) => (
-              <Grid item xs={6} sm={4} md={3} lg={2} key={strain.slug}>
-                <Card sx={{ position: 'relative', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '1px solid rgba(124, 179, 66, 0.3)', borderRadius: 2, transition: 'all 0.3s ease', '&:hover': { transform: 'translateY(-4px)', border: '1px solid rgba(124, 179, 66, 0.8)', boxShadow: '0 8px 24px rgba(124, 179, 66, 0.3)' } }}>
-                  {/* Favorite Button */}
-                  <IconButton
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleFavorite(strain.slug);
-                    }}
-                    sx={{
-                      position: 'absolute',
-                      top: 4,
-                      right: 4,
-                      zIndex: 10,
-                      bgcolor: 'rgba(0,0,0,0.6)',
-                      color: favorites.includes(strain.slug) ? '#ff4081' : '#fff',
-                      padding: '4px',
-                      '&:hover': {
-                        bgcolor: 'rgba(0,0,0,0.8)',
-                        transform: 'scale(1.1)',
-                      },
-                    }}
-                  >
-                    {favorites.includes(strain.slug) ? <FavoriteIcon fontSize="small" /> : <FavoriteBorderIcon fontSize="small" />}
-                  </IconButton>
+          <Stack spacing={1}>
+            {displayedStrains.map((strain, index) => {
+              const indicaPercent = strain.type === 'indica' ? 100 : strain.type === 'sativa' ? 0 : 50;
+              const sativaPercent = 100 - indicaPercent;
+              const typeColor = strain.type === 'indica' ? '#7b1fa2' : strain.type === 'sativa' ? '#f57c00' : '#00897b';
+              const strainNumber = filteredStrains.findIndex(s => s.slug === strain.slug) + 1;
 
-                  <Box
-                    onClick={() => handleStrainClick(strain)}
-                    sx={{
-                      height: 120,
-                      background: getStrainGradient(strain.type),
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      position: 'relative',
-                      cursor: 'pointer',
+              return (
+                <Paper
+                  key={strain.slug}
+                  onClick={() => handleStrainClick(strain)}
+                  sx={{
+                    p: 1.5,
+                    cursor: 'pointer',
+                    background: 'rgba(255,255,255,0.1)',
+                    backdropFilter: 'blur(20px)',
+                    border: `2px solid ${typeColor}40`,
+                    borderRadius: 2,
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      transform: 'translateX(4px)',
+                      border: `2px solid ${typeColor}`,
+                      boxShadow: `0 4px 16px ${typeColor}40`,
+                    }
+                  }}
+                >
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    {/* Strain Number */}
+                    <Typography variant="caption" sx={{
+                      color: '#7cb342',
+                      fontWeight: 700,
+                      fontSize: '0.7rem',
+                      minWidth: 32,
+                      textAlign: 'right',
+                      opacity: 0.7
+                    }}>
+                      #{strainNumber}
+                    </Typography>
+
+                    {/* Favorite Icon */}
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(strain.slug);
+                      }}
+                      sx={{
+                        color: favorites.includes(strain.slug) ? '#ff4081' : '#666',
+                        padding: '2px',
+                        '&:hover': {
+                          color: '#ff4081',
+                          transform: 'scale(1.2)',
+                        },
+                      }}
+                    >
+                      {favorites.includes(strain.slug) ? <FavoriteIcon sx={{ fontSize: 18 }} /> : <FavoriteBorderIcon sx={{ fontSize: 18 }} />}
+                    </IconButton>
+
+                    {/* Strain Name */}
+                    <Typography variant="body1" sx={{
+                      color: '#fff',
+                      fontWeight: 700,
+                      flex: 1,
+                      fontSize: '0.85rem',
                       overflow: 'hidden',
-                    }}
-                  >
-                    <LocalFloristIcon sx={{ fontSize: 64, color: 'rgba(255,255,255,0.3)' }} />
-                  </Box>
-
-                  <CardContent onClick={() => handleStrainClick(strain)} sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                    <Typography variant="body2" sx={{ color: '#fff', fontWeight: 600, mb: 0.5, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
                       {strain.name}
                     </Typography>
-                    <Chip label={strain.type || 'Unknown'} size="small" sx={{ bgcolor: getTypeColor(strain.type), color: '#fff', fontWeight: 600, fontSize: '0.65rem', height: 18, mb: 0.5 }} />
-                    {strain.thc && (
-                      <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, display: 'block', fontSize: '0.7rem' }}>
-                        THC: {strain.thc}%
+
+                    {/* Indica/Sativa Ratio */}
+                    <Stack direction="row" alignItems="center" spacing={0.3} sx={{ minWidth: 55, flexShrink: 0 }}>
+                      <Typography variant="caption" sx={{ color: '#7b1fa2', fontWeight: 600, fontSize: '0.65rem' }}>
+                        I{indicaPercent}
                       </Typography>
+                      <Typography variant="caption" sx={{ color: '#666', fontSize: '0.65rem' }}>|</Typography>
+                      <Typography variant="caption" sx={{ color: '#f57c00', fontWeight: 600, fontSize: '0.65rem' }}>
+                        S{sativaPercent}
+                      </Typography>
+                    </Stack>
+
+                    {/* THC % */}
+                    {strain.thc && (
+                      <Chip
+                        label={`${strain.thc}%`}
+                        size="small"
+                        sx={{
+                          bgcolor: '#7cb342',
+                          color: '#fff',
+                          fontWeight: 700,
+                          fontSize: '0.65rem',
+                          height: 20,
+                          minWidth: 40,
+                          flexShrink: 0,
+                          '& .MuiChip-label': { px: 0.5 }
+                        }}
+                      />
                     )}
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+
+                    {/* Type Badge */}
+                    <Chip
+                      label={strain.type || 'Unk'}
+                      size="small"
+                      sx={{
+                        bgcolor: typeColor,
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '0.65rem',
+                        height: 20,
+                        minWidth: 45,
+                        flexShrink: 0,
+                        textTransform: 'capitalize',
+                        '& .MuiChip-label': { px: 0.5 }
+                      }}
+                    />
+                  </Stack>
+                </Paper>
+              );
+            })}
+          </Stack>
 
           {/* Infinite scroll trigger */}
-          <Box ref={observerTarget} sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
+          <Box ref={observerTarget} sx={{ py: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             {hasMore && displayedStrains.length > 0 && (
-              <Typography variant="body2" sx={{ color: '#7cb342' }}>Scroll for more...</Typography>
+              <>
+                <CircularProgress size={30} sx={{ color: '#7cb342' }} />
+                <Typography variant="body2" sx={{ color: '#7cb342', fontWeight: 600 }}>
+                  Loading more strains...
+                </Typography>
+              </>
             )}
             {!hasMore && displayedStrains.length > 0 && displayedStrains.length === filteredStrains.length && (
-              <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
-                All {filteredStrains.length} strains displayed! 🌿
-              </Typography>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
+                  All {filteredStrains.length} strains displayed!
+                </Typography>
+                <Box component="img" src="/hero.png?v=13" alt="" sx={{ width: 16, height: 16, borderRadius: '50%', filter: 'drop-shadow(0 0 4px rgba(124, 179, 66, 0.6))' }} />
+              </Stack>
             )}
           </Box>
         </>
@@ -889,7 +1039,12 @@ export default function StrainBrowser({ onBack }) {
           }
         }}
       >
-        <DialogTitle sx={{ color: '#fff', fontWeight: 700, borderBottom: '1px solid rgba(124, 179, 66, 0.3)' }}>
+        <DialogTitle sx={{
+          color: '#fff',
+          fontWeight: 700,
+          borderBottom: '1px solid rgba(124, 179, 66, 0.3)',
+          pt: 'calc(env(safe-area-inset-top) + 16px)'
+        }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
             <Box>
               <Typography variant="h5" sx={{ fontWeight: 700, fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>{selectedStrain?.name}</Typography>

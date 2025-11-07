@@ -1,4 +1,4 @@
-import { Box, Button, Typography, Card, CardContent, Container } from '@mui/material';
+import { Box, Button, Typography, Card, CardContent, Container, Stack } from '@mui/material';
 import { LocalFlorist } from '@mui/icons-material';
 
 function AgeGate({ onVerify }) {
@@ -97,7 +97,11 @@ function AgeGate({ onVerify }) {
                 },
               }}
             >
-              🌿 I am 21 or Older 🌿
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Box component="img" src="/hero.png?v=13" alt="" sx={{ width: 20, height: 20, filter: 'drop-shadow(0 0 4px rgba(124, 179, 66, 0.6))' }} />
+                <span>I am 21 or Older</span>
+                <Box component="img" src="/hero.png?v=13" alt="" sx={{ width: 20, height: 20, filter: 'drop-shadow(0 0 4px rgba(124, 179, 66, 0.6))' }} />
+              </Stack>
             </Button>
             
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 3 }}>

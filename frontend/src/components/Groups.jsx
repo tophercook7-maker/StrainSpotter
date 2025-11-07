@@ -321,14 +321,22 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     setInput('');
 
     try {
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
       const res = await fetch(`${API_BASE}/api/groups/${selectedGroup.id}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`
         },
-        body: JSON.stringify({ content, user_id: userId })
+        body: JSON.stringify({ content, user_id: userId }),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
+
       if (res.ok) {
         await loadMessages(selectedGroup.id);
       } else {
@@ -338,7 +346,11 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       }
     } catch (e) {
       setMessages(prev => prev.filter(m => m.id !== optimisticId));
-      alert('Failed to send message');
+      if (e.name === 'AbortError') {
+        alert('Message sending timed out. Please check your connection and try again.');
+      } else {
+        alert('Failed to send message');
+      }
     }
   };
 
@@ -485,7 +497,9 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         sx={{
           position: 'relative',
           zIndex: 1,
-          color: '#f5f5f5'
+          color: '#f5f5f5',
+          pt: '120px',
+          pb: 3
         }}
       >
         {onBack && (
@@ -494,13 +508,13 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             size="small"
             variant="contained"
             sx={{
-              bgcolor: 'rgba(255,255,255,0.2)',
-              color: '#fff',
+              bgcolor: 'rgba(255,255,255,0.9)',
+              color: '#1a1a1a',
               textTransform: 'none',
               fontWeight: 700,
               borderRadius: 999,
               mb: 1,
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' }
+              '&:hover': { bgcolor: 'rgba(255,255,255,1)' }
             }}
           >
             ← Back to Garden
@@ -530,7 +544,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           </Box>
-          <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.25rem' }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.25rem', color: '#1a1a1a' }}>
             Groups & Chat
           </Typography>
         </Box>
@@ -545,7 +559,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           border: '1px solid rgba(255,255,255,0.18)'
         }}>
           <CardContent sx={{ p: 2 }}>
-            <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600, fontSize: '1rem' }}>
+            <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600, fontSize: '1rem', color: '#1a1a1a' }}>
               Groups
             </Typography>
             <Stack spacing={1.5}>
@@ -605,9 +619,10 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          p: 2
+          p: 2,
+          pt: '120px'
         }}>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: '#1a1a1a' }}>
             {selectedGroup?.name}
           </Typography>
           <Stack direction="row" spacing={1}>
@@ -740,8 +755,12 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                   onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
                   multiline
                   maxRows={3}
+                  sx={{
+                    '& .MuiInputBase-input': { color: '#1a1a1a' },
+                    '& .MuiInputBase-input::placeholder': { color: '#666', opacity: 1 }
+                  }}
                 />
-                <Button variant="contained" onClick={sendMessage} sx={{ minWidth: '80px' }}>
+                <Button variant="contained" onClick={sendMessage} sx={{ minWidth: '80px', color: '#fff' }}>
                   Send
                 </Button>
               </Stack>

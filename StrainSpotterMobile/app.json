@@ -16,7 +16,8 @@
       "bundleIdentifier": "com.strainspotter.app",
       "infoPlist": {
         "NSCameraUsageDescription": "StrainSpotter needs camera access to scan cannabis strains",
-        "NSPhotoLibraryUsageDescription": "StrainSpotter needs photo library access to select images for scanning"
+        "NSPhotoLibraryUsageDescription": "StrainSpotter needs photo library access to select images for scanning",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

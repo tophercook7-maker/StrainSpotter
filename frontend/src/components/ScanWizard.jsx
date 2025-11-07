@@ -588,7 +588,7 @@ export default function ScanWizard({ onBack }) {
           {/* Back and Logout buttons - Mobile Optimized */}
           <Box sx={{
             position: 'absolute',
-            top: { xs: 12, sm: 24 },
+            top: { xs: '120px', sm: 24 },
             left: { xs: 12, sm: 24 },
             right: { xs: 12, sm: 'auto' },
             zIndex: 100,
@@ -665,7 +665,7 @@ export default function ScanWizard({ onBack }) {
           </Box>
 
           {/* Hero Image Icon */}
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: { xs: 1, sm: 2 }, mt: { xs: 7, sm: 0 } }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: { xs: 1, sm: 2 }, mt: { xs: '180px', sm: 0 } }}>
             <Box
               sx={{
                 width: { xs: 50, sm: 70 },
@@ -971,7 +971,10 @@ export default function ScanWizard({ onBack }) {
                 width: '100%'
               }}>
                 <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: { xs: 1.5, sm: 2 }, display: 'flex', alignItems: 'center', gap: 1, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
-                  🌿 Plant Analysis
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Box component="img" src="/hero.png?v=13" alt="" sx={{ width: 18, height: 18, filter: 'drop-shadow(0 0 4px rgba(124, 179, 66, 0.6))' }} />
+                    <span>Plant Analysis</span>
+                  </Stack>
                 </Typography>
 
                 {/* Growth Stage */}
@@ -1751,7 +1754,10 @@ export default function ScanWizard({ onBack }) {
               borderBottom: '1px solid rgba(124,179,66,0.3)'
             }}>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                🌿 Garden Membership Access
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Box component="img" src="/hero.png?v=13" alt="" sx={{ width: 18, height: 18, filter: 'drop-shadow(0 0 4px rgba(124, 179, 66, 0.6))' }} />
+                  <span>Garden Membership Access</span>
+                </Stack>
               </Typography>
               <IconButton
                 onClick={() => setShowMembershipDialog(false)}
