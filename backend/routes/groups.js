@@ -426,10 +426,10 @@ router.post('/:id/messages', rejectIfProfane, async (req, res) => {
     
     // Insert new message
     const payload = { group_id: groupId, user_id: userId, content: cleaned };
-    const { data, error } = await writeClient
+    const { data: messageData, error } = await writeClient
       .from('messages')
       .insert(payload)
-      .select('*, users(id, username, avatar_url)')
+      .select('*')
       .single();
     if (error) {
       const hint = (!supabaseAdmin && /row-level security/i.test(error.message))
@@ -437,6 +437,23 @@ router.post('/:id/messages', rejectIfProfane, async (req, res) => {
         : null;
       return res.status(500).json({ error: error.message, hint });
     }
+
+    // Fetch user data separately
+    let userData = null;
+    if (userId) {
+      const { data: user } = await writeClient
+        .from('users')
+        .select('id, username, avatar_url')
+        .eq('id', userId)
+        .single();
+      userData = user;
+    }
+
+    // Combine message and user data
+    const data = {
+      ...messageData,
+      users: userData
+    };
     // After insert, enforce max 100 messages per group
     const { data: allMsgs } = await writeClient
       .from('messages')
