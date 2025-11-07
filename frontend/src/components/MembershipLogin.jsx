@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Box, Button, Typography, TextField, Paper, CircularProgress } from "@mui/material";
+import { API_BASE } from "../config";
 
 export default function MembershipLogin({ onSuccess }) {
   const [email, setEmail] = useState("");
@@ -12,7 +13,7 @@ export default function MembershipLogin({ onSuccess }) {
     setLoading(true);
     setError("");
     try {
-      const resp = await fetch("/api/membership/apply", {
+      const resp = await fetch(`${API_BASE}/api/membership/apply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, full_name: name })

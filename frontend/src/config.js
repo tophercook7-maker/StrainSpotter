@@ -10,26 +10,40 @@ const envCandidates = [
 const fromEnv = envCandidates.length ? envCandidates[0] : '';
 const isLocalhost = typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.host);
 const isEnvLocal = fromEnv && /localhost|127\.0\.0\.1/.test(fromEnv);
+const isCapacitor = typeof window !== 'undefined' && window.location.protocol === 'capacitor:';
 
 // Default remote API (Render backend) used when no env override is provided
 const DEFAULT_REMOTE_API = 'https://strainspotter.onrender.com';
 
 // If we're on localhost but VITE_API_BASE points to a remote server (e.g., Vercel), use the local backend to avoid CORS in dev.
-const resolvedForLocal = isLocalhost
-  ? (isEnvLocal ? fromEnv : 'http://localhost:5181')
-  : (fromEnv || DEFAULT_REMOTE_API);
+// If we're in Capacitor (mobile app), always use the remote API
+const resolvedForLocal = isCapacitor
+  ? (fromEnv || DEFAULT_REMOTE_API)
+  : isLocalhost
+    ? (isEnvLocal ? fromEnv : 'http://localhost:5181')
+    : (fromEnv || DEFAULT_REMOTE_API);
 
 export const API_BASE = resolvedForLocal.replace(/\/$/, '');
 
 // Log configuration on startup for debugging
 console.log('[Config] API_BASE:', API_BASE);
+console.log('[Config] isCapacitor:', isCapacitor);
+console.log('[Config] isLocalhost:', isLocalhost);
+console.log('[Config] Window location:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+console.log('[Config] Window protocol:', typeof window !== 'undefined' ? window.location.protocol : 'N/A');
 console.log('[Config] Environment variables:', {
   VITE_API_BASE: import.meta.env.VITE_API_BASE,
   VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
   VITE_BACKEND_URL: import.meta.env.VITE_BACKEND_URL,
   VITE_API_URL: import.meta.env.VITE_API_URL
 });
-console.log('[Config] Window location:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+
+// Show a visible alert on mobile to confirm API_BASE
+if (isCapacitor) {
+  setTimeout(() => {
+    alert(`StrainSpotter Config:\nAPI_BASE: ${API_BASE}\nProtocol: ${window.location.protocol}`);
+  }, 2000);
+}
 
 // Functions base (Edge Functions if provided, otherwise fall back to backend API routes)
 // This ensures uploads/processing work even if Supabase Edge Functions aren't deployed yet.

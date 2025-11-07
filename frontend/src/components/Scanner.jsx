@@ -133,19 +133,46 @@ function Scanner({ onViewHistory, onBack }) {
     }
   };
 
-  const handleImageCapture = (event) => {
+  const handleImageCapture = async (event) => {
+    console.log('[Scanner] handleImageCapture called');
     const files = Array.from(event.target.files || []);
+    console.log('[Scanner] Files selected:', files.length);
     if (!files.length) return;
 
-    const nextImages = [...images, ...files].slice(0, 3);
-    const nextPreviews = [
-      ...imagePreviews,
-      ...files.map((f) => URL.createObjectURL(f))
-    ].slice(0, 3);
+    try {
+      const nextImages = [...images, ...files].slice(0, 3);
+      console.log('[Scanner] Processing images:', nextImages.length);
 
-    setImages(nextImages);
-    setImagePreviews(nextPreviews);
-    setError(null);
+      // Convert files to data URLs instead of blob URLs for better iOS compatibility
+      const newPreviews = await Promise.all(
+        files.map((file, idx) => new Promise((resolve, reject) => {
+          console.log(`[Scanner] Reading file ${idx + 1}:`, file.name, file.type, file.size);
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            console.log(`[Scanner] File ${idx + 1} loaded successfully`);
+            resolve(e.target.result);
+          };
+          reader.onerror = (e) => {
+            console.error(`[Scanner] Failed to read file ${idx + 1}:`, e);
+            reject(new Error(`Failed to read image file ${idx + 1}`));
+          };
+          reader.readAsDataURL(file);
+        }))
+      );
+
+      const nextPreviews = [...imagePreviews, ...newPreviews].slice(0, 3);
+      console.log('[Scanner] All files converted to data URLs');
+
+      setImages(nextImages);
+      setImagePreviews(nextPreviews);
+      setError(null);
+      console.log('[Scanner] Image capture complete');
+    } catch (err) {
+      console.error('[Scanner] Error loading image:', err);
+      console.error('[Scanner] Error stack:', err.stack);
+      setError(`Failed to load image: ${err.message}. Please try again with a different photo.`);
+      alert(`Image Load Error:\n${err.message}`);
+    }
   };
 
   // Function to match detected text with strain names using visual features
@@ -586,8 +613,16 @@ function Scanner({ onViewHistory, onBack }) {
       setShowResult(true);
 
     } catch (err) {
-      setError(err.message || 'Scan failed. Please try again.');
-      console.error('Scan error:', err);
+      console.error('[Scanner] Scan error:', err);
+      console.error('[Scanner] Error stack:', err.stack);
+      console.error('[Scanner] Error details:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
+
+      // Show detailed error message
+      const errorMsg = err.message || 'Scan failed. Please try again.';
+      setError(`Scan failed: ${errorMsg}`);
+
+      // Also show an alert for debugging
+      alert(`Scan Error:\n${errorMsg}\n\nCheck console for details.`);
     } finally {
       setLoading(false);
     }
@@ -782,7 +817,7 @@ function Scanner({ onViewHistory, onBack }) {
     <Box sx={{ minHeight: '100vh' }}>
       {/* Back to Home button */}
       {onBack && (
-        <Box sx={{ position: 'fixed', top: 16, left: 16, zIndex: 1000 }}>
+        <Box sx={{ position: 'fixed', top: 60, left: 16, zIndex: 1000 }}>
           <Button
             onClick={onBack}
             size="small"
@@ -863,6 +898,10 @@ function Scanner({ onViewHistory, onBack }) {
                       component="img"
                       src={src}
                       alt={`Preview ${idx + 1}`}
+                      onError={(e) => {
+                        console.error('[Scanner] Image preview failed to load:', e);
+                        setError('Failed to display image preview. Please try a different photo.');
+                      }}
                       sx={{ width: '100%', maxHeight: 320, objectFit: 'cover', bgcolor: 'rgba(0,0,0,0)', borderRadius: 1 }}
                     />
                     {showGuide && (

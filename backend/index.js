@@ -157,7 +157,11 @@ const DEFAULT_ORIGINS = [
   'https://strain-spotter.vercel.app',
   'https://strainspotter-frontend.vercel.app',
   'https://frontend-goaqagqo9-tophercook7-makers-projects.vercel.app',
-  'https://frontend-gmgc1mgxt-tophercook7-makers-projects.vercel.app'
+  'https://frontend-gmgc1mgxt-tophercook7-makers-projects.vercel.app',
+  'capacitor://localhost',  // iOS/Android Capacitor app
+  'ionic://localhost',      // Alternative Capacitor protocol
+  'http://localhost',       // Capacitor fallback
+  'https://localhost'       // Capacitor fallback
 ];
 const ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS || DEFAULT_ORIGINS.join(','))
   .split(',')
@@ -170,6 +174,12 @@ function isAllowedOrigin(origin) {
   // Check exact match first
   if (ALLOW_ORIGINS.includes(origin)) {
     console.log('[CORS] Allowed (exact match):', origin);
+    return true;
+  }
+
+  // Always allow Capacitor mobile app (capacitor:// and ionic:// protocols)
+  if (origin.startsWith('capacitor://') || origin.startsWith('ionic://')) {
+    console.log('[CORS] Allowed (Capacitor mobile app):', origin);
     return true;
   }
 
