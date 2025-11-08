@@ -46,6 +46,7 @@ import messagesRoutes from './routes/messages.js';
 import profileGeneratorRoutes from './routes/profile-generator.js';
 import usersRoutes from './routes/users.js';
 import creditsRoutes from './routes/credits.js';
+import directMessagesRoutes from './routes/direct-messages.js';
 import { matchStrainByVisuals } from './services/visualMatcher.js';
 import { analyzePlantHealth } from './services/plantHealthAnalyzer.js';
 import {
@@ -991,6 +992,8 @@ app.use('/api/messages', messagesRoutes);
 app.use('/api/profile-generator', profileGeneratorRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/credits', creditsRoutes);
+app.use('/api/direct-messages', directMessagesRoutes);
+app.use('/api/direct-chats', directMessagesRoutes);
 
 // Error logs viewer endpoint (only accessible in development)
 app.get('/api/errors/recent', (req, res) => {

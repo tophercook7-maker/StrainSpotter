@@ -42,6 +42,28 @@ export default function Garden({ onBack, onNavigate }) {
   const [showFeedbackReader, setShowFeedbackReader] = useState(false);
   const [showBuyScans, setShowBuyScans] = useState(false);
 
+  // Get display name for user
+  const getUserDisplayName = () => {
+    if (!user) return 'Guest';
+
+    // Special case for Topher
+    if (user.email === 'topher.cook7@gmail.com') {
+      return 'Topher';
+    }
+
+    // Check user_metadata for username
+    if (user.user_metadata?.username) {
+      return user.user_metadata.username;
+    }
+
+    // Fallback to email prefix
+    if (user.email) {
+      return user.email.split('@')[0];
+    }
+
+    return 'Member';
+  };
+
   const handleLogout = async () => {
     // Admin users can always logout
     const isAdminUser = user?.email === 'topher.cook7@gmail.com' ||
@@ -132,14 +154,14 @@ export default function Garden({ onBack, onNavigate }) {
                   user?.email === 'andrewbeck209@gmail.com';
 
   const tiles = [
-    { title: 'AI Strain Scan', icon: <CameraAltIcon />, nav: 'scan', color: '#00e676', description: 'Identify any strain instantly' },
-    { title: 'Strain Browser', icon: <SpaIcon />, nav: 'strains', color: '#7cb342', description: 'Explore 1000+ strains' },
-    { title: 'Reviews Hub', icon: <RateReviewIcon />, nav: 'reviews', color: '#ffd600', description: 'Read & share experiences' },
-    { title: 'Community Groups', icon: <GroupsIcon />, nav: 'groups', color: '#66bb6a', description: 'Connect with growers' },
-    { title: 'Grow Coach', icon: <LocalFloristIcon />, nav: 'grow-coach', color: '#9ccc65', description: 'Expert growing tips' },
-    { title: 'Grower Directory', icon: <PeopleIcon />, nav: 'growers', color: '#8bc34a', description: 'Find local cultivators' },
-    { title: 'Seed Vendors', icon: <MenuBookIcon />, nav: 'seeds', color: '#aed581', description: 'Trusted seed sources' },
-    { title: 'Dispensaries', icon: <StoreIcon />, nav: 'dispensaries', color: '#c5e1a5', description: 'Find nearby shops' },
+    { title: 'AI Strain Scan', icon: <CameraAltIcon />, nav: 'scan', color: '#00e676', description: 'Identify any strain instantly', image: '📷', useEmoji: true },
+    { title: 'Strain Browser', icon: <SpaIcon />, nav: 'strains', color: '#7cb342', description: 'Explore 1000+ strains', image: '/hero.png?v=13', useEmoji: false },
+    { title: 'Reviews Hub', icon: <RateReviewIcon />, nav: 'reviews', color: '#ffd600', description: 'Read & share experiences', image: '⭐', useEmoji: true },
+    { title: 'Community Groups', icon: <GroupsIcon />, nav: 'groups', color: '#66bb6a', description: 'Connect with growers', image: '👥', useEmoji: true },
+    { title: 'Grow Coach', icon: <LocalFloristIcon />, nav: 'grow-coach', color: '#9ccc65', description: 'Expert growing tips', image: '🌱', useEmoji: true },
+    { title: 'Grower Directory', icon: <PeopleIcon />, nav: 'growers', color: '#8bc34a', description: 'Find local cultivators', image: '🧑‍🌾', useEmoji: true },
+    { title: 'Seed Vendors', icon: <MenuBookIcon />, nav: 'seeds', color: '#aed581', description: 'Trusted seed sources', image: '🌾', useEmoji: true },
+    { title: 'Dispensaries', icon: <StoreIcon />, nav: 'dispensaries', color: '#c5e1a5', description: 'Find nearby shops', image: '🏪', useEmoji: true },
   ];
 
   // Add admin-only tiles
@@ -150,7 +172,9 @@ export default function Garden({ onBack, onNavigate }) {
       nav: 'feedback-reader',
       color: '#ff6b6b',
       description: 'Admin feedback tool',
-      adminOnly: true
+      adminOnly: true,
+      image: '📋',
+      useEmoji: true
     });
   }
 
@@ -213,14 +237,17 @@ export default function Garden({ onBack, onNavigate }) {
       paddingTop: '120px',  // Fixed padding to clear the notch
       pb: 'calc(env(safe-area-inset-bottom) + 12px)',
       px: 2,
-      background: 'none'
+      background: 'none',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center'
     }}>
       {/* Expired Membership Warning */}
       {isExpired && (
         <Alert
           severity="error"
           icon={<WarningIcon />}
-          sx={{ mb: 1.5, py: 0.5, fontSize: '0.75rem' }}
+          sx={{ mb: 1.5, py: 0.5, fontSize: '0.75rem', width: '100%', maxWidth: '600px' }}
         >
           Payment overdue. Update payment to continue.
         </Alert>
@@ -235,15 +262,17 @@ export default function Garden({ onBack, onNavigate }) {
         border: '1.5px solid rgba(124, 179, 66, 0.4)',
         borderRadius: 3,
         boxShadow: '0 4px 20px rgba(124, 179, 66, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-        transition: 'all 0.15s ease'
+        transition: 'all 0.15s ease',
+        width: '100%',
+        maxWidth: '600px'
       }}>
         {/* Compact buttons and welcome in one row */}
         <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
           <Stack direction="row" spacing={1.5} alignItems="center">
             <Box
               sx={{
-                width: 48,
-                height: 48,
+                width: 40,
+                height: 40,
                 borderRadius: '50%',
                 background: 'transparent',
                 border: '2px solid rgba(124, 179, 66, 0.6)',
@@ -343,7 +372,9 @@ export default function Garden({ onBack, onNavigate }) {
         backdropFilter: 'blur(15px)',
         border: '1.5px solid rgba(124, 179, 66, 0.25)',
         borderRadius: 3,
-        boxShadow: '0 2px 12px rgba(0, 0, 0, 0.2)'
+        boxShadow: '0 2px 12px rgba(0, 0, 0, 0.2)',
+        width: '100%',
+        maxWidth: '600px'
       }}>
         <Typography variant="h6" sx={{
           color: '#CDDC39',
@@ -367,25 +398,27 @@ export default function Garden({ onBack, onNavigate }) {
         </Typography>
       </Paper>
 
-      {/* Premium Feature Tiles - 2 per row, bigger */}
-      <Grid container spacing={2}>
+      {/* Premium Feature Tiles - 2 per row, compact */}
+      <Grid container spacing={1.5} sx={{ width: '100%', maxWidth: '600px', justifyContent: 'center' }}>
         {tiles.map((tile) => (
-          <Grid item xs={6} key={tile.nav}>
+          <Grid item xs={6} key={tile.nav} sx={{ display: 'flex', justifyContent: 'center' }}>
             <Paper
               onClick={() => handleFeatureClick(tile.title, tile.nav)}
               sx={{
-                p: 2,
+                p: 1.5,
                 textAlign: 'center',
                 cursor: 'pointer',
-                background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(124, 179, 66, 0.08) 100%)',
-                backdropFilter: 'blur(15px)',
+                background: 'rgba(255,255,255,0.05)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
                 border: '1.5px solid rgba(124, 179, 66, 0.3)',
                 borderRadius: 2.5,
                 transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
                 position: 'relative',
                 overflow: 'hidden',
-                minHeight: '120px',
+                width: '100%',
+                height: '100px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
@@ -402,53 +435,77 @@ export default function Garden({ onBack, onNavigate }) {
                   transition: 'opacity 0.15s ease'
                 },
                 '&:hover': {
-                  background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.2) 0%, rgba(156, 204, 101, 0.15) 100%)',
+                  background: 'rgba(124, 179, 66, 0.15)',
                   border: '1.5px solid rgba(124, 179, 66, 0.6)',
-                  transform: 'translateY(-4px) scale(1.05)',
-                  boxShadow: '0 8px 24px rgba(124, 179, 66, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                  transform: 'translateY(-2px) scale(1.03)',
+                  boxShadow: '0 8px 24px rgba(124, 179, 66, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
                   '&::before': {
                     opacity: 1
                   }
                 },
                 '&:active': {
-                  transform: 'translateY(-2px) scale(1.02)',
+                  transform: 'translateY(-1px) scale(1.01)',
                   transition: 'all 0.05s ease'
                 }
               }}
             >
-              <Box sx={{
-                width: 48,
-                height: 48,
-                margin: '0 auto 8px auto',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: `linear-gradient(135deg, ${tile.color} 0%, ${tile.color}dd 100%)`,
-                borderRadius: '50%',
-                boxShadow: `0 3px 10px ${tile.color}66, inset 0 1px 0 rgba(255, 255, 255, 0.3)`,
-                transition: 'all 0.15s ease',
-                '& svg': { fontSize: 28, color: '#fff', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }
-              }}>
-                {tile.icon}
-              </Box>
+              {tile.useEmoji ? (
+                <Box sx={{
+                  fontSize: '2.5rem',
+                  lineHeight: 1,
+                  mb: 0.5,
+                  filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+                  transition: 'all 0.15s ease',
+                  textAlign: 'center',
+                  width: '100%'
+                }}>
+                  {tile.image}
+                </Box>
+              ) : (
+                <Box sx={{
+                  width: 40,
+                  height: 40,
+                  mb: 0.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '50%',
+                  border: '2px solid rgba(124, 179, 66, 0.5)',
+                  boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)',
+                  overflow: 'hidden',
+                  background: 'transparent',
+                  transition: 'all 0.15s ease',
+                  mx: 'auto'
+                }}>
+                  <img
+                    src={tile.image}
+                    alt={tile.title}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </Box>
+              )}
               <Typography variant="body2" sx={{
-                color: '#fff',
+                color: '#CDDC39',
                 fontWeight: 700,
-                fontSize: '0.9rem',
-                lineHeight: 1.2,
-                mb: 0.5,
+                fontSize: '0.8rem',
+                lineHeight: 1.1,
+                mb: 0.25,
                 display: 'block',
                 textShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
-                transition: 'all 0.15s ease'
+                transition: 'all 0.15s ease',
+                textAlign: 'center',
+                width: '100%'
               }}>
                 {tile.title}
               </Typography>
               <Typography variant="caption" sx={{
-                color: '#b0b0b0',
-                fontSize: '0.7rem',
-                lineHeight: 1.3,
+                color: '#9CCC65',
+                fontSize: '0.65rem',
+                lineHeight: 1.2,
                 display: 'block',
-                textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
+                textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)',
+                textAlign: 'center',
+                width: '100%'
               }}>
                 {tile.description}
               </Typography>
@@ -466,7 +523,9 @@ export default function Garden({ onBack, onNavigate }) {
         border: '1.5px solid rgba(124, 179, 66, 0.3)',
         borderRadius: 3,
         boxShadow: '0 2px 12px rgba(124, 179, 66, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-        transition: 'all 0.15s ease'
+        transition: 'all 0.15s ease',
+        width: '100%',
+        maxWidth: '600px'
       }}>
         <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
           <Typography variant="caption" sx={{

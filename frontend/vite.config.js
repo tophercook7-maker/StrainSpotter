@@ -1,21 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { viteExternalsPlugin } from 'vite-plugin-externals'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    react({
-      // Use classic runtime to avoid React internals issues
-      jsxRuntime: 'classic'
-    }),
-    viteExternalsPlugin({
-      react: 'React',
-      'react-dom': 'ReactDOM',
-      'react-dom/client': 'ReactDOM'
-    })
+    react()
   ],
   base: './', // Use relative paths for Capacitor compatibility
+  server: {
+    port: 5173,
+    host: true
+  },
   build: {
     // Target older browsers for better iOS WebView compatibility
     target: 'es2015',
@@ -42,8 +37,7 @@ export default defineConfig({
   },
   // Optimize dependencies for mobile
   optimizeDeps: {
-    include: ['@mui/material', '@mui/icons-material'],
-    exclude: ['react', 'react-dom'],
+    include: ['@mui/material', '@mui/icons-material', 'react', 'react-dom'],
     esbuildOptions: {
       target: 'es2015'
     }

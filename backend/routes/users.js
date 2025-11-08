@@ -6,6 +6,50 @@ import { ensureUserRecord } from '../utils/ensureUser.js';
 const router = express.Router();
 const writeClient = supabaseAdmin ?? supabase;
 
+// GET /api/users - Get all users for direct messaging
+router.get('/', async (req, res) => {
+  try {
+    const { data, error } = await writeClient
+      .from('users')
+      .select('id, username, email')
+      .order('username', { ascending: true });
+
+    if (error) {
+      console.error('[users] Error fetching users:', error);
+      return res.status(500).json({ error: 'Failed to fetch users' });
+    }
+
+    console.log('[users] Fetched', data?.length || 0, 'users from users table');
+
+    // Enrich with profile usernames if available
+    const enrichedUsers = await Promise.all((data || []).map(async (user) => {
+      // Try to get username from profiles table
+      const { data: profile } = await writeClient
+        .from('profiles')
+        .select('username')
+        .eq('user_id', user.id)
+        .single();
+
+      // Use profile username if available, otherwise fall back to users table username
+      const finalUsername = profile?.username || user.username || user.email?.split('@')[0] || 'User';
+
+      console.log('[users] User', user.id, '- username:', finalUsername, '(from', profile?.username ? 'profiles' : 'users', 'table)');
+
+      return {
+        user_id: user.id,
+        username: finalUsername,
+        email: user.email
+      };
+    }));
+
+    console.log('[users] Returning', enrichedUsers.length, 'enriched users');
+    res.json(enrichedUsers);
+  } catch (err) {
+    console.error('[users] Exception:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Ensure a user record exists in public.users table
 // This is called after auth signup to prevent "Could not create user record" errors
 router.post('/ensure', async (req, res) => {

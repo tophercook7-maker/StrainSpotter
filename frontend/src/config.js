@@ -29,21 +29,6 @@ export const API_BASE = resolvedForLocal.replace(/\/$/, '');
 console.log('[Config] API_BASE:', API_BASE);
 console.log('[Config] isCapacitor:', isCapacitor);
 console.log('[Config] isLocalhost:', isLocalhost);
-console.log('[Config] Window location:', typeof window !== 'undefined' ? window.location.href : 'N/A');
-console.log('[Config] Window protocol:', typeof window !== 'undefined' ? window.location.protocol : 'N/A');
-console.log('[Config] Environment variables:', {
-  VITE_API_BASE: import.meta.env.VITE_API_BASE,
-  VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
-  VITE_BACKEND_URL: import.meta.env.VITE_BACKEND_URL,
-  VITE_API_URL: import.meta.env.VITE_API_URL
-});
-
-// Show a visible alert on mobile to confirm API_BASE
-if (isCapacitor) {
-  setTimeout(() => {
-    alert(`StrainSpotter Config:\nAPI_BASE: ${API_BASE}\nProtocol: ${window.location.protocol}`);
-  }, 2000);
-}
 
 // Functions base (Edge Functions if provided, otherwise fall back to backend API routes)
 // This ensures uploads/processing work even if Supabase Edge Functions aren't deployed yet.

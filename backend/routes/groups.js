@@ -264,13 +264,51 @@ router.get('/', async (req, res) => {
     let memberSummaryMap = new Map();
 
     if (groupIds.length) {
+      // Fetch messages without foreign key relationship (to avoid schema cache issues)
       const { data: lastMessages, error: lastErr } = await readClient
         .from('messages')
-        .select('group_id, content, created_at, user_id, users(id, username, avatar_url)')
+        .select('group_id, content, created_at, user_id')
         .in('group_id', groupIds)
         .order('created_at', { ascending: false });
-      if (!lastErr && Array.isArray(lastMessages)) {
-        lastMessageMap = buildLastMessageMap(lastMessages);
+
+      if (lastErr) {
+        console.error('[groups] Error fetching last messages:', lastErr);
+      }
+
+      // Fetch users separately
+      let usersMap = new Map();
+      if (Array.isArray(lastMessages) && lastMessages.length > 0) {
+        const userIds = [...new Set(lastMessages.map(m => m.user_id).filter(Boolean))];
+        if (userIds.length > 0) {
+          const { data: users, error: usersErr } = await readClient
+            .from('users')
+            .select('id, username, avatar_url')
+            .in('id', userIds);
+
+          if (usersErr) {
+            console.error('[groups] Error fetching users for messages:', usersErr);
+          } else if (Array.isArray(users)) {
+            users.forEach(u => usersMap.set(u.id, u));
+          }
+        }
+
+        // Build last message map with user details
+        for (const msg of lastMessages) {
+          if (!msg?.group_id) continue;
+          if (lastMessageMap.has(msg.group_id)) continue; // already captured newest
+
+          const user = usersMap.get(msg.user_id);
+          lastMessageMap.set(msg.group_id, {
+            content: msg.content,
+            created_at: msg.created_at,
+            user_id: msg.user_id,
+            user: user ? {
+              id: user.id,
+              username: user.username,
+              avatar_url: user.avatar_url
+            } : null
+          });
+        }
       }
 
       const { data: memberships, error: memberErr } = await readClient
@@ -385,13 +423,19 @@ router.post('/', async (req, res) => {
 
 router.get('/:id/messages', async (req, res) => {
   try {
+    // Limit to last 1000 messages to prevent performance issues
     const { data, error } = await readClient
       .from('messages')
       .select('*, users(id, username, avatar_url)')
       .eq('group_id', req.params.id)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false })
+      .limit(1000);
+
     if (error) return res.status(500).json({ error: error.message });
-    res.json(data || []);
+
+    // Reverse to show oldest first (chronological order)
+    const messages = (data || []).reverse();
+    res.json(messages);
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -534,12 +578,30 @@ router.get('/:id/members', async (req, res) => {
       .select(`
         user_id,
         joined_at,
-        users(id, username, avatar_url)
+        users(id, username, avatar_url, email)
       `)
       .eq('group_id', req.params.id);
 
     if (error) return res.status(500).json({ error: error.message });
-    res.json(data || []);
+
+    // Enrich with profile usernames if available
+    const enrichedMembers = await Promise.all((data || []).map(async (member) => {
+      // Try to get username from profiles table
+      const { data: profile } = await readClient
+        .from('profiles')
+        .select('username')
+        .eq('user_id', member.user_id)
+        .single();
+
+      // Use profile username if available, otherwise fall back to users table username
+      if (profile?.username && member.users) {
+        member.users.username = profile.username;
+      }
+
+      return member;
+    }));
+
+    res.json(enrichedMembers);
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
