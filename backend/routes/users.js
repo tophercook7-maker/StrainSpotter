@@ -21,28 +21,45 @@ router.get('/', async (req, res) => {
 
     console.log('[users] Fetched', data?.length || 0, 'users from users table');
 
-    // Enrich with profile usernames if available
-    const enrichedUsers = await Promise.all((data || []).map(async (user) => {
-      // Try to get username from profiles table
-      const { data: profile } = await writeClient
+    const users = data || [];
+    const userIds = users.map(u => u.id).filter(Boolean);
+
+    let profilesMap = new Map();
+    if (userIds.length) {
+      const { data: profiles, error: profileErr } = await writeClient
         .from('profiles')
-        .select('username')
-        .eq('user_id', user.id)
-        .single();
+        .select('user_id, display_name, username')
+        .in('user_id', userIds);
 
-      // Use profile username if available, otherwise fall back to users table username
-      const finalUsername = profile?.username || user.username || user.email?.split('@')[0] || 'User';
+      if (profileErr) {
+        console.error('[users] Error fetching profiles:', profileErr);
+      } else {
+        profilesMap = new Map(profiles.map(p => [p.user_id, p]));
+      }
+    }
 
-      console.log('[users] User', user.id, '- username:', finalUsername, '(from', profile?.username ? 'profiles' : 'users', 'table)');
+    const enrichedUsers = users.map(user => {
+      const profile = profilesMap.get(user.id);
+      const displayName = profile?.display_name
+        || profile?.username
+        || user.username
+        || (user.email ? user.email.split('@')[0] : null)
+        || `Member ${String(user.id || '').slice(0, 8)}`;
+
+      const finalUsername = profile?.username
+        || user.username
+        || (user.email ? user.email.split('@')[0] : null)
+        || displayName;
 
       return {
         user_id: user.id,
+        display_name: displayName,
         username: finalUsername,
         email: user.email
       };
-    }));
+    }).sort((a, b) => a.display_name.localeCompare(b.display_name, undefined, { sensitivity: 'base' }));
 
-    console.log('[users] Returning', enrichedUsers.length, 'enriched users');
+    console.log('[users] Returning', enrichedUsers.length, 'enriched users with display names');
     res.json(enrichedUsers);
   } catch (err) {
     console.error('[users] Exception:', err);
@@ -94,6 +111,98 @@ router.post('/ensure', async (req, res) => {
   } catch (err) {
     console.error('[users/ensure] Error:', err);
     res.status(500).json({ error: String(err) });
+  }
+});
+
+router.post('/profile', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const token = authHeader.substring(7);
+    const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !authData?.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const user = authData.user;
+    const userId = user.id;
+    const email = user.email || null;
+    const rawDisplayName = req.body?.display_name ?? req.body?.displayName;
+    const rawUsername = req.body?.username;
+
+    const displayName = (rawDisplayName || '').trim();
+    if (!displayName || displayName.length < 2) {
+      return res.status(400).json({ error: 'Display name must be at least 2 characters.' });
+    }
+
+    const sanitizedDisplayName = displayName.slice(0, 60);
+
+    let sanitizedUsername = (rawUsername || '').trim().toLowerCase();
+    sanitizedUsername = sanitizedUsername.replace(/[^a-z0-9]+/g, '').slice(0, 32);
+    if (sanitizedUsername && sanitizedUsername.length < 3) {
+      return res.status(400).json({ error: 'Username must be at least 3 characters.' });
+    }
+
+    if (sanitizedUsername) {
+      const { data: existingUsername, error: usernameErr } = await writeClient
+        .from('profiles')
+        .select('user_id')
+        .eq('username', sanitizedUsername)
+        .neq('user_id', userId)
+        .maybeSingle();
+
+      if (usernameErr && usernameErr.code !== 'PGRST116') {
+        console.error('[users/profile] Username lookup failed:', usernameErr);
+      }
+
+      if (existingUsername) {
+        return res.status(400).json({ error: 'Username is already in use.' });
+      }
+    }
+
+    const payload = {
+      display_name: sanitizedDisplayName,
+      username: sanitizedUsername || null,
+      email
+    };
+
+    const { data: updated, error: updateErr } = await writeClient
+      .from('profiles')
+      .update(payload)
+      .eq('user_id', userId)
+      .select()
+      .maybeSingle();
+
+    let profile = updated;
+    if (updateErr && updateErr.code !== 'PGRST116') {
+      console.error('[users/profile] Update failed:', updateErr);
+      return res.status(500).json({ error: 'Failed to update profile' });
+    }
+
+    if (!profile) {
+      const { data: inserted, error: insertErr } = await writeClient
+        .from('profiles')
+        .insert({
+          user_id: userId,
+          ...payload
+        })
+        .select()
+        .single();
+
+      if (insertErr) {
+        console.error('[users/profile] Insert failed:', insertErr);
+        return res.status(500).json({ error: 'Failed to update profile' });
+      }
+      profile = inserted;
+    }
+
+    res.json({ profile });
+  } catch (err) {
+    console.error('[users/profile] Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

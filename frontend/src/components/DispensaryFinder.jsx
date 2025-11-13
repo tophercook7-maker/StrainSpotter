@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Box, Typography, Stack, Paper, Button, TextField, CircularProgress,
-  Card, CardContent, Chip, IconButton, Slider, FormControl, InputLabel,
-  Select, MenuItem, Alert
+  Box, Typography, Stack, Paper, Button, CircularProgress,
+  Card, CardContent, Chip, IconButton, Slider, Alert, CardActionArea
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
@@ -18,15 +17,15 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
-  const [radius, setRadius] = useState(10);
+  const [radius, setRadius] = useState(25);
   const [locationStatus, setLocationStatus] = useState('detecting');
-  const initialRadiusRef = useRef(10);
+  const initialRadiusRef = useRef(25);
 
   const searchDispensaries = useCallback(async (lat, lng, searchRadius) => {
     setLoading(true);
     setError(null);
     try {
-      let url = `${API_BASE}/api/dispensaries-live?lat=${lat}&lng=${lng}&radius=${searchRadius}`;
+      let url = `${API_BASE}/api/dispensaries-live?lat=${lat}&lng=${lng}&radius=${searchRadius}&limit=100`;
       if (strainSlug) {
         url += `&strain=${strainSlug}`;
       }
@@ -90,13 +89,37 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
     }
   }, [searchDispensaries]);
 
-  const handleRadiusChange = (event, newValue) => {
+  const handleRadiusChange = (_event, newValue) => {
     setRadius(newValue);
+    if (userLocation) {
+      searchDispensaries(userLocation.lat, userLocation.lng, newValue);
+    }
   };
 
   const handleSearch = () => {
     if (userLocation) {
       searchDispensaries(userLocation.lat, userLocation.lng, radius);
+    }
+  };
+
+  const openPlaceOnMaps = (dispensary) => {
+    if (dispensary.place_id) {
+      window.open(`https://www.google.com/maps/place/?q=place_id:${dispensary.place_id}`, '_blank');
+      return;
+    }
+
+    const parts = [];
+    if (dispensary.name) parts.push(dispensary.name);
+    if (dispensary.address) parts.push(dispensary.address);
+    if (dispensary.city && dispensary.state) parts.push(`${dispensary.city}, ${dispensary.state}`);
+
+    if (parts.length > 0) {
+      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parts.join(', '))}`, '_blank');
+      return;
+    }
+
+    if (dispensary.latitude !== undefined && dispensary.longitude !== undefined) {
+      window.open(`https://www.google.com/maps/search/?api=1&query=${dispensary.latitude},${dispensary.longitude}`, '_blank');
     }
   };
 
@@ -170,13 +193,13 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
               value={radius}
               onChange={handleRadiusChange}
               min={1}
-              max={50}
+              max={100}
               step={1}
               marks={[
                 { value: 1, label: '1mi' },
-                { value: 10, label: '10mi' },
                 { value: 25, label: '25mi' },
-                { value: 50, label: '50mi' }
+                { value: 50, label: '50mi' },
+                { value: 100, label: '100mi' }
               ]}
               sx={{
                 color: '#7cb342',
@@ -244,7 +267,8 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
                 border: '1px solid rgba(124, 179, 66, 0.3)', 
                 borderRadius: 2 
               }}>
-                <CardContent>
+                <CardActionArea onClick={() => openPlaceOnMaps(dispensary)}>
+                  <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={2}>
                     <Box flex={1}>
                       <Stack direction="row" alignItems="center" spacing={1} mb={1}>
@@ -303,7 +327,10 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
                       {dispensary.latitude && dispensary.longitude && (
                         <IconButton
                           size="small"
-                          onClick={() => getDirections(dispensary.latitude, dispensary.longitude)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              getDirections(dispensary.latitude, dispensary.longitude);
+                            }}
                           sx={{ color: '#7cb342' }}
                           title="Get Directions"
                         >
@@ -315,6 +342,7 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
                           size="small"
                           component="a"
                           href={`tel:${dispensary.phone}`}
+                            onClick={(event) => event.stopPropagation()}
                           sx={{ color: '#7cb342' }}
                           title="Call"
                         >
@@ -327,6 +355,7 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
                           component="a"
                           href={dispensary.website}
                           target="_blank"
+                            onClick={(event) => event.stopPropagation()}
                           sx={{ color: '#7cb342' }}
                           title="Visit Website"
                         >
@@ -341,7 +370,8 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
                       {dispensary.description}
                     </Typography>
                   )}
-                </CardContent>
+                  </CardContent>
+                </CardActionArea>
               </Card>
             ))}
           </Stack>

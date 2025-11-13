@@ -426,15 +426,50 @@ router.get('/:id/messages', async (req, res) => {
     // Limit to last 1000 messages to prevent performance issues
     const { data, error } = await readClient
       .from('messages')
-      .select('*, users(id, username, avatar_url)')
+      .select('*, users(id, username, avatar_url, email)')
       .eq('group_id', req.params.id)
       .order('created_at', { ascending: false })
       .limit(1000);
 
     if (error) return res.status(500).json({ error: error.message });
 
-    // Reverse to show oldest first (chronological order)
-    const messages = (data || []).reverse();
+    const rawMessages = data || [];
+    const userIds = [...new Set(rawMessages.map(m => m.user_id).filter(Boolean))];
+
+    let profilesMap = new Map();
+    if (userIds.length) {
+      const { data: profileRows, error: profileErr } = await readClient
+        .from('profiles')
+        .select('user_id, display_name, username, avatar_url')
+        .in('user_id', userIds);
+
+      if (profileErr) {
+        console.error('[groups/messages] Failed to load profiles:', profileErr.message);
+      } else {
+        profilesMap = new Map(profileRows.map(row => [row.user_id, row]));
+      }
+    }
+
+    const messages = rawMessages
+      .reverse()
+      .map(message => {
+        const profile = profilesMap.get(message.user_id);
+        const fallbackName = message.users?.username
+          || (message.users?.email ? message.users.email.split('@')[0] : null)
+          || `Member ${String(message.user_id || '').slice(0, 8)}`;
+
+        return {
+          ...message,
+          users: {
+            ...message.users,
+            display_name: profile?.display_name || fallbackName,
+            username: profile?.username || message.users?.username,
+            avatar_url: profile?.avatar_url || message.users?.avatar_url || null
+          },
+          profile
+        };
+      });
+
     res.json(messages);
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -584,22 +619,46 @@ router.get('/:id/members', async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
 
-    // Enrich with profile usernames if available
-    const enrichedMembers = await Promise.all((data || []).map(async (member) => {
-      // Try to get username from profiles table
-      const { data: profile } = await readClient
+    const members = data || [];
+    const memberIds = [...new Set(members.map(m => m.user_id).filter(Boolean))];
+    let profilesMap = new Map();
+
+    if (memberIds.length) {
+      const { data: profileRows, error: profileErr } = await readClient
         .from('profiles')
-        .select('username')
-        .eq('user_id', member.user_id)
-        .single();
+        .select('user_id, display_name, username, avatar_url')
+        .in('user_id', memberIds);
 
-      // Use profile username if available, otherwise fall back to users table username
-      if (profile?.username && member.users) {
-        member.users.username = profile.username;
+      if (profileErr) {
+        console.error('[groups/members] Failed to load profiles:', profileErr.message);
+      } else {
+        profilesMap = new Map(profileRows.map(row => [row.user_id, row]));
       }
+    }
 
-      return member;
-    }));
+    const enrichedMembers = members.map(member => {
+      const profile = profilesMap.get(member.user_id);
+      const fallbackName = member.users?.username
+        || (member.users?.email ? member.users.email.split('@')[0] : null)
+        || `Member ${String(member.user_id || '').slice(0, 8)}`;
+
+      return {
+        ...member,
+        users: {
+          ...member.users,
+          display_name: profile?.display_name || fallbackName,
+          username: profile?.username || member.users?.username,
+          avatar_url: profile?.avatar_url || member.users?.avatar_url || null
+        },
+        profile
+      };
+    });
+
+    enrichedMembers.sort((a, b) => {
+      const nameA = a.users?.display_name || '';
+      const nameB = b.users?.display_name || '';
+      return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+    });
 
     res.json(enrichedMembers);
   } catch (e) {

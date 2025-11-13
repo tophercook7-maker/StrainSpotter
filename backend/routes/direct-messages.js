@@ -3,6 +3,54 @@ import { supabaseAdmin } from '../supabaseAdmin.js';
 
 const router = express.Router();
 
+async function fetchUserDirectory(userIds = []) {
+  const ids = [...new Set(userIds.filter(Boolean))];
+  if (!ids.length) {
+    return new Map();
+  }
+
+  const { data: users, error: usersError } = await supabaseAdmin
+    .from('users')
+    .select('id, username, email')
+    .in('id', ids);
+
+  if (usersError) {
+    console.error('[direct-messages] Error loading users:', usersError);
+  }
+
+  const { data: profiles, error: profilesError } = await supabaseAdmin
+    .from('profiles')
+    .select('user_id, display_name, username, avatar_url')
+    .in('user_id', ids);
+
+  if (profilesError) {
+    console.error('[direct-messages] Error loading profiles:', profilesError);
+  }
+
+  const profilesMap = new Map((profiles || []).map(profile => [profile.user_id, profile]));
+
+  return new Map((users || []).map(user => {
+    const profile = profilesMap.get(user.id);
+    const displayName = profile?.display_name
+      || profile?.username
+      || user.username
+      || (user.email ? user.email.split('@')[0] : null)
+      || `Member ${String(user.id || '').slice(0, 8)}`;
+
+    const username = profile?.username
+      || user.username
+      || displayName;
+
+    return [user.id, {
+      user_id: user.id,
+      display_name: displayName,
+      username,
+      email: user.email,
+      avatar_url: profile?.avatar_url || null
+    }];
+  }));
+}
+
 /**
  * GET /api/direct-messages/:userId/:otherUserId
  * Load all messages between two users
@@ -32,17 +80,8 @@ router.get('/:userId/:otherUserId', async (req, res) => {
     }
 
     // Fetch user details separately
-    const userIds = [...new Set([userId, otherUserId])];
-    const { data: users, error: usersError } = await supabaseAdmin
-      .from('users')
-      .select('id, username, email')
-      .in('id', userIds);
-
-    if (usersError) {
-      console.error('[direct-messages] Error loading users:', usersError);
-    }
-
-    const usersMap = new Map((users || []).map(u => [u.id, { user_id: u.id, username: u.username, email: u.email }]));
+    const userIds = [userId, otherUserId];
+    const usersMap = await fetchUserDirectory(userIds);
 
     // Map response to match frontend expectations and reverse to chronological order
     const messages = (data || []).reverse().map(msg => ({
@@ -102,16 +141,7 @@ router.post('/', async (req, res) => {
     }
 
     // Fetch user details separately
-    const { data: users, error: usersError } = await supabaseAdmin
-      .from('users')
-      .select('id, username, email')
-      .in('id', [sender_id, receiver_id]);
-
-    if (usersError) {
-      console.error('[direct-messages] Error loading users:', usersError);
-    }
-
-    const usersMap = new Map((users || []).map(u => [u.id, { user_id: u.id, username: u.username, email: u.email }]));
+    const usersMap = await fetchUserDirectory([sender_id, receiver_id]);
 
     // Map response to match frontend expectations
     const message = {
@@ -156,16 +186,7 @@ router.get('/chats/:userId', async (req, res) => {
     const userIds = [...new Set(messages.flatMap(m => [m.sender_id, m.receiver_id]))];
 
     // Fetch user details
-    const { data: users, error: usersError } = await supabaseAdmin
-      .from('users')
-      .select('id, username, email')
-      .in('id', userIds);
-
-    if (usersError) {
-      console.error('[direct-messages] Error loading users:', usersError);
-    }
-
-    const usersMap = new Map((users || []).map(u => [u.id, { user_id: u.id, username: u.username, email: u.email }]));
+    const usersMap = await fetchUserDirectory(userIds);
 
     // Group by other user and get last message + unread count
     const chatsMap = new Map();

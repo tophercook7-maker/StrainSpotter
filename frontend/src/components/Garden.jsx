@@ -8,7 +8,7 @@ import ReviewsHub from './ReviewsHub';
 import DispensaryFinder from './DispensaryFinder';
 import SeedVendorFinder from './SeedVendorFinder';
 import Groups from './Groups';
-import GrowCoach from './GrowCoach';
+import GrowCoach, { LOGBOOK_TAB_INDEX } from './GrowCoach';
 import GrowerDirectory from './GrowerDirectory';
 import FeedbackModal from './FeedbackModal';
 import FeedbackReader from './FeedbackReader';
@@ -22,6 +22,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import WarningIcon from '@mui/icons-material/Warning';
 import RateReviewIcon from '@mui/icons-material/RateReview';
 import FeedbackIcon from '@mui/icons-material/Feedback';
+import NoteAltIcon from '@mui/icons-material/NoteAlt';
 import CreditBalance from './CreditBalance';
 import BuyScansModal from './BuyScansModal';
 
@@ -37,6 +38,7 @@ export default function Garden({ onBack, onNavigate }) {
   const [showSeedFinder, setShowSeedFinder] = useState(false);
   const [showGroups, setShowGroups] = useState(false);
   const [showGrowCoach, setShowGrowCoach] = useState(false);
+  const [growCoachInitialTab, setGrowCoachInitialTab] = useState(0);
   const [showGrowerDirectory, setShowGrowerDirectory] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showFeedbackReader, setShowFeedbackReader] = useState(false);
@@ -126,6 +128,14 @@ export default function Garden({ onBack, onNavigate }) {
 
     // Special case for Grow Coach
     if (nav === 'grow-coach') {
+      setGrowCoachInitialTab(0);
+      setShowGrowCoach(true);
+      return;
+    }
+
+    // Special case for Grow Logbook (open Grow Coach on logbook tab)
+    if (nav === 'grow-logbook') {
+      setGrowCoachInitialTab(LOGBOOK_TAB_INDEX);
       setShowGrowCoach(true);
       return;
     }
@@ -159,6 +169,7 @@ export default function Garden({ onBack, onNavigate }) {
     { title: 'Reviews Hub', icon: <RateReviewIcon />, nav: 'reviews', color: '#ffd600', description: 'Read & share experiences', image: '⭐', useEmoji: true },
     { title: 'Community Groups', icon: <GroupsIcon />, nav: 'groups', color: '#66bb6a', description: 'Connect with growers', image: '👥', useEmoji: true },
     { title: 'Grow Coach', icon: <LocalFloristIcon />, nav: 'grow-coach', color: '#9ccc65', description: 'Expert growing tips', image: '🌱', useEmoji: true },
+    { title: 'Grow Logbook', icon: <NoteAltIcon />, nav: 'grow-logbook', color: '#81c784', description: 'Track every stage', image: '📓', useEmoji: true },
     { title: 'Grower Directory', icon: <PeopleIcon />, nav: 'growers', color: '#8bc34a', description: 'Find local cultivators', image: '🧑‍🌾', useEmoji: true },
     { title: 'Seed Vendors', icon: <MenuBookIcon />, nav: 'seeds', color: '#aed581', description: 'Trusted seed sources', image: '🌾', useEmoji: true },
     { title: 'Dispensaries', icon: <StoreIcon />, nav: 'dispensaries', color: '#c5e1a5', description: 'Find nearby shops', image: '🏪', useEmoji: true },
@@ -218,7 +229,7 @@ export default function Garden({ onBack, onNavigate }) {
 
   // Show GrowCoach if user clicked Grow Coach
   if (showGrowCoach) {
-    return <GrowCoach onBack={() => setShowGrowCoach(false)} />;
+    return <GrowCoach onBack={() => setShowGrowCoach(false)} initialTab={growCoachInitialTab} />;
   }
 
   // Show GrowerDirectory if user clicked Grower Directory

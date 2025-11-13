@@ -9,7 +9,6 @@ import ErrorBoundary from './ErrorBoundary.jsx';
 // Vercel Speed Insights for React (use '/react', not '/next' in Vite apps)
 import { SpeedInsights } from '@vercel/speed-insights/react'
 // Vercel Analytics for tracking page views and user behavior
-import { Analytics } from '@vercel/analytics/react'
 
 // Ensure React is available globally for debugging
 window.React = React;
@@ -26,8 +25,6 @@ createRoot(document.getElementById('root')).render(
     </ErrorBoundary>
     {/* Collect real-user performance metrics in Vercel */}
     <SpeedInsights />
-    {/* Track page views and user behavior in Vercel Analytics */}
-    <Analytics />
   </StrictMode>,
 )
 

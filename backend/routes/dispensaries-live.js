@@ -27,8 +27,38 @@ function haversineMiles(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// Helper: Search Google Places for dispensaries
-async function searchGooglePlaces(lat, lng, radius) {
+// Helper: generate additional search centers (offset grid) for broader coverage
+function generateSearchCenters(lat, lng, radiusMiles) {
+  const centers = [{ lat, lng }];
+  if (radiusMiles <= 15) {
+    return centers;
+  }
+
+  const mileToLat = 1 / 69; // approx
+  const mileToLng = 1 / (Math.cos(lat * Math.PI / 180) * 69);
+  const offsets = [
+    { dLat: radiusMiles * 0.3, dLng: 0 },
+    { dLat: -radiusMiles * 0.3, dLng: 0 },
+    { dLat: 0, dLng: radiusMiles * 0.3 },
+    { dLat: 0, dLng: -radiusMiles * 0.3 },
+    { dLat: radiusMiles * 0.2, dLng: radiusMiles * 0.2 },
+    { dLat: radiusMiles * 0.2, dLng: -radiusMiles * 0.2 },
+    { dLat: -radiusMiles * 0.2, dLng: radiusMiles * 0.2 },
+    { dLat: -radiusMiles * 0.2, dLng: -radiusMiles * 0.2 }
+  ];
+
+  offsets.forEach((offset) => {
+    centers.push({
+      lat: lat + offset.dLat * mileToLat,
+      lng: lng + offset.dLng * mileToLng
+    });
+  });
+
+  return centers;
+}
+
+// Helper: Search Google Places Nearby for dispensaries
+async function searchGooglePlaces(lat, lng, radius, overrideKeyword) {
   const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
   
   if (!GOOGLE_PLACES_API_KEY) {
@@ -40,20 +70,43 @@ async function searchGooglePlaces(lat, lng, radius) {
     // Convert radius from miles to meters
     const radiusMeters = Math.min(radius * 1609.34, 50000); // Max 50km
 
-    // Try multiple search keywords to catch different dispensary types
-    const keywords = [
-      'cannabis dispensary',
-      'marijuana dispensary',
-      'medical marijuana',
-      'cannabis pharmacy'
+    // Try multiple search keywords/type combinations to catch different dispensary listings
+    const searchConfigs = [
+      { keyword: 'cannabis dispensary' },
+      { keyword: 'cannabis dispensaries near me' },
+      { keyword: 'marijuana dispensary' },
+      { keyword: 'weed dispensary' },
+      { keyword: 'weed dispensary near me' },
+      { keyword: 'weed store', type: 'store' },
+      { keyword: 'cannabis store', type: 'store' },
+      { keyword: 'cannabis retailer', type: 'store' },
+      { keyword: 'medical marijuana dispensary', type: 'pharmacy' },
+      { keyword: 'medical marijuana clinic', type: 'doctor' },
+      { keyword: 'medical cannabis clinic', type: 'doctor' },
+      { keyword: 'recreational cannabis', type: 'store' },
+      { keyword: 'recreational marijuana', type: 'store' },
+      { keyword: 'cannabis club' },
+      { keyword: 'cannabis collective' },
+      { keyword: 'hash dispensary', type: 'store' },
+      { keyword: 'kief dispensary', type: 'store' },
+      { keyword: 'THC dispensary', type: 'store' },
+      { keyword: 'CBD dispensary', type: 'store' },
+      { keyword: 'CBD shop', type: 'store' },
+      { keyword: 'marijuana delivery' },
+      { keyword: 'cannabis delivery' }
     ];
 
     let allResults = [];
     const seenPlaceIds = new Set();
 
     // Search with each keyword and combine results
-    for (const keyword of keywords) {
-      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusMeters}&keyword=${encodeURIComponent(keyword)}&key=${GOOGLE_PLACES_API_KEY}`;
+    const configsToUse = overrideKeyword
+      ? [{ keyword: overrideKeyword }]
+      : searchConfigs;
+
+    for (const { keyword, type } of configsToUse) {
+      const typeParam = type ? `&type=${encodeURIComponent(type)}` : '';
+      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusMeters}&keyword=${encodeURIComponent(keyword)}${typeParam}&key=${GOOGLE_PLACES_API_KEY}`;
 
       const response = await fetch(url);
       const data = await response.json();
@@ -95,6 +148,47 @@ async function searchGooglePlaces(lat, lng, radius) {
     }));
   } catch (error) {
     console.error('[dispensaries-live] Google Places search failed:', error);
+    return [];
+  }
+}
+
+// Helper: Google Places Text Search for brand names
+async function searchGooglePlacesText(query, lat, lng, radius) {
+  const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
+  
+  if (!GOOGLE_PLACES_API_KEY) {
+    return [];
+  }
+
+  try {
+    const radiusMeters = radius ? Math.min(radius * 1609.34, 50000) : undefined;
+    const locationParam = (lat && lng) ? `&location=${lat},${lng}` : '';
+    const radiusParam = radiusMeters ? `&radius=${radiusMeters}` : '';
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}${locationParam}${radiusParam}&key=${GOOGLE_PLACES_API_KEY}`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status !== 'OK' || !data.results) {
+      if (data.status !== 'ZERO_RESULTS') {
+        console.error('[dispensaries-live] Places text search error:', data.status, data.error_message);
+      }
+      return [];
+    }
+
+    return data.results.map(result => ({
+      id: `google-text-${result.place_id}`,
+      name: result.name,
+      address: result.formatted_address,
+      latitude: result.geometry?.location?.lat,
+      longitude: result.geometry?.location?.lng,
+      rating: result.rating || 0,
+      review_count: result.user_ratings_total || 0,
+      verified: false,
+      source: 'google_places_text',
+      place_id: result.place_id,
+    }));
+  } catch (error) {
+    console.error('[dispensaries-live] Places text search failed:', error);
     return [];
   }
 }
@@ -186,24 +280,79 @@ router.get('/', async (req, res) => {
       console.error('[dispensaries-live] Database search failed:', dbError);
     }
 
-    // 2. Search Google Places for dispensaries
-    const googleResults = await searchGooglePlaces(userLat, userLng, searchRadius);
+    // 2. Search Google Places for dispensaries across multiple centers
+    const centers = generateSearchCenters(userLat, userLng, searchRadius);
+    let googleResults = [];
+    for (const center of centers) {
+      const resultsForCenter = await searchGooglePlaces(center.lat, center.lng, searchRadius);
+      googleResults = googleResults.concat(resultsForCenter);
+    }
+
+    // 2b. If Google returns very few results, run brand-focused searches for broader coverage
+    let brandResults = [];
+    if (googleResults.length < 10) {
+      const brandKeywords = [
+        'Good Day Farm dispensary',
+        'Good Day Farm cannabis',
+        'Curaleaf dispensary',
+        'Trulieve dispensary',
+        'Harvest cannabis dispensary',
+        'Zen Leaf dispensary',
+        'Bloom Medicinals dispensary',
+        'Rise dispensary',
+        'Greenlight dispensary'
+      ];
+
+      for (const brand of brandKeywords) {
+        for (const center of centers) {
+          const brandNearby = await searchGooglePlaces(center.lat, center.lng, Math.max(searchRadius, 60), brand);
+          brandResults = brandResults.concat(brandNearby);
+
+          const brandText = await searchGooglePlacesText(`${brand} Arkansas`, center.lat, center.lng, Math.max(searchRadius, 75));
+          brandResults = brandResults.concat(brandText);
+        }
+      }
+    }
+
+    // Ensure brand results include distance
+    brandResults = brandResults.map((item) => {
+      if (typeof item.distance === 'number') return item;
+      if (item.latitude !== undefined && item.longitude !== undefined) {
+        return {
+          ...item,
+          distance: haversineMiles(userLat, userLng, item.latitude, item.longitude)
+        };
+      }
+      return { ...item, distance: Number.POSITIVE_INFINITY };
+    });
 
     // 3. Combine and deduplicate results
-    const combined = [...dbResults, ...googleResults];
-    
+    const combined = [...googleResults, ...brandResults, ...dbResults];
+
+    // Deduplicate by id / name+coords
+    const seen = new Set();
+    const deduped = [];
+    for (const item of combined) {
+      const key = item.id || `${item.name}-${item.address || ''}-${item.latitude || ''}-${item.longitude || ''}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduped.push(item);
+      }
+    }
+
     // Sort by distance
-    combined.sort((a, b) => a.distance - b.distance);
+    deduped.sort((a, b) => a.distance - b.distance);
 
     // Limit results
-    const limited = combined.slice(0, parseInt(limit));
+    const limited = deduped.slice(0, parseInt(limit));
 
     res.json({
-      total: combined.length,
+      total: deduped.length,
       results: limited,
       sources: {
         database: dbResults.length,
-        google_places: googleResults.length
+        google_places_nearby: googleResults.length,
+        google_places_brand: brandResults.length
       }
     });
 

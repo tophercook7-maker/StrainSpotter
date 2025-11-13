@@ -32,6 +32,8 @@ import {
 import FlagIcon from '@mui/icons-material/Flag';
 import GroupsIcon from '@mui/icons-material/Groups';
 import ChatIcon from '@mui/icons-material/Chat';
+import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
+import ProfileSetupDialog from './ProfileSetupDialog.jsx';
 import { API_BASE } from '../config';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../hooks/useAuth.js';
@@ -90,8 +92,12 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     setSnackbar(prev => ({ ...prev, open: false }));
   };
   const [adminUserId, setAdminUserId] = useState(null);
-  const [debugInfo, setDebugInfo] = useState('');
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [profileInfo, setProfileInfo] = useState(null);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profilePromptDismissed, setProfilePromptDismissed] = useState(false);
 
   const formatTimestamp = useCallback((iso) => {
     if (!iso) return '';
@@ -114,6 +120,35 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   }, []);
 
   const [currentUserName, setCurrentUserName] = useState('You');
+
+  const shouldPromptProfile = useCallback((profile, email, id) => {
+    const name = (profile?.display_name || '').trim();
+    if (!name) return true;
+    if (name.length < 3) return true;
+    const lower = name.toLowerCase();
+    const emailPrefix = email ? email.split('@')[0].toLowerCase() : '';
+    const sanitizedEmail = emailPrefix.replace(/[^a-z]/g, '');
+    const fallbacks = [
+      emailPrefix,
+      sanitizedEmail,
+      `user_${(id || '').slice(0, 8)}`.toLowerCase(),
+      `user ${(id || '').slice(0, 8)}`.toLowerCase(),
+      `member ${(id || '').slice(0, 8)}`.toLowerCase()
+    ];
+    if (fallbacks.includes(lower)) return true;
+    if (lower.includes('@')) return true;
+    if (/_/.test(lower) || /[0-9]{3,}/.test(lower)) return true;
+    return false;
+  }, []);
+
+  const deriveDisplayName = useCallback((profile, email, id) => {
+    if (profile?.display_name) return profile.display_name;
+    if (profile?.username) return profile.username;
+    if (email === 'topher.cook7@gmail.com') return 'Topher';
+    if (email) return email.split('@')[0];
+    if (id) return `Member ${id.slice(0, 8)}`;
+    return 'You';
+  }, []);
 
   // Track auth user id if not provided via props
   useEffect(() => {
@@ -162,27 +197,24 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           const email = session?.user?.email;
 
           if (email) {
-            // First, try to get existing username from profiles table
             const { data: profile } = await supabase
               .from('profiles')
-              .select('username')
+              .select('display_name, username, email')
               .eq('user_id', userId)
               .single();
 
-            let userName;
-            if (profile?.username) {
-              // Use existing username from profile
-              userName = profile.username;
-              console.log('[Groups] Using existing username from profile:', userName);
-            } else if (email === 'topher.cook7@gmail.com') {
-              // Special case for Topher
-              userName = 'Topher';
-            } else {
-              // Fallback to email prefix
-              userName = email.split('@')[0];
-            }
+            const profileWithEmail = profile
+              ? { ...profile, email: profile.email ?? email }
+              : { display_name: null, username: null, email };
 
+            setProfileInfo(profileWithEmail);
+
+            const userName = deriveDisplayName(profileWithEmail, email, userId);
             setCurrentUserName(userName);
+
+            if (!profilePromptDismissed && shouldPromptProfile(profileWithEmail, email, userId)) {
+              setProfileDialogOpen(true);
+            }
 
             console.log('[Groups] Ensuring user record exists for:', userId, email);
             const ensureRes = await fetch(`${API_BASE}/api/users/ensure`, {
@@ -193,6 +225,8 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             if (ensureRes.ok) {
               console.log('[Groups] User account ready');
             }
+          } else if (!profilePromptDismissed) {
+            setProfileDialogOpen(true);
           }
         } catch (e) {
           console.error('[Groups] Auto-setup error:', e);
@@ -205,7 +239,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     })();
     const stored = localStorage.getItem(guidelinesKey);
     if (stored === 'true') setGuidelinesAccepted(true);
-  }, [guidelinesKey, userId, adminUserId]);
+  }, [guidelinesKey, userId, adminUserId, profilePromptDismissed, deriveDisplayName, shouldPromptProfile]);
 
   // Auto-refresh messages when a group is selected
   useEffect(() => {
@@ -343,6 +377,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         console.log('👤 Total users loaded:', data.length);
         console.log('👤 User details:', data.map(u => ({
           user_id: u.user_id,
+          display_name: u.display_name,
           username: u.username,
           email: u.email
         })));
@@ -366,6 +401,60 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     } finally {
       setLoadingUsers(false);
     }
+  };
+
+  const handleProfileSave = async ({ displayName }) => {
+    setProfileSaving(true);
+    setProfileError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        throw new Error('Please log in again.');
+      }
+
+      const res = await fetch(`${API_BASE}/api/users/profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          display_name: displayName
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to update profile.');
+      }
+
+      const { profile } = await res.json();
+      if (profile) {
+        setProfileInfo(profile);
+        const friendlyName = deriveDisplayName(profile, profile.email || session?.user?.email, userId);
+        setCurrentUserName(friendlyName);
+      }
+
+      setProfileDialogOpen(false);
+      setProfilePromptDismissed(false);
+      setSnackbar({ open: true, message: 'Profile updated!', severity: 'success' });
+
+      if (selectedGroup) {
+        await loadMembers(selectedGroup.id);
+      }
+      await loadAllUsers();
+    } catch (e) {
+      console.error('[Groups] Profile update failed:', e);
+      setProfileError(e.message || 'Failed to update profile.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleProfileDialogClose = () => {
+    setProfileDialogOpen(false);
+    setProfilePromptDismissed(true);
   };
 
   // Load direct chats for current user
@@ -402,7 +491,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
 
   // Start a direct chat with a user
   const startDirectChat = async (otherUser) => {
-    console.log('💬 Starting direct chat with:', otherUser.username, otherUser.user_id);
+    console.log('💬 Starting direct chat with:', otherUser.display_name || otherUser.username, otherUser.user_id);
     setSelectedChat(otherUser);
     setDirectMessages([]); // Clear previous messages
     setChatDialogOpen(true);
@@ -450,6 +539,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       receiver_id: selectedChat.user_id,
       sender: {
         user_id: userId,
+        display_name: currentUserName,
         username: currentUserName,
         avatar_url: null
       },
@@ -605,6 +695,12 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     }
   };
 
+  const closeGroupDialog = useCallback(() => {
+    setGroupDialogOpen(false);
+    setSelectedGroup(null);
+    setMessages([]);
+  }, []);
+
   const sendMessage = async () => {
     const content = input.trim();
     if (!content || !selectedGroup) return;
@@ -635,6 +731,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       user_id: userId,
       users: {
         id: userId,
+        display_name: currentUserName,
         username: currentUserName,
         avatar_url: null
       },
@@ -644,15 +741,13 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     setMessages(prev => [...prev, optimisticMessage]);
     setInput('');
 
+    let timeoutId;
     try {
       // Add timeout to prevent hanging
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
       const apiUrl = `${API_BASE}/api/groups/${selectedGroup.id}/messages`;
-
-      // Show debug info - stays visible until response
-      setDebugInfo(`🚀 SENDING MESSAGE...\n\nAPI: ${apiUrl}\nUser ID: ${userId}\nGroup ID: ${selectedGroup.id}\nToken: ${accessToken ? 'YES ✓' : 'NO ✗'}\n\nWaiting for response...`);
 
       console.log('🚀 Sending message to:', apiUrl);
       console.log('📝 Message content:', content);
@@ -678,14 +773,26 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         console.log('✅ Message sent successfully!');
         const responseData = await res.json();
         console.log('📨 Response data:', responseData);
-        setDebugInfo('✅ SUCCESS!\nMessage sent successfully!');
+
         // Remove optimistic message
         setMessages(prev => prev.filter(m => m.id !== optimisticId));
 
         // If backend returns the message, add it immediately
         if (responseData && responseData.id) {
           console.log('📨 Adding message from response:', responseData);
-          setMessages(prev => [...prev, responseData]);
+          const displayName = responseData?.users?.display_name
+            || responseData?.users?.username
+            || currentUserName
+            || `Member ${String(userId || '').slice(0, 8)}`;
+
+          setMessages(prev => [...prev, {
+            ...responseData,
+            users: {
+              ...responseData.users,
+              display_name: displayName,
+              username: responseData?.users?.username || displayName
+            }
+          }]);
         } else {
           // Otherwise wait a moment for backend to save, then reload
           console.log('📨 No message in response, reloading...');
@@ -697,7 +804,11 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         // Reload groups list to update last_message on button
         loadGroups();
 
-        setTimeout(() => setDebugInfo(''), 10000); // Show for 10 seconds
+        setSnackbar({
+          open: true,
+          message: 'Message sent successfully!',
+          severity: 'success'
+        });
       } else {
         const errorText = await res.text();
         console.error('❌ Server error response:', errorText);
@@ -708,8 +819,11 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           err = { error: errorText || 'Failed to send message' };
         }
         setMessages(prev => prev.filter(m => m.id !== optimisticId));
-        setDebugInfo(`❌ FAILED!\n\nStatus: ${res.status} ${res.statusText}\nError: ${err.error || 'Unknown error'}\n\nAPI: ${apiUrl}`);
-        // Don't auto-close error messages
+        setSnackbar({
+          open: true,
+          message: err.error || `Failed to send message (${res.status})`,
+          severity: 'error'
+        });
       }
     } catch (e) {
       // Always remove the optimistic message on error
@@ -722,8 +836,13 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         ? 'Request timed out after 10 seconds'
         : e.message;
 
-      setDebugInfo(`❌ EXCEPTION!\n\nType: ${e.name}\nMessage: ${errorMsg}\n\nAPI: ${apiUrl}\n\nThis means the request never reached the server.`);
-      // Don't auto-close error messages
+      setSnackbar({
+        open: true,
+        message: `Failed to send message: ${errorMsg}`,
+        severity: 'error'
+      });
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
   };
 
@@ -781,7 +900,10 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
 
   const renderGroupButton = (group) => {
     const last = group.last_message;
-    const snippet = last ? `${last.user?.username ? `${last.user.username}: ` : ''}${messageSnippet(last.content)}` : 'No conversations yet.';
+    const lastAuthor = last?.user?.display_name || last?.user?.username;
+    const snippet = last
+      ? `${lastAuthor ? `${lastAuthor}: ` : ''}${messageSnippet(last.content)}`
+      : 'No conversations yet.';
     const timestamp = formatTimestamp(last?.created_at || group.created_at);
     return (
       <Button
@@ -819,7 +941,11 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   };
 
   const renderMessageAuthor = (message) => {
-    const name = message.users?.username || 'Member';
+    const name = message.users?.display_name
+      || message.profile?.display_name
+      || message.users?.username
+      || (message.users?.email ? message.users.email.split('@')[0] : null)
+      || `Member ${String(message.user_id || '').slice(0, 8)}`;
     const initials = name.slice(0, 2).toUpperCase();
     return (
       <ListItemAvatar>
@@ -885,10 +1011,21 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           position: 'relative',
           zIndex: 1,
           color: '#f5f5f5',
-          pt: '120px',
+          pt: 'calc(env(safe-area-inset-top, 0px) + 64px)',
           pb: 3
         }}
       >
+        <ProfileSetupDialog
+          open={profileDialogOpen}
+          email={profileInfo?.email || authUser?.email || ''}
+          initialDisplayName={profileInfo?.display_name || currentUserName}
+          initialUsername={profileInfo?.username || ''}
+          saving={profileSaving}
+          error={profileError}
+          onSave={handleProfileSave}
+          onClose={handleProfileDialogClose}
+        />
+
         <Button
           onClick={onBack || (() => window.history.back())}
           size="small"
@@ -1068,70 +1205,18 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                       </Button>
                     </Stack>
 
-                    {/* Debug Info */}
-                    <Alert
-                      severity="info"
-                      sx={{
-                        bgcolor: 'rgba(33,150,243,0.1)',
-                        backdropFilter: 'blur(10px)',
-                        WebkitBackdropFilter: 'blur(10px)',
-                        color: '#64B5F6',
-                        border: '1px solid rgba(33,150,243,0.3)',
-                        mb: 1,
-                        '& .MuiAlert-icon': {
-                          color: '#64B5F6'
-                        }
-                      }}
-                    >
-                      <Typography variant="caption" sx={{ display: 'block' }}>
-                        API: {API_BASE}
-                      </Typography>
-                      <Typography variant="caption" sx={{ display: 'block' }}>
-                        Users loaded: {allUsers.length}
-                      </Typography>
-                      <Typography variant="caption" sx={{ display: 'block' }}>
-                        Loading: {loadingUsers ? 'Yes' : 'No'}
-                      </Typography>
-                      <Typography variant="caption" sx={{ display: 'block' }}>
-                        Error: {usersError ? 'Yes' : 'No'}
-                      </Typography>
-                    </Alert>
-
                     {/* Error Message */}
                     {usersError && (
-                      <Alert
-                        severity="error"
+                      <Typography
+                        variant="body2"
                         sx={{
-                          bgcolor: 'rgba(211,47,47,0.1)',
-                          backdropFilter: 'blur(10px)',
-                          WebkitBackdropFilter: 'blur(10px)',
-                          color: '#ff6b6b',
-                          border: '1px solid rgba(211,47,47,0.3)',
-                          '& .MuiAlert-icon': {
-                            color: '#ff6b6b'
-                          }
+                          color: '#ff8a80',
+                          fontWeight: 500,
+                          mb: 1
                         }}
                       >
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                          {usersError}
-                        </Typography>
-                        <Button
-                          size="small"
-                          onClick={loadAllUsers}
-                          sx={{
-                            mt: 1,
-                            color: '#ff6b6b',
-                            borderColor: '#ff6b6b',
-                            '&:hover': {
-                              borderColor: '#ff8787',
-                              bgcolor: 'rgba(211,47,47,0.1)'
-                            }
-                          }}
-                          variant="outlined"
-                        >
-                          Retry
-                        </Button>
-                      </Alert>
+                        {usersError}
+                      </Typography>
                     )}
 
                     {/* Loading State */}
@@ -1187,8 +1272,8 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                                   </Avatar>
                                 </Badge>
                                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#CDDC39' }}>
-                                    {chat.user.username || 'User'}
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#CDDC39' }}>
+                                {chat.user.display_name || chat.user.username || 'User'}
                                   </Typography>
                                   <Typography
                                     variant="caption"
@@ -1247,11 +1332,11 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                             >
                               <Stack direction="row" spacing={1.5} alignItems="center">
                                 <Avatar sx={{ bgcolor: 'rgba(124,179,66,0.35)', color: '#0c220f' }}>
-                                  {(user.username || 'U').slice(0, 2).toUpperCase()}
+                                  {(user.display_name || user.username || 'U').slice(0, 2).toUpperCase()}
                                 </Avatar>
                                 <Box>
                                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#CDDC39' }}>
-                                    {user.username || 'User'}
+                                    {user.display_name || user.username || 'User'}
                                   </Typography>
                                   <Typography variant="caption" sx={{ color: '#9CCC65' }}>
                                     Click to chat
@@ -1273,7 +1358,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       {/* Group Chat Dialog */}
       <Dialog
         open={groupDialogOpen}
-        onClose={() => setGroupDialogOpen(false)}
+        onClose={closeGroupDialog}
         maxWidth="md"
         fullWidth
         fullScreen
@@ -1298,13 +1383,32 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          p: 2,
-          pt: '120px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+          p: { xs: 1.5, md: 2.5 },
+          pt: { xs: 'calc(env(safe-area-inset-top, 0px) + 16px)', md: 3 },
+          boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          gap: 2
         }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, color: '#CDDC39', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
-            {selectedGroup?.name}
-          </Typography>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
+            <Button
+              startIcon={<ArrowBackIosNewIcon fontSize="small" />}
+              onClick={closeGroupDialog}
+              sx={{
+                color: '#CDDC39',
+                textTransform: 'none',
+                fontWeight: 600,
+                '&:hover': { bgcolor: 'rgba(124,179,66,0.2)' }
+              }}
+            >
+              Back
+            </Button>
+            <Typography
+              variant="h6"
+              noWrap
+              sx={{ fontWeight: 700, color: '#CDDC39', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}
+            >
+              {selectedGroup?.name}
+            </Typography>
+          </Stack>
           <Stack direction="row" spacing={1}>
             {isMember ? (
               <Button
@@ -1341,7 +1445,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             )}
             <Button
               size="small"
-              onClick={() => setGroupDialogOpen(false)}
+              onClick={closeGroupDialog}
               sx={{
                 color: '#CDDC39',
                 '&:hover': {
@@ -1357,14 +1461,16 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         <DialogContent sx={{
           flex: 1,
           display: 'flex',
-          flexDirection: 'row',
+          flexDirection: { xs: 'column', md: 'row' },
           p: 0,
           overflow: 'hidden'
         }}>
           {/* User List Sidebar - Facebook Style */}
           <Box sx={{
-            width: '280px',
-            borderRight: '2px solid rgba(124,179,66,0.4)',
+            width: { xs: '100%', md: '280px' },
+            maxHeight: { xs: 220, md: 'unset' },
+            borderRight: { xs: 'none', md: '2px solid rgba(124,179,66,0.4)' },
+            borderBottom: { xs: '2px solid rgba(124,179,66,0.4)', md: 'none' },
             background: 'rgba(0,0,0,0.3)',
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
@@ -1393,7 +1499,11 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             }}>
               <Stack spacing={0.5}>
                 {members.map((m, idx) => {
-                  const memberUsername = m.users?.username || m.users?.email?.split('@')[0] || 'User';
+                  const memberDisplayName = m.users?.display_name
+                    || m.profile?.display_name
+                    || m.users?.username
+                    || m.users?.email?.split('@')[0]
+                    || `Member ${String(m.user_id || '').slice(0, 8)}`;
                   const isCurrentUser = m.user_id === userId;
 
                   return (
@@ -1404,7 +1514,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                           // Start DM with this user
                           const chatUser = {
                             user_id: m.user_id,
-                            username: memberUsername,
+                            username: memberDisplayName,
                             email: m.users?.email
                           };
                           startDirectChat(chatUser);
@@ -1438,7 +1548,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                           fontSize: '0.9rem',
                           fontWeight: 700
                         }}>
-                          {memberUsername.slice(0, 2).toUpperCase()}
+                          {memberDisplayName.slice(0, 2).toUpperCase()}
                         </Avatar>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Typography
@@ -1451,7 +1561,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                               whiteSpace: 'nowrap'
                             }}
                           >
-                            {memberUsername} {isCurrentUser && '(You)'}
+                            {memberDisplayName} {isCurrentUser && '(You)'}
                           </Typography>
                           {!isCurrentUser && (
                             <Typography variant="caption" sx={{ color: '#9CCC65', fontSize: '0.7rem' }}>
@@ -1469,32 +1579,6 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
 
           {/* Main Chat Area */}
           <Stack spacing={1.5} sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, p: 2 }}>
-            {/* Debug Info Display */}
-            {debugInfo && (
-              <Alert
-                severity={debugInfo.includes('✅') ? 'success' : 'error'}
-                onClose={() => setDebugInfo('')}
-                sx={{
-                  background: debugInfo.includes('✅')
-                    ? 'rgba(76,175,80,0.95)'
-                    : 'rgba(244,67,54,0.95)',
-                  color: '#fff',
-                  border: debugInfo.includes('✅')
-                    ? '3px solid rgba(76,175,80,1)'
-                    : '3px solid rgba(244,67,54,1)',
-                  flexShrink: 0,
-                  fontFamily: 'monospace',
-                  fontSize: '1rem',
-                  fontWeight: 700,
-                  whiteSpace: 'pre-wrap',
-                  p: 3,
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)'
-                }}
-              >
-                {debugInfo}
-              </Alert>
-            )}
-
             {!guidelinesAccepted && (
               <Alert
                 severity="warning"
@@ -1613,7 +1697,11 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                         }
                         secondary={
                           <Typography variant="caption" sx={{ color: '#9CCC65' }}>
-                            {(m.users?.username || 'Member')} • {new Date(m.created_at).toLocaleString()}
+                            {(m.users?.display_name
+                              || m.profile?.display_name
+                              || m.users?.username
+                              || (m.users?.email ? m.users.email.split('@')[0] : `Member ${String(m.user_id || '').slice(0, 8)}`))
+                            } • {new Date(m.created_at).toLocaleString()}
                             {m.optimistic ? ' • sending…' : ''}
                           </Typography>
                         }
@@ -1797,7 +1885,13 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                 ) : (
                   directMessages.map((m, idx) => {
                     const isCurrentUser = m.sender_id === userId;
-                    const senderName = isCurrentUser ? 'You' : (m.sender?.username || selectedChat?.username || 'User');
+                    const senderName = isCurrentUser
+                      ? 'You'
+                      : (m.sender?.display_name
+                        || m.sender?.username
+                        || selectedChat?.display_name
+                        || selectedChat?.username
+                        || 'User');
                     const initials = senderName.slice(0, 2).toUpperCase();
 
                     return (
