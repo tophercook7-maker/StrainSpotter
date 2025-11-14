@@ -58,6 +58,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   const [directMessages, setDirectMessages] = useState([]); // Direct messages (separate from group messages)
   const [usersError, setUsersError] = useState(null); // Error loading users
   const [loadingUsers, setLoadingUsers] = useState(false); // Loading state for users
+  const [userSearchTerm, setUserSearchTerm] = useState('');
 
   // Check if current user is admin
   const isCurrentUserAdmin = authUser?.email === 'topher.cook7@gmail.com' ||
@@ -91,6 +92,32 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     if (reason === 'clickaway') return;
     setSnackbar(prev => ({ ...prev, open: false }));
   };
+
+  const normalizeText = useCallback((value) => (value || '').toString().toLowerCase().trim(), []);
+
+  const userDisplayName = useCallback((user) => {
+    return user?.display_name
+      || user?.username
+      || (user?.email ? user.email.split('@')[0] : null)
+      || 'User';
+  }, []);
+
+  const filteredDirectChats = useMemo(() => {
+    const term = normalizeText(userSearchTerm);
+    if (!term) return directChats;
+    return directChats.filter(chat => normalizeText(userDisplayName(chat.user)).includes(term));
+  }, [directChats, userSearchTerm, normalizeText, userDisplayName]);
+
+  const filteredUsers = useMemo(() => {
+    const term = normalizeText(userSearchTerm);
+    const list = allUsers.map(user => ({
+      ...user,
+      _label: userDisplayName(user)
+    })).sort((a, b) => a._label.localeCompare(b._label));
+
+    if (!term) return list;
+    return list.filter(user => normalizeText(user._label).includes(term));
+  }, [allUsers, userSearchTerm, normalizeText, userDisplayName]);
   const [adminUserId, setAdminUserId] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [profileInfo, setProfileInfo] = useState(null);
@@ -98,6 +125,23 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profilePromptDismissed, setProfilePromptDismissed] = useState(false);
+
+  const sendHeartbeat = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+      await fetch(`${API_BASE}/api/users/heartbeat`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+    } catch (err) {
+      console.error('[Groups] Heartbeat failed:', err);
+    }
+  }, [userId]);
 
   const formatTimestamp = useCallback((iso) => {
     if (!iso) return '';
@@ -186,6 +230,15 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     }
     return () => sub?.unsubscribe?.();
   }, [userIdProp, authUser]);
+
+  useEffect(() => {
+    if (!userId) return;
+    sendHeartbeat();
+    const interval = setInterval(() => {
+      sendHeartbeat();
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [userId, sendHeartbeat]);
   
   useEffect(() => {
     (async () => {
@@ -1076,6 +1129,32 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           </Typography>
         </Box>
 
+        <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
+          <Typography variant="body2" sx={{ color: '#9CCC65', flex: 1 }}>
+            Signed in as {currentUserName}
+          </Typography>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => {
+              setProfilePromptDismissed(false);
+              setProfileDialogOpen(true);
+            }}
+            sx={{
+              color: '#CDDC39',
+              borderColor: 'rgba(124,179,66,0.4)',
+              textTransform: 'none',
+              fontWeight: 600,
+              '&:hover': {
+                borderColor: 'rgba(124,179,66,0.7)',
+                bgcolor: 'rgba(124,179,66,0.15)'
+              }
+            }}
+          >
+            Edit Profile
+          </Button>
+        </Stack>
+
         {/* Tabs for Groups and Direct Messages */}
         <Card sx={{
           bgcolor: 'rgba(255,255,255,0.08)',
@@ -1183,6 +1262,24 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
 
                 {userId && (
                   <>
+                    <TextField
+                      size="small"
+                      value={userSearchTerm}
+                      onChange={(e) => setUserSearchTerm(e.target.value)}
+                      placeholder="Search by name"
+                      variant="outlined"
+                      fullWidth
+                      sx={{
+                        '& .MuiInputBase-root': {
+                          bgcolor: 'rgba(255,255,255,0.05)',
+                          borderRadius: 2,
+                          border: '1px solid rgba(124,179,66,0.3)',
+                          color: '#CDDC39'
+                        },
+                        mb: 2
+                      }}
+                    />
+
                     <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
                       <Typography variant="subtitle2" sx={{ color: '#CDDC39', fontWeight: 700, flex: 1 }}>
                         All Users
@@ -1227,13 +1324,13 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                     )}
 
                     {/* Recent Chats Section */}
-                    {directChats.length > 0 && (
+                    {filteredDirectChats.length > 0 && (
                       <Box sx={{ mb: 3 }}>
                         <Typography variant="subtitle2" sx={{ color: '#CDDC39', fontWeight: 700, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
                           💬 Recent Chats
                         </Typography>
                         <Stack spacing={1}>
-                          {directChats.map(chat => (
+                          {filteredDirectChats.map(chat => (
                             <Button
                               key={chat.user.user_id}
                               variant="outlined"
@@ -1296,19 +1393,19 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                     )}
 
                     {/* All Users Section */}
-                    {!loadingUsers && !usersError && allUsers.length === 0 && directChats.length === 0 && (
+                    {!loadingUsers && !usersError && filteredUsers.length === 0 && filteredDirectChats.length === 0 && (
                       <Typography variant="body2" sx={{ color: '#9CCC65' }}>
                         No other users found. Click Refresh to try again.
                       </Typography>
                     )}
 
-                    {!loadingUsers && !usersError && allUsers.length > 0 && (
+                    {!loadingUsers && !usersError && filteredUsers.length > 0 && (
                       <Box>
                         <Typography variant="subtitle2" sx={{ color: '#9CCC65', fontWeight: 700, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
                           👥 All Users
                         </Typography>
                         <Stack spacing={1}>
-                          {allUsers.map(user => (
+                          {filteredUsers.map(user => (
                             <Button
                               key={user.user_id}
                               variant="outlined"

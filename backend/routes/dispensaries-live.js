@@ -47,7 +47,48 @@ const DISALLOWED_TYPES = [
   'department_store',
   'convenience_store',
   'big_box_store',
-  'hardware_store'
+  'hardware_store',
+  'beauty_salon',
+  'hair_care',
+  'home_goods_store',
+  'drugstore',
+  'shopping_mall',
+  'clothing_store',
+  'shoe_store',
+  'book_store',
+  'furniture_store',
+  'painter',
+  'pest_control',
+  'lawn_mower_store',
+  'landscaper'
+];
+
+const NON_CANNABIS_KEYWORDS = [
+  'weed control',
+  'lawn care',
+  'pest control',
+  'beauty',
+  'ulta',
+  'cosmetic',
+  'salon',
+  'spa',
+  'nail',
+  'makeup',
+  'bath & body',
+  'garden center',
+  'nursery',
+  'farm supply'
+];
+
+const PRIMARY_SEARCH_KEYWORDS = [
+  { keyword: 'cannabis dispensary' },
+  { keyword: 'marijuana dispensary' },
+  { keyword: 'weed dispensary' },
+  { keyword: 'medical marijuana dispensary', type: 'pharmacy' },
+  { keyword: 'cannabis store', type: 'store' },
+  { keyword: 'cbd dispensary', type: 'store' },
+  { keyword: 'cbd shop', type: 'store' },
+  { keyword: 'weed delivery' }
 ];
 
 function containsCannabisKeywords(...fields) {
@@ -56,6 +97,14 @@ function containsCannabisKeywords(...fields) {
     .join(' ')
     .toLowerCase();
   return CANNABIS_KEYWORDS.some(keyword => haystack.includes(keyword));
+}
+
+function containsNonCannabisKeywords(...fields) {
+  const haystack = fields
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return NON_CANNABIS_KEYWORDS.some(keyword => haystack.includes(keyword));
 }
 
 function isLikelyCannabisPlace(place) {
@@ -71,6 +120,11 @@ function isLikelyCannabisPlace(place) {
   );
 
   if (!hasKeyword) {
+    return false;
+  }
+
+  const haystack = `${name} ${vicinity}`.toLowerCase();
+  if (containsNonCannabisKeywords(haystack, types.join(' '))) {
     return false;
   }
 
@@ -131,6 +185,38 @@ function generateSearchCenters(lat, lng, radiusMiles) {
   return centers;
 }
 
+// Helper: fetch with timeout so Google calls never hang forever
+async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function runWithConcurrency(tasks, limit = 4) {
+  const results = [];
+  let index = 0;
+
+  async function worker() {
+    while (index < tasks.length) {
+      const currentIndex = index++;
+      try {
+        results[currentIndex] = await tasks[currentIndex]();
+      } catch (err) {
+        results[currentIndex] = { error: err };
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 // Helper: Search Google Places Nearby for dispensaries
 async function searchGooglePlaces(lat, lng, radius, overrideKeyword) {
   const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
@@ -145,30 +231,7 @@ async function searchGooglePlaces(lat, lng, radius, overrideKeyword) {
     const radiusMeters = Math.min(radius * 1609.34, 50000); // Max 50km
 
     // Try multiple search keywords/type combinations to catch different dispensary listings
-    const searchConfigs = [
-      { keyword: 'cannabis dispensary' },
-      { keyword: 'cannabis dispensaries near me' },
-      { keyword: 'marijuana dispensary' },
-      { keyword: 'weed dispensary' },
-      { keyword: 'weed dispensary near me' },
-      { keyword: 'weed store', type: 'store' },
-      { keyword: 'cannabis store', type: 'store' },
-      { keyword: 'cannabis retailer', type: 'store' },
-      { keyword: 'medical marijuana dispensary', type: 'pharmacy' },
-      { keyword: 'medical marijuana clinic', type: 'doctor' },
-      { keyword: 'medical cannabis clinic', type: 'doctor' },
-      { keyword: 'recreational cannabis', type: 'store' },
-      { keyword: 'recreational marijuana', type: 'store' },
-      { keyword: 'cannabis club' },
-      { keyword: 'cannabis collective' },
-      { keyword: 'hash dispensary', type: 'store' },
-      { keyword: 'kief dispensary', type: 'store' },
-      { keyword: 'THC dispensary', type: 'store' },
-      { keyword: 'CBD dispensary', type: 'store' },
-      { keyword: 'CBD shop', type: 'store' },
-      { keyword: 'marijuana delivery' },
-      { keyword: 'cannabis delivery' }
-    ];
+    const searchConfigs = PRIMARY_SEARCH_KEYWORDS;
 
     let allResults = [];
     const seenPlaceIds = new Set();
@@ -176,17 +239,26 @@ async function searchGooglePlaces(lat, lng, radius, overrideKeyword) {
     // Search with each keyword and combine results
     const configsToUse = overrideKeyword
       ? [{ keyword: overrideKeyword }]
-      : searchConfigs;
+      : searchConfigs.slice(0, radius > 30 ? 6 : 4);
 
-    for (const { keyword, type } of configsToUse) {
+    const tasks = configsToUse.map(({ keyword, type }) => async () => {
       const typeParam = type ? `&type=${encodeURIComponent(type)}` : '';
       const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusMeters}&keyword=${encodeURIComponent(keyword)}${typeParam}&key=${GOOGLE_PLACES_API_KEY}`;
+      const response = await fetchWithTimeout(url);
+      return response.json();
+    });
 
-      const response = await fetch(url);
-      const data = await response.json();
+    const responses = await runWithConcurrency(tasks, 3);
+
+    for (const data of responses) {
+      if (!data || data.error) {
+        if (data?.error) {
+          console.error('[dispensaries-live] Nearby search failed:', data.error.message || data.error);
+        }
+        continue;
+      }
 
       if (data.status === 'OK' && data.results) {
-        // Add unique results only, filter out permanently closed places and blacklisted dispensaries
         for (const place of data.results) {
           const isClosed = place.business_status?.includes('CLOSED');
           const isBlacklisted = CLOSED_DISPENSARIES.some(closed => place.name.includes(closed));
@@ -197,7 +269,7 @@ async function searchGooglePlaces(lat, lng, radius, overrideKeyword) {
             allResults.push(place);
           }
         }
-      } else if (data.status !== 'ZERO_RESULTS') {
+      } else if (data.status && data.status !== 'ZERO_RESULTS') {
         console.error('[dispensaries-live] Google Places API error:', data.status, data.error_message);
       }
     }
@@ -240,7 +312,7 @@ async function searchGooglePlacesText(query, lat, lng, radius) {
     const locationParam = (lat && lng) ? `&location=${lat},${lng}` : '';
     const radiusParam = radiusMeters ? `&radius=${radiusMeters}` : '';
     const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}${locationParam}${radiusParam}&key=${GOOGLE_PLACES_API_KEY}`;
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url);
     const data = await response.json();
 
     if (data.status !== 'OK' || !data.results) {
@@ -295,7 +367,7 @@ async function getPlaceDetails(placeId) {
   try {
     const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,formatted_phone_number,website,opening_hours,rating,user_ratings_total,geometry&key=${GOOGLE_PLACES_API_KEY}`;
     
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url);
     const data = await response.json();
 
     if (data.status !== 'OK') {
@@ -347,27 +419,35 @@ router.get('/', async (req, res) => {
         .not('longitude', 'is', null);
 
       if (!error && dispensaries) {
-        dbResults = dispensaries.map(d => ({
-          ...d,
-          distance: haversineMiles(userLat, userLng, d.latitude, d.longitude),
-          source: 'database'
-        })).filter(d => d.distance <= searchRadius);
+        dbResults = dispensaries
+          .filter(d => containsCannabisKeywords(d.name, d.address, d.description, Array.isArray(d.tags) ? d.tags.join(' ') : d.tags))
+          .filter(d => !containsNonCannabisKeywords(d.name, d.description, d.address))
+          .map(d => ({
+            ...d,
+            distance: haversineMiles(userLat, userLng, d.latitude, d.longitude),
+            source: 'database'
+          }))
+          .filter(d => d.distance <= searchRadius);
       }
     } catch (dbError) {
       console.error('[dispensaries-live] Database search failed:', dbError);
     }
 
     // 2. Search Google Places for dispensaries across multiple centers
-    const centers = generateSearchCenters(userLat, userLng, searchRadius);
+    const centerLimit = searchRadius <= 15 ? 1 : searchRadius <= 30 ? 2 : searchRadius <= 50 ? 3 : 4;
+    const centers = generateSearchCenters(userLat, userLng, searchRadius).slice(0, centerLimit);
     let googleResults = [];
     for (const center of centers) {
       const resultsForCenter = await searchGooglePlaces(center.lat, center.lng, searchRadius);
       googleResults = googleResults.concat(resultsForCenter);
+      if (googleResults.length >= 80) {
+        break;
+      }
     }
 
     // 2b. If Google returns very few results, run brand-focused searches for broader coverage
     let brandResults = [];
-    if (googleResults.length < 10) {
+    if (searchRadius >= 20 && googleResults.length < 8) {
       const brandKeywords = [
         'Good Day Farm dispensary',
         'Good Day Farm cannabis',
@@ -380,13 +460,23 @@ router.get('/', async (req, res) => {
         'Greenlight dispensary'
       ];
 
-      for (const brand of brandKeywords) {
-        for (const center of centers) {
+      const limitedBrands = brandKeywords.slice(0, 4);
+      const brandCenters = centers.slice(0, 2);
+
+      for (const brand of limitedBrands) {
+        for (const center of brandCenters) {
           const brandNearby = await searchGooglePlaces(center.lat, center.lng, Math.max(searchRadius, 60), brand);
           brandResults = brandResults.concat(brandNearby);
 
           const brandText = await searchGooglePlacesText(`${brand} Arkansas`, center.lat, center.lng, Math.max(searchRadius, 75));
           brandResults = brandResults.concat(brandText);
+
+          if (brandResults.length >= 40) {
+            break;
+          }
+        }
+        if (brandResults.length >= 40) {
+          break;
         }
       }
     }

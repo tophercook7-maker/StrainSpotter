@@ -5,6 +5,47 @@ import { ensureUserRecord } from '../utils/ensureUser.js';
 
 const router = express.Router();
 const writeClient = supabaseAdmin ?? supabase;
+const adminEmails = new Set([
+  'topher.cook7@gmail.com',
+  'strainspotter25@gmail.com',
+  'admin@strainspotter.com',
+  'andrewbeck209@gmail.com'
+]);
+
+async function authenticateRequest(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return { error: 'Unauthorized' };
+  }
+  const token = authHeader.substring(7);
+  try {
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data?.user) {
+      return { error: 'Unauthorized' };
+    }
+    return { user: data.user };
+  } catch (err) {
+    console.error('[users] Auth check failed:', err);
+    return { error: 'Unauthorized' };
+  }
+}
+
+async function fetchProfileRole(userId) {
+  if (!userId) return null;
+  const { data, error } = await writeClient
+    .from('profiles')
+    .select('role, email')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) {
+    console.error('[users] Failed to load profile role:', error);
+    return null;
+  }
+  if (data?.email && adminEmails.has(data.email.toLowerCase())) {
+    return 'admin';
+  }
+  return data?.role || null;
+}
 
 // GET /api/users - Get all users for direct messaging
 router.get('/', async (req, res) => {
@@ -63,6 +104,101 @@ router.get('/', async (req, res) => {
     res.json(enrichedUsers);
   } catch (err) {
     console.error('[users] Exception:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/heartbeat', async (req, res) => {
+  try {
+    const auth = await authenticateRequest(req);
+    if (!auth.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = auth.user.id;
+    const { error } = await writeClient
+      .from('profiles')
+      .update({
+        last_seen_at: new Date().toISOString(),
+        membership_status: 'active'
+      })
+      .eq('user_id', userId);
+    if (error) {
+      console.error('[users] Heartbeat update failed:', error);
+      return res.status(500).json({ error: 'Failed to update heartbeat' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[users] Heartbeat exception:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/directory', async (req, res) => {
+  try {
+    const auth = await authenticateRequest(req);
+    if (!auth.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const callerRole = await fetchProfileRole(auth.user.id);
+    if (callerRole !== 'admin' && callerRole !== 'moderator') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const {
+      role: roleFilter,
+      status,
+      search,
+      limit = 200
+    } = req.query;
+
+    let query = writeClient
+      .from('profiles')
+      .select(`
+        user_id,
+        display_name,
+        username,
+        email,
+        role,
+        membership_status,
+        profile_tags,
+        is_grower,
+        grower_farm_name,
+        grower_city,
+        grower_state,
+        grower_certified,
+        grower_listed_in_directory,
+        grower_experience_years,
+        grower_license_status,
+        last_seen_at,
+        created_at
+      `)
+      .order('last_seen_at', { ascending: false, nullsFirst: false });
+
+    if (roleFilter) {
+      query = query.eq('role', roleFilter);
+    }
+    if (status) {
+      query = query.eq('membership_status', status);
+    }
+    if (search) {
+      const sanitized = search.trim();
+      query = query.or(
+        `display_name.ilike.%${sanitized}%,username.ilike.%${sanitized}%,email.ilike.%${sanitized}%,grower_farm_name.ilike.%${sanitized}%`
+      );
+    }
+
+    const cappedLimit = Math.min(parseInt(limit, 10) || 200, 500);
+    query = query.limit(cappedLimit);
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('[users] Directory fetch failed:', error);
+      return res.status(500).json({ error: 'Failed to load directory' });
+    }
+
+    res.json({ members: data || [] });
+  } catch (err) {
+    console.error('[users] Directory exception:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

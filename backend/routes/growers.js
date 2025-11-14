@@ -14,6 +14,101 @@ import { supabase } from '../supabaseClient.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 
 const router = express.Router();
+const adminEmails = new Set([
+  'topher.cook7@gmail.com',
+  'strainspotter25@gmail.com',
+  'admin@strainspotter.com',
+  'andrewbeck209@gmail.com'
+]);
+
+async function fetchUserEmail(client, userId) {
+  if (!userId) return null;
+  const { data, error } = await (client ?? supabaseAdmin ?? supabase)
+    .from('users')
+    .select('email')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) {
+    console.error('[growers] Failed to fetch user email:', error);
+    return null;
+  }
+  return data?.email?.toLowerCase() || null;
+}
+
+function deriveProfileTags(profile) {
+  const tags = new Set(Array.isArray(profile?.profile_tags) ? profile.profile_tags : []);
+  if (profile?.is_grower) {
+    tags.add('grower');
+  } else {
+    tags.delete('grower');
+  }
+
+  if (profile?.grower_certified) {
+    tags.add('certified');
+  } else {
+    tags.delete('certified');
+  }
+
+  if (profile?.grower_listed_in_directory) {
+    tags.add('directory');
+  } else {
+    tags.delete('directory');
+  }
+
+  if (profile?.grower_moderator_opt_in) {
+    tags.add('moderator_opt_in');
+  } else {
+    tags.delete('moderator_opt_in');
+  }
+
+  return Array.from(tags);
+}
+
+async function syncProfileClassification(client, profileRow, overrides = {}) {
+  if (!profileRow?.user_id) {
+    return profileRow;
+  }
+
+  const email =
+    overrides.email ||
+    profileRow.email ||
+    (await fetchUserEmail(client, profileRow.user_id));
+
+  const normalizedEmail = email?.toLowerCase();
+  const tags = deriveProfileTags(profileRow);
+  let nextRole = profileRow.role || 'member';
+
+  if (normalizedEmail && adminEmails.has(normalizedEmail)) {
+    nextRole = 'admin';
+  } else if (overrides.forceModerator || (profileRow.grower_moderator_opt_in && profileRow.grower_certified)) {
+    nextRole = 'moderator';
+  } else if (nextRole !== 'admin') {
+    nextRole = 'member';
+  }
+
+  const membershipStatus = overrides.membershipStatus || profileRow.membership_status || 'active';
+
+  const { error } = await (client ?? supabaseAdmin ?? supabase)
+    .from('profiles')
+    .update({
+      profile_tags: tags,
+      role: nextRole,
+      membership_status: membershipStatus
+    })
+    .eq('user_id', profileRow.user_id);
+
+  if (error) {
+    console.error('[growers] Failed to sync profile classification:', error);
+  }
+
+  return {
+    ...profileRow,
+    profile_tags: tags,
+    role: nextRole,
+    membership_status: membershipStatus,
+    email: email || profileRow.email
+  };
+}
 
 // ============================================
 // GROWER PROFILE ENDPOINTS
@@ -104,6 +199,11 @@ router.post('/profile/setup', async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
+    const syncedProfile = await syncProfileClassification(client, data, {
+      forceModerator: !!(moderatorOptIn && certified),
+      membershipStatus: 'active'
+    });
+
     // Manage moderator status & comped membership
     if (moderatorOptIn && certified) {
       const permissions = ['moderate_messages', 'moderate_images', 'warn_users'];
@@ -135,7 +235,7 @@ router.post('/profile/setup', async (req, res) => {
       console.error('refresh_comp_membership_for_user failed:', rpcErr);
     }
 
-    res.json({ success: true, profile: data });
+    res.json({ success: true, profile: syncedProfile });
   } catch (e) {
     console.error('Error in grower profile setup:', e);
     res.status(500).json({ error: String(e) });
@@ -222,7 +322,8 @@ router.put('/profile/update', async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    res.json({ success: true, profile: data });
+    const syncedProfile = await syncProfileClassification(client, data);
+    res.json({ success: true, profile: syncedProfile });
   } catch (e) {
     console.error('Error in grower profile update:', e);
     res.status(500).json({ error: String(e) });
@@ -290,7 +391,8 @@ router.post('/profile/opt-in', async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    res.json({ success: true, profile: data });
+    const syncedProfile = await syncProfileClassification(client, data);
+    res.json({ success: true, profile: syncedProfile });
   } catch (e) {
     console.error('Error in opt-in:', e);
     res.status(500).json({ error: String(e) });
@@ -325,7 +427,8 @@ router.post('/profile/opt-out', async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    res.json({ success: true, profile: data });
+    const syncedProfile = await syncProfileClassification(client, data);
+    res.json({ success: true, profile: syncedProfile });
   } catch (e) {
     console.error('Error in opt-out:', e);
     res.status(500).json({ error: String(e) });

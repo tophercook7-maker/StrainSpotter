@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Card,
@@ -39,19 +39,42 @@ export default function GrowerDirectory({ onBack }) {
     })();
   }, []);
 
-  const renderGrowerCard = (g) => (
+  const normalizeTags = useMemo(
+    () => (tags) => Array.isArray(tags) ? tags.filter(Boolean) : [],
+    []
+  );
+
+  const renderGrowerCard = (g) => {
+    const primaryName = g.display_name || g.grower_farm_name || 'Grower';
+    const secondaryName = g.display_name && g.grower_farm_name && g.grower_farm_name !== g.display_name
+      ? g.grower_farm_name
+      : null;
+    const tags = normalizeTags(g.profile_tags);
+    const roleLabel = g.role === 'admin'
+      ? 'Admin'
+      : g.role === 'moderator'
+        ? 'Moderator'
+        : g.role === 'grower'
+          ? 'Grower'
+          : null;
+    return (
     <Grid item xs={12} sm={6} md={4} key={g.user_id || g.id}>
       <Card sx={{ height: '100%', background: 'rgba(255,255,255,0.10)', backdropFilter: 'blur(12px)', border: '2px solid black', boxShadow: 'none' }}>
         <CardContent>
           <Stack spacing={2}>
             <Stack direction="row" spacing={2} alignItems="center">
               <Avatar sx={{ bgcolor: 'primary.main', width: 56, height: 56 }}>
-                {(g.grower_farm_name || g.grower_city || '??').substring(0, 2).toUpperCase()}
+                {primaryName.substring(0, 2).toUpperCase()}
               </Avatar>
               <Box sx={{ flex: 1 }}>
                 <Typography variant="h6">
-                  {g.grower_farm_name || 'Grower'}
+                  {primaryName}
                 </Typography>
+                {secondaryName && (
+                  <Typography variant="body2" color="text.secondary">
+                    {secondaryName}
+                  </Typography>
+                )}
                 {g.grower_certified && (
                   <Chip
                     label="Certified"
@@ -68,6 +91,14 @@ export default function GrowerDirectory({ onBack }) {
                     </Typography>
                   </Stack>
                 )}
+                <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
+                  {roleLabel && (
+                    <Chip label={roleLabel} size="small" color="warning" variant="outlined" />
+                  )}
+                  {tags.slice(0, 3).map((tag) => (
+                    <Chip key={tag} label={tag.replace(/_/g, ' ')} size="small" variant="outlined" />
+                  ))}
+                </Stack>
               </Box>
             </Stack>
 
@@ -94,14 +125,15 @@ export default function GrowerDirectory({ onBack }) {
               sx={{ alignSelf: 'flex-start' }}
             />
 
-            <Button variant="outlined" size="small">
-              View Profile
+            <Button variant="outlined" size="small" onClick={() => setShowRegistration(true)}>
+              Edit / View Profile
             </Button>
           </Stack>
         </CardContent>
       </Card>
     </Grid>
   );
+  };
 
   const renderSection = (title, list) => {
     if (!list || list.length === 0) return null;

@@ -17,9 +17,9 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
-  const [radius, setRadius] = useState(25);
+  const [radius, setRadius] = useState(10);
   const [locationStatus, setLocationStatus] = useState('detecting');
-  const initialRadiusRef = useRef(25);
+  const initialRadiusRef = useRef(10);
 
   const searchDispensaries = useCallback(async (lat, lng, searchRadius) => {
     setLoading(true);
@@ -108,18 +108,43 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
       return;
     }
 
+    const name =
+      dispensary.name ||
+      dispensary.business_name ||
+      dispensary.legal_name ||
+      dispensary.title;
+
     const parts = [];
-    if (dispensary.name) parts.push(dispensary.name);
+    if (name) parts.push(name);
     if (dispensary.address) parts.push(dispensary.address);
-    if (dispensary.city && dispensary.state) parts.push(`${dispensary.city}, ${dispensary.state}`);
+    if (dispensary.formatted_address) parts.push(dispensary.formatted_address);
+
+    const cityState = [dispensary.city, dispensary.state]
+      .filter(Boolean)
+      .join(', ')
+      .trim();
+    if (cityState) parts.push(cityState);
+
+    // Include postal/zip if available
+    if (dispensary.postal_code) parts.push(dispensary.postal_code);
+
+    // As a last resort, append coordinates to the textual query
+    if (
+      (!dispensary.address && !dispensary.city && !dispensary.state) &&
+      dispensary.latitude !== undefined &&
+      dispensary.longitude !== undefined
+    ) {
+      parts.push(`${dispensary.latitude}, ${dispensary.longitude}`);
+    }
 
     if (parts.length > 0) {
-      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parts.join(', '))}`, '_blank');
+      const query = encodeURIComponent(parts.join(', '));
+      window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
       return;
     }
 
     if (dispensary.latitude !== undefined && dispensary.longitude !== undefined) {
-      window.open(`https://www.google.com/maps/search/?api=1&query=${dispensary.latitude},${dispensary.longitude}`, '_blank');
+      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${dispensary.latitude},${dispensary.longitude}`)}`, '_blank');
     }
   };
 

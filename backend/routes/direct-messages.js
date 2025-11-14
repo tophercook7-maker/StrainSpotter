@@ -55,6 +55,61 @@ async function fetchUserDirectory(userIds = []) {
  * GET /api/direct-messages/:userId/:otherUserId
  * Load all messages between two users
  */
+router.get('/chats/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const { data: messages, error } = await supabaseAdmin
+      .from('direct_messages')
+      .select('*')
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[direct-messages] Error loading chats:', error);
+      return res.status(500).json({ error: 'Failed to load chats' });
+    }
+
+    const userIds = [...new Set(messages.flatMap(m => [m.sender_id, m.receiver_id]))];
+    const usersMap = await fetchUserDirectory(userIds);
+
+    const chatsMap = new Map();
+
+    for (const msg of messages) {
+      const otherUserId = msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
+      const otherUser = usersMap.get(otherUserId);
+
+      if (!chatsMap.has(otherUserId)) {
+        const unreadCount = messages.filter(m =>
+          m.sender_id === otherUserId &&
+          m.receiver_id === userId &&
+          !m.read_at
+        ).length;
+
+        chatsMap.set(otherUserId, {
+          user: otherUser,
+          last_message: msg,
+          unread_count: unreadCount
+        });
+      }
+    }
+
+    const chats = Array.from(chatsMap.values());
+    res.json(chats);
+  } catch (err) {
+    console.error('[direct-messages] Exception:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/direct-messages/:userId/:otherUserId
+ * Load all messages between two users
+ */
 router.get('/:userId/:otherUserId', async (req, res) => {
   try {
     const { userId, otherUserId } = req.params;
@@ -162,63 +217,6 @@ router.post('/', async (req, res) => {
  * Get list of all users the current user has chatted with
  * Returns unique users with last message preview
  */
-router.get('/chats/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
-    // Get all messages where user is sender or receiver
-    const { data: messages, error } = await supabaseAdmin
-      .from('direct_messages')
-      .select('*')
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('[direct-messages] Error loading chats:', error);
-      return res.status(500).json({ error: 'Failed to load chats' });
-    }
-
-    // Get unique user IDs
-    const userIds = [...new Set(messages.flatMap(m => [m.sender_id, m.receiver_id]))];
-
-    // Fetch user details
-    const usersMap = await fetchUserDirectory(userIds);
-
-    // Group by other user and get last message + unread count
-    const chatsMap = new Map();
-
-    for (const msg of messages) {
-      const otherUserId = msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
-      const otherUser = usersMap.get(otherUserId);
-
-      if (!chatsMap.has(otherUserId)) {
-        // Count unread messages from this user
-        const unreadCount = messages.filter(m =>
-          m.sender_id === otherUserId &&
-          m.receiver_id === userId &&
-          !m.read_at
-        ).length;
-
-        chatsMap.set(otherUserId, {
-          user: otherUser,
-          last_message: msg,
-          unread_count: unreadCount
-        });
-      }
-    }
-
-    const chats = Array.from(chatsMap.values());
-    res.json(chats);
-  } catch (err) {
-    console.error('[direct-messages] Exception:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
 /**
  * PUT /api/direct-messages/mark-read/:userId/:otherUserId
  * Mark all messages from otherUserId to userId as read
