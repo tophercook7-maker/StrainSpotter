@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
@@ -32,17 +32,21 @@ export default function OnboardingFlow() {
   const { user } = useAuth();
   const { onboardingRequired, loading, profile, refresh, needsDisplayName, needsPersona, needsRole, error } = useOnboardingStatus();
   const [step, setStep] = useState(0);
-  const [displayName, setDisplayName] = useState(profile?.display_name || '');
-  const [persona, setPersona] = useState(() => {
-    const personaTag = profile?.profile_tags?.find(tag => tag.startsWith('persona:'));
-    return personaTag ? personaTag.replace('persona:', '') : '';
-  });
-  const [notifications, setNotifications] = useState(() => {
-    return profile?.profile_tags?.some(tag => tag.startsWith('notify:')) || false;
-  });
+  const [displayName, setDisplayName] = useState('');
+  const [persona, setPersona] = useState('');
+  const [notifications, setNotifications] = useState(false);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  useEffect(() => {
+    if (profile) {
+      setDisplayName(profile.display_name || '');
+      const personaTag = profile.profile_tags?.find(tag => tag.startsWith('persona:'));
+      setPersona(personaTag ? personaTag.replace('persona:', '') : '');
+      setNotifications(profile.profile_tags?.some(tag => tag.startsWith('notify:')) || false);
+    }
+  }, [profile]);
 
   const steps = useMemo(() => [
     { label: 'Profile', description: 'Set your public name so others recognize you.' },
@@ -97,12 +101,34 @@ export default function OnboardingFlow() {
 
   const showStepper = needsDisplayName || needsPersona || needsRole;
 
+  if (!open) return null;
+
   return (
-    <Dialog open={open} fullScreen PaperProps={{ sx: { background: 'rgba(0,0,0,0.75)', color: '#fff' } }}>
-      <DialogTitle sx={{ textAlign: 'center', fontWeight: 700, color: '#CDDC39' }}>
+    <Dialog open fullScreen PaperProps={{ sx: { background: '#041204', color: '#fff' } }}>
+      <DialogTitle sx={{ textAlign: 'center', fontWeight: 700, color: '#CDDC39', pt: 4 }}>
         Welcome to StrainSpotter
       </DialogTitle>
-      <DialogContent sx={{ maxWidth: 520, mx: 'auto' }}>
+      <DialogContent
+        sx={{
+          maxWidth: 520,
+          mx: 'auto',
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          pt: 1,
+          pb: 6
+        }}
+      >
+        <Box
+          sx={{
+            overflowY: 'auto',
+            pr: 1,
+            flex: 1,
+            '&::-webkit-scrollbar': { width: 6 },
+            '&::-webkit-scrollbar-thumb': { background: 'rgba(255,255,255,0.2)', borderRadius: 999 }
+          }}
+        >
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
@@ -219,6 +245,7 @@ export default function OnboardingFlow() {
           </Alert>
         )}
 
+        </Box>
         <Stack direction="row" spacing={2} sx={{ mt: 4 }}>
           {step > 0 && (
             <Button

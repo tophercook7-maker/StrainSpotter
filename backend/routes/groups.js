@@ -423,10 +423,9 @@ router.post('/', async (req, res) => {
 
 router.get('/:id/messages', async (req, res) => {
   try {
-    // Limit to last 1000 messages to prevent performance issues
     const { data, error } = await readClient
       .from('messages')
-      .select('*, users(id, username, avatar_url, email)')
+      .select('id, group_id, user_id, content, created_at')
       .eq('group_id', req.params.id)
       .order('created_at', { ascending: false })
       .limit(1000);
@@ -437,16 +436,30 @@ router.get('/:id/messages', async (req, res) => {
     const userIds = [...new Set(rawMessages.map(m => m.user_id).filter(Boolean))];
 
     let profilesMap = new Map();
+    let usersMap = new Map();
+
     if (userIds.length) {
-      const { data: profileRows, error: profileErr } = await readClient
-        .from('profiles')
-        .select('user_id, display_name, username, avatar_url')
-        .in('user_id', userIds);
+      const [{ data: profileRows, error: profileErr }, { data: userRows, error: userErr }] = await Promise.all([
+        readClient
+          .from('profiles')
+          .select('user_id, display_name, username, avatar_url')
+          .in('user_id', userIds),
+        readClient
+          .from('users')
+          .select('id, username, email, avatar_url')
+          .in('id', userIds)
+      ]);
 
       if (profileErr) {
         console.error('[groups/messages] Failed to load profiles:', profileErr.message);
-      } else {
+      } else if (Array.isArray(profileRows)) {
         profilesMap = new Map(profileRows.map(row => [row.user_id, row]));
+      }
+
+      if (userErr) {
+        console.error('[groups/messages] Failed to load users:', userErr.message);
+      } else if (Array.isArray(userRows)) {
+        usersMap = new Map(userRows.map(row => [row.id, row]));
       }
     }
 
@@ -454,17 +467,20 @@ router.get('/:id/messages', async (req, res) => {
       .reverse()
       .map(message => {
         const profile = profilesMap.get(message.user_id);
-        const fallbackName = message.users?.username
-          || (message.users?.email ? message.users.email.split('@')[0] : null)
+        const supaUser = usersMap.get(message.user_id);
+        const fallbackName = profile?.display_name
+          || supaUser?.username
+          || (supaUser?.email ? supaUser.email.split('@')[0] : null)
           || `Member ${String(message.user_id || '').slice(0, 8)}`;
 
         return {
           ...message,
           users: {
-            ...message.users,
-            display_name: profile?.display_name || fallbackName,
-            username: profile?.username || message.users?.username,
-            avatar_url: profile?.avatar_url || message.users?.avatar_url || null
+            id: message.user_id,
+            username: profile?.username || supaUser?.username || fallbackName,
+            avatar_url: profile?.avatar_url || supaUser?.avatar_url || null,
+            email: supaUser?.email || null,
+            display_name: fallbackName
           },
           profile
         };

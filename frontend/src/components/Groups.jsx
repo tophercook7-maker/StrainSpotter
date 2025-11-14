@@ -1899,12 +1899,24 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           pt: '120px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
         }}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
+            <Button
+              startIcon={<ArrowBackIosNewIcon fontSize="small" />}
+              onClick={() => setChatDialogOpen(false)}
+              sx={{
+                color: '#CDDC39',
+                textTransform: 'none',
+                fontWeight: 600,
+                '&:hover': { bgcolor: 'rgba(124,179,66,0.2)' }
+              }}
+            >
+              Back
+            </Button>
             <Avatar sx={{ bgcolor: 'rgba(124,179,66,0.35)', color: '#0c220f' }}>
-              {(selectedChat?.username || 'U').slice(0, 2).toUpperCase()}
+              {(selectedChat?.username || selectedChat?.display_name || 'U').slice(0, 2).toUpperCase()}
             </Avatar>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#CDDC39', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
-              {selectedChat?.username || 'User'}
+            <Typography variant="h6" noWrap sx={{ fontWeight: 700, color: '#CDDC39', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
+              {selectedChat?.display_name || selectedChat?.username || 'User'}
             </Typography>
           </Stack>
           <Button
