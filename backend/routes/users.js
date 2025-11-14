@@ -12,7 +12,7 @@ const adminEmails = new Set([
   'andrewbeck209@gmail.com'
 ]);
 
-const allowedRoles = ['member', 'grower', 'operator', 'budtender', 'moderator', 'admin'];
+const allowedRoles = ['member', 'grower', 'operator', 'budtender', 'moderator', 'admin', 'enthusiast'];
 
 const personaTags = ['persona:enthusiast', 'persona:grower', 'persona:operator'];
 
@@ -417,16 +417,19 @@ router.post('/onboarding', async (req, res) => {
       return res.status(400).json({ error: 'Display name must be at least 2 characters.' });
     }
 
+    const personaRole = persona === 'grower'
+      ? 'grower'
+      : persona === 'operator'
+        ? 'operator'
+        : persona === 'enthusiast'
+          ? 'enthusiast'
+          : null;
+
     const updates = {
       display_name: displayName,
-      membership_status: 'active'
+      membership_status: 'active',
+      role: allowedRoles.includes(personaRole || requestedRole) ? (personaRole || requestedRole) : 'member'
     };
-
-    if (requestedRole && allowedRoles.includes(requestedRole)) {
-      updates.role = requestedRole;
-    } else if (!requestedRole) {
-      updates.role = 'member';
-    }
 
     const { data: existingProfile, error: profileErr } = await writeClient
       .from('profiles')
