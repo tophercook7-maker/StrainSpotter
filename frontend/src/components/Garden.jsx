@@ -25,6 +25,7 @@ import FeedbackIcon from '@mui/icons-material/Feedback';
 import NoteAltIcon from '@mui/icons-material/NoteAlt';
 import CreditBalance from './CreditBalance';
 import BuyScansModal from './BuyScansModal';
+import GardenNavBar from './GardenNavBar';
 
 export default function Garden({ onBack, onNavigate }) {
   const { user, isExpired, canLogout, loading } = useMembershipGuard();
@@ -43,6 +44,7 @@ export default function Garden({ onBack, onNavigate }) {
   const [showFeedback, setShowFeedback] = useState(false);
   const [showFeedbackReader, setShowFeedbackReader] = useState(false);
   const [showBuyScans, setShowBuyScans] = useState(false);
+  const [navValue, setNavValue] = useState('home');
 
   // Get display name for user
   const getUserDisplayName = () => {
@@ -90,71 +92,43 @@ export default function Garden({ onBack, onNavigate }) {
   };
 
   const handleFeatureClick = (featureName, nav) => {
-    // Special case for AI Scan
-    if (nav === 'scan') {
-      setShowScan(true);
-      return;
+    switch (nav) {
+      case 'scan':
+        openScreen('scan', () => setShowScan(true));
+        return;
+      case 'strains':
+        openScreen('home', () => setShowStrainBrowser(true));
+        return;
+      case 'reviews':
+        openScreen('home', () => setShowReviews(true));
+        return;
+      case 'dispensaries':
+        openScreen('dispensaries', () => setShowDispensaryFinder(true));
+        return;
+      case 'seeds':
+        openScreen('home', () => setShowSeedFinder(true));
+        return;
+      case 'groups':
+        openScreen('groups', () => setShowGroups(true));
+        return;
+      case 'grow-coach':
+        setGrowCoachInitialTab(0);
+        openScreen('home', () => setShowGrowCoach(true));
+        return;
+      case 'grow-logbook':
+        setGrowCoachInitialTab(LOGBOOK_TAB_INDEX);
+        openScreen('home', () => setShowGrowCoach(true));
+        return;
+      case 'growers':
+        openScreen('growers', () => setShowGrowerDirectory(true));
+        return;
+      case 'feedback-reader':
+        openScreen('home', () => setShowFeedbackReader(true));
+        return;
+      default:
+        setSelectedFeature(featureName);
+        setShowComingSoon(true);
     }
-
-    // Special case for Strain Browser
-    if (nav === 'strains') {
-      setShowStrainBrowser(true);
-      return;
-    }
-
-    // Special case for Reviews Hub
-    if (nav === 'reviews') {
-      setShowReviews(true);
-      return;
-    }
-
-    // Special case for Dispensary Finder
-    if (nav === 'dispensaries') {
-      setShowDispensaryFinder(true);
-      return;
-    }
-
-    // Special case for Seed Vendor Finder
-    if (nav === 'seeds') {
-      setShowSeedFinder(true);
-      return;
-    }
-
-    // Special case for Community Groups
-    if (nav === 'groups') {
-      setShowGroups(true);
-      return;
-    }
-
-    // Special case for Grow Coach
-    if (nav === 'grow-coach') {
-      setGrowCoachInitialTab(0);
-      setShowGrowCoach(true);
-      return;
-    }
-
-    // Special case for Grow Logbook (open Grow Coach on logbook tab)
-    if (nav === 'grow-logbook') {
-      setGrowCoachInitialTab(LOGBOOK_TAB_INDEX);
-      setShowGrowCoach(true);
-      return;
-    }
-
-    // Special case for Grower Directory
-    if (nav === 'growers') {
-      setShowGrowerDirectory(true);
-      return;
-    }
-
-    // Special case for Feedback Reader (admin only)
-    if (nav === 'feedback-reader') {
-      setShowFeedbackReader(true);
-      return;
-    }
-
-    // For other features, show "coming soon" (later this could call into a navigator)
-    setSelectedFeature(featureName);
-    setShowComingSoon(true);
   };
 
   // Check if user is admin
@@ -188,6 +162,24 @@ export default function Garden({ onBack, onNavigate }) {
       useEmoji: true
     });
   }
+
+  const resetScreens = (nextNav = 'home') => {
+    setShowScan(false);
+    setShowStrainBrowser(false);
+    setShowReviews(false);
+    setShowDispensaryFinder(false);
+    setShowSeedFinder(false);
+    setShowGroups(false);
+    setShowGrowCoach(false);
+    setShowGrowerDirectory(false);
+    setShowFeedbackReader(false);
+    setNavValue(nextNav);
+  };
+
+  const openScreen = (navId, openCallback) => {
+    resetScreens(navId);
+    openCallback?.();
+  };
 
   if (loading) {
     return (
@@ -242,7 +234,83 @@ export default function Garden({ onBack, onNavigate }) {
     return <FeedbackReader user={user} onBack={() => setShowFeedbackReader(false)} />;
   }
 
-  return (
+  const handleNavChange = (next) => {
+    if (next === navValue) return;
+    switch (next) {
+      case 'home':
+        resetScreens('home');
+        return;
+      case 'scan':
+        openScreen('scan', () => setShowScan(true));
+        return;
+      case 'groups':
+        openScreen('groups', () => setShowGroups(true));
+        return;
+      case 'dispensaries':
+        openScreen('dispensaries', () => setShowDispensaryFinder(true));
+        return;
+      case 'growers':
+        openScreen('growers', () => setShowGrowerDirectory(true));
+        return;
+      default:
+        break;
+    }
+  };
+
+  const renderWithNav = (content, navActive = navValue) => (
+    <Box sx={{ minHeight: '100vh', pb: 'calc(env(safe-area-inset-bottom) + 72px)' }}>
+      {content}
+      <GardenNavBar
+        value={navActive}
+        onChange={handleNavChange}
+        items={[
+          { value: 'home', label: 'Garden', icon: <SpaIcon /> },
+          { value: 'scan', label: 'Scan', icon: <CameraAltIcon /> },
+          { value: 'groups', label: 'Groups', icon: <GroupsIcon /> },
+          { value: 'dispensaries', label: 'Shops', icon: <StoreIcon /> },
+          { value: 'growers', label: 'Growers', icon: <PeopleIcon /> }
+        ]}
+      />
+    </Box>
+  );
+
+  if (loading) {
+    return renderWithNav(
+      <Box sx={{ minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography sx={{ color: '#fff' }}>Loading...</Typography>
+      </Box>
+    );
+  }
+
+  if (showScan) {
+    return renderWithNav(<ScanWizard onBack={() => resetScreens('home')} />, 'scan');
+  }
+  if (showStrainBrowser) {
+    return renderWithNav(<StrainBrowser onBack={() => resetScreens('home')} />);
+  }
+  if (showReviews) {
+    return renderWithNav(<ReviewsHub onBack={() => resetScreens('home')} currentUser={user} />);
+  }
+  if (showDispensaryFinder) {
+    return renderWithNav(<DispensaryFinder onBack={() => resetScreens('home')} />, 'dispensaries');
+  }
+  if (showSeedFinder) {
+    return renderWithNav(<SeedVendorFinder onBack={() => resetScreens('home')} />);
+  }
+  if (showGroups) {
+    return renderWithNav(<Groups onBack={() => resetScreens('home')} />, 'groups');
+  }
+  if (showGrowCoach) {
+    return renderWithNav(<GrowCoach onBack={() => resetScreens('home')} initialTab={growCoachInitialTab} />);
+  }
+  if (showGrowerDirectory) {
+    return renderWithNav(<GrowerDirectory onBack={() => resetScreens('home')} />, 'growers');
+  }
+  if (showFeedbackReader) {
+    return renderWithNav(<FeedbackReader user={user} onBack={() => resetScreens('home')} />);
+  }
+
+  return renderWithNav(
     <Box sx={{
       minHeight: '100vh',
       paddingTop: '120px',  // Fixed padding to clear the notch
