@@ -19,7 +19,7 @@ import {
 export default function Auth({ onBack }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
+  const [mode, setMode] = useState('signin'); // 'signin' | 'signup' | 'reset'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
@@ -42,10 +42,17 @@ export default function Auth({ onBack }) {
     setLoading(true);
     setError(null);
     setInfo(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         setError(error.message);
       } else {
+        const confirmedAt = data?.user?.email_confirmed_at || data?.session?.user?.email_confirmed_at;
+        if (!confirmedAt) {
+          await supabase.auth.signOut();
+          setError('Please verify your email before signing in. Check your inbox for the confirmation link.');
+          setInfo(null);
+          return;
+        }
         // Ensure user record exists immediately after password sign-in
         try {
           const { data } = await supabase.auth.getSession();
@@ -100,13 +107,12 @@ export default function Auth({ onBack }) {
     setLoading(true);
     setError(null);
     setInfo(null);
-    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+    const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/#/` : undefined;
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: redirectTo,
-        data: { email_confirmed: true } // Auto-confirm for dev
+        emailRedirectTo: redirectTo
       }
     });
     setLoading(false);
@@ -115,22 +121,9 @@ export default function Auth({ onBack }) {
     } else if (data?.user?.identities?.length === 0) {
       setError('This email is already registered. Please sign in, or use "Forgot password" to reset.');
     } else {
-      // Generate cannabis-themed profile automatically
-      try {
-        await fetch(`${API_BASE}/api/profile-generator/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: email,
-            userId: data.user.id
-          })
-        });
-      } catch (e) {
-        console.warn('[auth] Failed to generate profile:', e);
-      }
-
       setError(null);
-      setInfo('Account created with a cannabis-themed profile! You can now sign in.');
+      setInfo('Check your inbox to verify your email. You can sign in once you confirm.');
+      setMode('signin');
     }
   }
 
@@ -165,8 +158,7 @@ export default function Auth({ onBack }) {
     setError(null);
     setInfo(null);
     try {
-      // Important: redirectTo must match exactly what's in Supabase Auth settings
-      const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/` : undefined;
+      const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/#/` : undefined;
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) setError(error.message);
       else setInfo('Password reset email sent. Check your email and click the link to reset your password. The link expires in 1 hour.');
@@ -246,11 +238,13 @@ export default function Auth({ onBack }) {
               </>
             ) : (
               <>
-                <Tabs value={mode} onChange={(_e, v) => setMode(v)} aria-label="auth mode">
+                <Tabs value={mode === 'reset' ? false : mode} onChange={(_e, v) => setMode(v)} aria-label="auth mode">
                   <Tab label="Sign In" value="signin" />
                   <Tab label="Sign Up" value="signup" />
                 </Tabs>
-                <TextField label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} fullWidth sx={{ background: 'rgba(255,255,255,0.10)', color: 'black', fontSize: '1.15rem', borderRadius: 2, input: { color: 'black' } }} InputLabelProps={{ style: { color: 'black', fontWeight: 600 } }} />
+                {mode !== 'reset' && (
+                  <TextField label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} fullWidth sx={{ background: 'rgba(255,255,255,0.10)', color: 'black', fontSize: '1.15rem', borderRadius: 2, input: { color: 'black' } }} InputLabelProps={{ style: { color: 'black', fontWeight: 600 } }} />
+                )}
                 {mode === 'signin' && (
                   <>
                     <TextField label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} fullWidth sx={{ background: 'rgba(255,255,255,0.10)', color: 'black', fontSize: '1.15rem', borderRadius: 2, input: { color: 'black' } }} InputLabelProps={{ style: { color: 'black', fontWeight: 600 } }} />
@@ -261,7 +255,7 @@ export default function Auth({ onBack }) {
                         {loading ? <CircularProgress size={20} /> : 'Sign In'}
                       </Button>
                       <Button variant="outlined" onClick={sendMagicLink} disabled={loading} sx={{ fontSize: '1.1rem', color: 'black', border: '1.5px solid black', fontWeight: 700 }}>Send Magic Link</Button>
-                      <Button variant="text" onClick={forgotPassword} disabled={loading} sx={{ fontSize: '1.1rem', color: 'black', fontWeight: 700 }}>Forgot Password?</Button>
+                      <Button variant="text" onClick={() => { setMode('reset'); setInfo(null); setError(null); }} disabled={loading} sx={{ fontSize: '1.1rem', color: 'black', fontWeight: 700 }}>Forgot Password?</Button>
                     </Stack>
                   </>
                 )}
@@ -277,6 +271,32 @@ export default function Auth({ onBack }) {
                       <MuiLink component="button" onClick={() => setMode('signin')} sx={{ alignSelf: 'center', color: 'black', fontWeight: 700 }}>
                         Already registered? Sign in
                       </MuiLink>
+                    </Stack>
+                  </>
+                )}
+                {mode === 'reset' && (
+                  <>
+                    <Typography variant="body2" sx={{ color: 'black' }}>
+                      Enter your account email and we’ll send you a reset link.
+                    </Typography>
+                    <TextField
+                      label="Account Email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      fullWidth
+                      sx={{ background: 'rgba(255,255,255,0.10)', color: 'black', fontSize: '1.15rem', borderRadius: 2, input: { color: 'black' } }}
+                      InputLabelProps={{ style: { color: 'black', fontWeight: 600 } }}
+                    />
+                    {error && <Alert severity="error" sx={{ fontSize: '1.1rem', color: 'black', background: 'rgba(255,255,255,0.10)' }}>{error}</Alert>}
+                    {info && <Alert severity="info" sx={{ fontSize: '1.1rem', color: 'black', background: 'rgba(255,255,255,0.10)' }}>{info}</Alert>}
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                      <Button variant="contained" onClick={forgotPassword} disabled={loading || !email} sx={{ fontSize: '1.1rem', color: 'black', background: 'rgba(255,255,255,0.20)', border: '1.5px solid black', boxShadow: 'none', fontWeight: 700 }}>
+                        {loading ? <CircularProgress size={20} /> : 'Send Reset Email'}
+                      </Button>
+                      <Button variant="text" onClick={() => { setMode('signin'); setInfo(null); setError(null); }} sx={{ fontSize: '1.1rem', color: 'black', fontWeight: 700 }}>
+                        Back to Sign In
+                      </Button>
                     </Stack>
                   </>
                 )}

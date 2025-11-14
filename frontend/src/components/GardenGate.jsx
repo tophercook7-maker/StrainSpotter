@@ -3,9 +3,10 @@ import { Box, Button, Typography, TextField, Stack, Paper, Dialog, DialogTitle, 
 import { supabase, isAuthConfigured } from '../supabaseClient';
 
 export default function GardenGate({ onSuccess, onBack }) {
-  const [mode, setMode] = useState('welcome'); // 'welcome', 'signup', 'login'
+  const [mode, setMode] = useState('welcome'); // 'welcome', 'signup', 'login', 'payment', 'verify'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [checkingAuth, setCheckingAuth] = useState(true);
   
   // Signup fields
@@ -18,6 +19,7 @@ export default function GardenGate({ onSuccess, onBack }) {
   const [loginPassword, setLoginPassword] = useState('');
   
   const [paymentComplete, setPaymentComplete] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
   const authConfigured = isAuthConfigured();
 
   // Check if user is already logged in and has membership
@@ -70,6 +72,7 @@ export default function GardenGate({ onSuccess, onBack }) {
     }
     
     setLoading(true);
+    setInfo('');
     try {
       // Create account with Supabase Auth
       const { data, error: signupError } = await supabase.auth.signUp({
@@ -79,15 +82,17 @@ export default function GardenGate({ onSuccess, onBack }) {
           data: {
             username: signupName,
             membership: 'none' // Will be upgraded after payment
-          }
+          },
+          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/#/` : undefined
         }
       });
 
       if (signupError) throw signupError;
 
       if (data.user) {
-        // Account created, now show payment
-        setMode('payment');
+        setPendingEmail(signupEmail);
+        setMode('verify');
+        setInfo('Check your inbox to confirm your email, then sign in.');
       }
     } catch (e) {
       setError(e.message || 'Signup failed');
@@ -102,6 +107,7 @@ export default function GardenGate({ onSuccess, onBack }) {
       return;
     }
     setError('');
+    setInfo('');
     if (!loginEmail || !loginPassword) {
       setError('Please enter email and password');
       return;
@@ -124,6 +130,13 @@ export default function GardenGate({ onSuccess, onBack }) {
       }
 
       if (data.session?.user) {
+        if (!data.session.user.email_confirmed_at) {
+          await supabase.auth.signOut();
+          setMode('verify');
+          setPendingEmail(loginEmail);
+          setError('Please verify your email before entering the garden.');
+          return;
+        }
         console.log('✅ Login successful!', data.session.user);
 
         // Check membership status
@@ -143,6 +156,46 @@ export default function GardenGate({ onSuccess, onBack }) {
     } catch (e) {
       console.error('❌ Login failed:', e);
       setError(e.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!supabase) return;
+    if (!loginEmail) {
+      setError('Enter your email first, then tap "Forgot password".');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setInfo('');
+    try {
+      const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/#/` : undefined;
+      const { error } = await supabase.auth.resetPasswordForEmail(loginEmail, { redirectTo });
+      if (error) throw error;
+      setInfo('Password reset email sent. Check your inbox.');
+    } catch (err) {
+      setError(err.message || 'Failed to send reset email.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!supabase || !pendingEmail) return;
+    setLoading(true);
+    setError('');
+    setInfo('');
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: pendingEmail
+      });
+      if (error) throw error;
+      setInfo('Verification email resent. Check your inbox.');
+    } catch (err) {
+      setError(err.message || 'Failed to resend verification email.');
     } finally {
       setLoading(false);
     }
@@ -388,6 +441,7 @@ export default function GardenGate({ onSuccess, onBack }) {
             </Typography>
             
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            {info && <Alert severity="info" sx={{ mb: 2 }}>{info}</Alert>}
             
             <Stack spacing={2}>
               <TextField
@@ -430,6 +484,14 @@ export default function GardenGate({ onSuccess, onBack }) {
               >
                 {loading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Login'}
               </Button>
+              <Button
+                variant="text"
+                onClick={handleForgotPassword}
+                disabled={loading || !loginEmail}
+                sx={{ color: '#ccc' }}
+              >
+                Forgot password?
+              </Button>
               
               <Button
                 variant="text"
@@ -437,6 +499,44 @@ export default function GardenGate({ onSuccess, onBack }) {
                 sx={{ color: '#ccc' }}
               >
                 ← Back
+              </Button>
+            </Stack>
+          </>
+        )}
+
+        {/* Verification Screen */}
+        {mode === 'verify' && (
+          <>
+            <Typography variant="h4" sx={{ mb: 2, color: '#fff', fontWeight: 900 }}>
+              Confirm Your Email
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 3, color: '#e0e0e0' }}>
+              We sent a confirmation link to <strong>{pendingEmail || signupEmail || loginEmail || 'your email'}</strong>. Tap the link, then return here to finish setting up your account.
+            </Typography>
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            {info && <Alert severity="info" sx={{ mb: 2 }}>{info}</Alert>}
+            <Stack spacing={2}>
+              <Button
+                variant="contained"
+                onClick={handleResendVerification}
+                disabled={loading || !pendingEmail}
+                sx={{
+                  width: '100%',
+                  py: 2,
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                  bgcolor: 'rgba(124, 179, 66, 0.8)',
+                  '&:hover': { bgcolor: 'rgba(124, 179, 66, 1)' }
+                }}
+              >
+                {loading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Resend Verification Email'}
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => { setMode('login'); setError(''); setInfo(''); }}
+                sx={{ color: '#fff', borderColor: 'rgba(124, 179, 66, 0.6)' }}
+              >
+                Return to Sign In
               </Button>
             </Stack>
           </>

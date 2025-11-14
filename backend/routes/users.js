@@ -12,6 +12,10 @@ const adminEmails = new Set([
   'andrewbeck209@gmail.com'
 ]);
 
+const allowedRoles = ['member', 'grower', 'operator', 'budtender', 'moderator', 'admin'];
+
+const personaTags = ['persona:enthusiast', 'persona:grower', 'persona:operator'];
+
 async function authenticateRequest(req) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -203,6 +207,26 @@ router.get('/directory', async (req, res) => {
   }
 });
 
+function sanitizeDisplayName(raw) {
+  const name = (raw || '').trim();
+  if (!name) return null;
+  return name.slice(0, 80);
+}
+
+function mergeProfileTags(existing = [], additions = []) {
+  const tags = new Set(Array.isArray(existing) ? existing.filter(Boolean) : []);
+  additions.filter(Boolean).forEach(tag => tags.add(tag));
+  return Array.from(tags);
+}
+
+function replaceTag(tags = [], prefix, replacement) {
+  const next = (Array.isArray(tags) ? tags : []).filter(tag => !tag.startsWith(prefix));
+  if (replacement) {
+    next.push(`${prefix}${replacement}`);
+  }
+  return next;
+}
+
 // Ensure a user record exists in public.users table
 // This is called after auth signup to prevent "Could not create user record" errors
 router.post('/ensure', async (req, res) => {
@@ -252,29 +276,23 @@ router.post('/ensure', async (req, res) => {
 
 router.post('/profile', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const auth = await authenticateRequest(req);
+    if (!auth.user) {
+      return res.status(401).json({ error: auth.error || 'Unauthorized' });
     }
 
-    const token = authHeader.substring(7);
-    const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !authData?.user) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const user = authData.user;
+    const user = auth.user;
     const userId = user.id;
     const email = user.email || null;
     const rawDisplayName = req.body?.display_name ?? req.body?.displayName;
     const rawUsername = req.body?.username;
+    const bio = (req.body?.bio || '').toString().slice(0, 500);
+    const avatarUrl = req.body?.avatar_url || req.body?.avatarUrl || null;
 
-    const displayName = (rawDisplayName || '').trim();
+    const displayName = sanitizeDisplayName(rawDisplayName);
     if (!displayName || displayName.length < 2) {
       return res.status(400).json({ error: 'Display name must be at least 2 characters.' });
     }
-
-    const sanitizedDisplayName = displayName.slice(0, 60);
 
     let sanitizedUsername = (rawUsername || '').trim().toLowerCase();
     sanitizedUsername = sanitizedUsername.replace(/[^a-z0-9]+/g, '').slice(0, 32);
@@ -300,9 +318,11 @@ router.post('/profile', async (req, res) => {
     }
 
     const payload = {
-      display_name: sanitizedDisplayName,
+      display_name: displayName,
       username: sanitizedUsername || null,
-      email
+      email,
+      bio: bio || null,
+      avatar_url: avatarUrl
     };
 
     const { data: updated, error: updateErr } = await writeClient
@@ -338,6 +358,111 @@ router.post('/profile', async (req, res) => {
     res.json({ profile });
   } catch (err) {
     console.error('[users/profile] Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/onboarding-status', async (req, res) => {
+  try {
+    const auth = await authenticateRequest(req);
+    if (!auth.user) {
+      return res.status(401).json({ error: auth.error || 'Unauthorized' });
+    }
+
+    const { data: profile, error } = await writeClient
+      .from('profiles')
+      .select('user_id, display_name, username, role, membership_status, profile_tags, avatar_url, bio, email')
+      .eq('user_id', auth.user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[users] Onboarding status failed:', error);
+      return res.status(500).json({ error: 'Failed to load profile' });
+    }
+
+    const needsDisplayName = !profile?.display_name || profile.display_name.trim().length < 2;
+    const needsRole = !profile?.role || profile.role === 'member';
+    const personaTag = (profile?.profile_tags || []).find(tag => tag.startsWith('persona:'));
+    const needsPersona = !personaTag;
+    const needsAvatar = !profile?.avatar_url;
+
+    res.json({
+      profile,
+      needsDisplayName,
+      needsRole,
+      needsPersona,
+      needsAvatar,
+      onboardingRequired: needsDisplayName || needsRole || needsPersona
+    });
+  } catch (err) {
+    console.error('[users] Onboarding status error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/onboarding', async (req, res) => {
+  try {
+    const auth = await authenticateRequest(req);
+    if (!auth.user) {
+      return res.status(401).json({ error: auth.error || 'Unauthorized' });
+    }
+
+    const userId = auth.user.id;
+    const displayName = sanitizeDisplayName(req.body?.display_name ?? req.body?.displayName);
+    const requestedRole = req.body?.role;
+    const persona = (req.body?.persona || '').toLowerCase();
+    const wantsNotifications = Boolean(req.body?.notifications);
+
+    if (!displayName || displayName.length < 2) {
+      return res.status(400).json({ error: 'Display name must be at least 2 characters.' });
+    }
+
+    const updates = {
+      display_name: displayName,
+      membership_status: 'active'
+    };
+
+    if (requestedRole && allowedRoles.includes(requestedRole)) {
+      updates.role = requestedRole;
+    } else if (!requestedRole) {
+      updates.role = 'member';
+    }
+
+    const { data: existingProfile, error: profileErr } = await writeClient
+      .from('profiles')
+      .select('profile_tags')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (profileErr) {
+      console.error('[users] Failed to load profile before onboarding:', profileErr);
+      return res.status(500).json({ error: 'Failed to update profile' });
+    }
+
+    let tags = mergeProfileTags(existingProfile?.profile_tags);
+    if (persona) {
+      const normalizedPersona = ['grower', 'operator', 'enthusiast'].includes(persona) ? persona : 'enthusiast';
+      tags = replaceTag(tags, 'persona:', normalizedPersona);
+    }
+
+    tags = replaceTag(tags, 'notify:', wantsNotifications ? 'all' : null);
+    updates.profile_tags = tags;
+
+    const { data, error } = await writeClient
+      .from('profiles')
+      .update(updates)
+      .eq('user_id', userId)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error('[users] Onboarding update failed:', error);
+      return res.status(500).json({ error: 'Failed to save onboarding data' });
+    }
+
+    res.json({ profile: data, onboardingComplete: true });
+  } catch (err) {
+    console.error('[users] Onboarding error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

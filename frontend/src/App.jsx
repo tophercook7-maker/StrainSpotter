@@ -31,6 +31,7 @@ import GuidelinesGate from './components/GuidelinesGate';
 import ErrorViewer from './components/ErrorViewer';
 import ErrorBoundary from './components/ErrorBoundary';
 import EmergencyLogout from './components/EmergencyLogout';
+import OnboardingFlow from './components/OnboardingFlow';
 
 import PasswordReset from './components/PasswordReset';
 // Apply full marijuana-themed design with cannabis leaf icon and hero.png
@@ -121,6 +122,7 @@ function App() {
           )}
           {/* No navigation bar - all actions are on-screen buttons */}
           <div style={{ position: 'relative', zIndex: 10 }}>
+            <OnboardingFlow />
             {currentView === 'home' && (
               <Home onNavigate={setCurrentView} />
             )}
