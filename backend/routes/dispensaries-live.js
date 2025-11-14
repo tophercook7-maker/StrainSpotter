@@ -8,6 +8,80 @@ const CLOSED_DISPENSARIES = [
   'Green Springs Medical'
 ];
 
+const CANNABIS_KEYWORDS = [
+  'cannabis',
+  'marijuana',
+  'weed',
+  'dispensary',
+  'thc',
+  'cbd',
+  'tetrahydrocannabinol',
+  'medical marijuana',
+  'medical cannabis',
+  'recreational cannabis',
+  '420',
+  'bud',
+  'ganja',
+  'hemp',
+  'hash',
+  'kief',
+  'flower',
+  'good day farm',
+  'curaleaf',
+  'trulieve',
+  'zen leaf',
+  'rise dispensary',
+  'bloom medicinals',
+  'greenlight',
+  'verilife',
+  'planet 13',
+  'harvest cannabis',
+  'green goods',
+  'gtl cannabis',
+  'muv dispensary'
+];
+
+const DISALLOWED_TYPES = [
+  'supermarket',
+  'grocery_or_supermarket',
+  'department_store',
+  'convenience_store',
+  'big_box_store',
+  'hardware_store'
+];
+
+function containsCannabisKeywords(...fields) {
+  const haystack = fields
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return CANNABIS_KEYWORDS.some(keyword => haystack.includes(keyword));
+}
+
+function isLikelyCannabisPlace(place) {
+  if (!place) return false;
+  const name = place.name || '';
+  const vicinity = place.vicinity || place.address || place.formatted_address || '';
+  const types = Array.isArray(place.types) ? place.types : [];
+
+  const hasKeyword = containsCannabisKeywords(
+    name,
+    vicinity,
+    types.join(' ')
+  );
+
+  if (!hasKeyword) {
+    return false;
+  }
+
+  // Filter obvious non-dispensary types (e.g. Walmart, Costco)
+  if (types.some(type => DISALLOWED_TYPES.includes(type))) {
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * Live Dispensary Finder
  * Combines database results with Google Places API for real-time dispensary search
@@ -116,8 +190,9 @@ async function searchGooglePlaces(lat, lng, radius, overrideKeyword) {
         for (const place of data.results) {
           const isClosed = place.business_status?.includes('CLOSED');
           const isBlacklisted = CLOSED_DISPENSARIES.some(closed => place.name.includes(closed));
+          const looksLikeDispensary = isLikelyCannabisPlace(place);
 
-          if (!seenPlaceIds.has(place.place_id) && !isClosed && !isBlacklisted) {
+          if (!seenPlaceIds.has(place.place_id) && !isClosed && !isBlacklisted && looksLikeDispensary) {
             seenPlaceIds.add(place.place_id);
             allResults.push(place);
           }
@@ -175,18 +250,20 @@ async function searchGooglePlacesText(query, lat, lng, radius) {
       return [];
     }
 
-    return data.results.map(result => ({
-      id: `google-text-${result.place_id}`,
-      name: result.name,
-      address: result.formatted_address,
-      latitude: result.geometry?.location?.lat,
-      longitude: result.geometry?.location?.lng,
-      rating: result.rating || 0,
-      review_count: result.user_ratings_total || 0,
-      verified: false,
-      source: 'google_places_text',
-      place_id: result.place_id,
-    }));
+    return data.results
+      .filter(isLikelyCannabisPlace)
+      .map(result => ({
+        id: `google-text-${result.place_id}`,
+        name: result.name,
+        address: result.formatted_address,
+        latitude: result.geometry?.location?.lat,
+        longitude: result.geometry?.location?.lng,
+        rating: result.rating || 0,
+        review_count: result.user_ratings_total || 0,
+        verified: false,
+        source: 'google_places_text',
+        place_id: result.place_id,
+      }));
   } catch (error) {
     console.error('[dispensaries-live] Places text search failed:', error);
     return [];

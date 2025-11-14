@@ -1039,69 +1039,7 @@ export default function ScanWizard({ onBack }) {
                 )}
 
                 {/* Confidence */}
-                {(() => {
-                  const raw = Number(plantHealth.confidence);
-                  const confidenceScore = Number.isFinite(raw)
-                    ? Math.max(0, Math.min(100, Math.round(raw)))
-                    : 0;
-
-                  let headline = `Confidence is cautious — ${confidenceScore}%`;
-                  let explanation = 'The picture angle or lighting might be throwing the model off. Try another photo from a different angle or distance. It’s computer-generated help, so treat it as guidance rather than perfection.';
-                  let headlineColor = '#FFD54F';
-                  let background = 'linear-gradient(135deg, rgba(255, 213, 79, 0.35), rgba(255, 213, 79, 0.1))';
-                  let borderColor = 'rgba(255, 213, 79, 0.7)';
-
-                  if (confidenceScore >= 85) {
-                    headline = `Confidence looks strong — ${confidenceScore}%`;
-                    explanation = 'Great signal, but a different angle or brighter lighting can still nudge the score. If something seems off, take another photo to double-check. It’s better than guessing, yet still computer-generated.';
-                    headlineColor = '#69F0AE';
-                    background = 'linear-gradient(135deg, rgba(105, 240, 174, 0.45), rgba(105, 240, 174, 0.12))';
-                    borderColor = 'rgba(105, 240, 174, 0.8)';
-                  } else if (confidenceScore >= 60) {
-                    headline = `Confidence is moderate — ${confidenceScore}%`;
-                    explanation = 'You’re in the middle zone. Try another picture—adjust the angle, focus on a single leaf, or step back slightly. Remember, the analysis is computer-generated and not flawless.';
-                    headlineColor = '#64B5F6';
-                    background = 'linear-gradient(135deg, rgba(100, 181, 246, 0.40), rgba(100, 181, 246, 0.12))';
-                    borderColor = 'rgba(100, 181, 246, 0.75)';
-                  }
-
-                  return (
-                    <Box
-                      sx={{
-                        mt: 2,
-                        p: 2.5,
-                        borderRadius: 2,
-                        background,
-                        border: `2px solid ${borderColor}`,
-                        boxShadow: '0 10px 24px rgba(0,0,0,0.22), inset 0 0 18px rgba(0,0,0,0.25)'
-                      }}
-                    >
-                      <Typography
-                        variant="subtitle1"
-                        sx={{
-                          color: headlineColor,
-                          fontWeight: 800,
-                          letterSpacing: 0.4,
-                          textTransform: 'uppercase'
-                        }}
-                      >
-                        {headline}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: '#FAFAFA',
-                          display: 'block',
-                          mt: 1,
-                          lineHeight: 1.6,
-                          fontSize: '0.95rem'
-                        }}
-                      >
-                        {explanation}
-                      </Typography>
-                    </Box>
-                  );
-                })()}
+                <ConfidenceCallout confidence={plantHealth.confidence} />
               </Box>
             )}
 
