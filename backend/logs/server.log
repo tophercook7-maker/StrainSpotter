@@ -1,0 +1,15 @@
+[2025-10-25T14:32:53.550Z] MASTER-KEY ATTEMPT
+Payload: {"user_id":"session-1761402761793-fnkyccsz5","key":"KING123"}
+Headers: {"host":"localhost:5181","accept":"*/*","content-type":"application/json","sec-fetch-site":"same-site","origin":"http://localhost:5174","sec-fetch-mode":"cors","user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15","referer":"http://localhost:5174/","sec-fetch-dest":"empty","content-length":"61","accept-language":"en-US,en;q=0.9","priority":"u=3, i","accept-encoding":"gzip, deflate","connection":"keep-alive"}
+Cookies: {}
+Expected key: KING123
+[2025-10-25T14:35:16.065Z] MASTER-KEY ATTEMPT
+Payload: {"key":"KING123"}
+Headers: {"host":"localhost:5181","user-agent":"curl/8.7.1","accept":"*/*","content-type":"application/json","content-length":"17"}
+Cookies: {}
+Expected key: KING123
+[2025-10-26T23:35:57.727Z] MASTER-KEY ATTEMPT
+Payload: {"user_id":null,"email":"topher.cook7@gmail.com","key":"KING123"}
+Headers: {"host":"localhost:5181","accept":"*/*","content-type":"application/json","sec-fetch-site":"same-site","origin":"http://localhost:5173","sec-fetch-mode":"cors","user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15","referer":"http://localhost:5173/","sec-fetch-dest":"empty","content-length":"65","accept-language":"en-US,en;q=0.9","priority":"u=3, i","accept-encoding":"gzip, deflate","connection":"keep-alive"}
+Cookies: {}
+Expected key: KING123

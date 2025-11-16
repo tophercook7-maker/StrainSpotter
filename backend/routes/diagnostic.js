@@ -1,11 +1,12 @@
 import express from 'express';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { sendMail, isEmailConfigured } from '../services/mailer.js';
+import { requireAdmin } from '../utils/accessControl.js';
 
 const router = express.Router();
 
 // Quick test endpoint to see what Vision API detects from a base64 image
-router.post('/vision-test', async (req, res) => {
+router.post('/vision-test', requireAdmin, async (req, res) => {
   try {
     const { base64 } = req.body;
     if (!base64) {
@@ -54,7 +55,7 @@ router.post('/vision-test', async (req, res) => {
 });
 
 // Quick strain search test
-router.get('/search-test', async (req, res) => {
+router.get('/search-test', requireAdmin, async (req, res) => {
   const { q } = req.query;
   if (!q) {
     console.warn(JSON.stringify({ tag: 'diagnostic', warning: 'Query parameter "q" required' }));
@@ -78,7 +79,7 @@ router.get('/search-test', async (req, res) => {
 export default router;
 
 // Email test endpoint to verify SMTP config quickly
-router.post('/email-test', async (req, res) => {
+router.post('/email-test', requireAdmin, async (req, res) => {
   try {
     if (!isEmailConfigured()) {
       console.warn(JSON.stringify({ tag: 'diagnostic', warning: 'SMTP not configured' }));

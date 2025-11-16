@@ -1,46 +1,12 @@
-# Node
-node_modules
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-dist
-build
-.cache
-
-# Env
-.env
-.env.*
+# Environment
 env/.env.local
+.env
 .env.local
-env/google-vision-key.json
- 
-# Private paste sheets (do not commit secrets)
-docs/*.local.md
-docs/VERCEL_PASTE_SHEET.local.md
 
-# Frontend env files (do not commit secrets)
-frontend/.env.local
-frontend/.env.local.backup
-frontend/.env.production
-
-# Mac
-.DS_Store
-
-# Logs
-logs
-*.log
-*.pid
-*.seed
-*.pid.lock
-
-# PM2
-pm2/pm2.log
-pm2/*.pid
-
-# IDE
-.vscode/*.log
-.idea
-*.iml
+# Dependencies
+node_modules/
+# Local secret / config files
 GOOGLE_VISION_JSON_FOR_VERCEL.txt
-.vercel
+docs/VERCEL_PASTE_SHEET.local.md
+env/google-vision-key.json
+env/.env.local.bak*

@@ -28,6 +28,8 @@ import {
 } from '@mui/icons-material';
 import { supabase } from '../supabaseClient';
 import { API_BASE } from '../config';
+import EmptyStateCard from './EmptyStateCard';
+import GrassIcon from '@mui/icons-material/Grass';
 
 const stageOptions = [
   'Planning',
@@ -295,6 +297,7 @@ export default function GrowLogBook() {
     <Stack spacing={3}>
       <Paper
         elevation={0}
+        id="grow-log-form"
         sx={{
           p: 3,
           borderRadius: 3,
@@ -634,9 +637,18 @@ export default function GrowLogBook() {
             <CircularProgress color="success" />
           </Box>
         ) : groupedLogs.length === 0 ? (
-          <Alert severity="info">
-            No log entries yet. Start by documenting today’s tasks and vitals above.
-          </Alert>
+          <EmptyStateCard
+            title="No grow logs yet"
+            description="Capture your daily environment, feedings, and canopy changes to unlock AI insights."
+            icon={<GrassIcon sx={{ fontSize: 56, color: '#2e7d32' }} />}
+            actionLabel="Add first log"
+            onAction={() => {
+              const section = document.getElementById('grow-log-form');
+              if (section) {
+                section.scrollIntoView({ behavior: 'smooth' });
+              }
+            }}
+          />
         ) : (
           <Stack spacing={3}>
             {groupedLogs.map(({ label, items }) => (

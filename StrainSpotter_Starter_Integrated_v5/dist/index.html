@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="./hero.png" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <meta name="theme-color" content="#0b120b" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>StrainSpotter</title>
+
+    <!-- Load React from CDN to ensure it's available globally before Vite bundle -->
+    <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+
+    <style>
+      /* Global field background so translucent UI shows it */
+      html, body, #root { height: 100%; }
+      body {
+        margin: 0;
+        /* Apply the background directly to body - no dark overlay */
+        background-image: url('strainspotter-bg.jpg');
+        background-size: cover;
+        background-position: center center;
+        background-attachment: fixed;
+        background-repeat: no-repeat;
+        color-scheme: dark;
+      }
+    </style>
+    <script type="module" crossorigin src="./assets/index-BrfZ5GmZ.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CN8SJ2n4.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Debug logging
+      console.log('=== StrainSpotter index.html loaded ===');
+      console.log('Protocol:', window.location.protocol);
+      console.log('Hostname:', window.location.hostname);
+      console.log('Pathname:', window.location.pathname);
+      console.log('User Agent:', navigator.userAgent);
+      console.log('React loaded from CDN:', typeof window.React);
+      console.log('ReactDOM loaded from CDN:', typeof window.ReactDOM);
+
+      // Add global error handler
+      window.addEventListener('error', (e) => {
+        console.error('Global error:', e.message, e.filename, e.lineno, e.colno);
+        console.error('Error object:', e.error);
+        alert('Error: ' + e.message + ' at ' + e.filename + ':' + e.lineno);
+      });
+
+      window.addEventListener('unhandledrejection', (e) => {
+        console.error('Unhandled promise rejection:', e.reason);
+        alert('Promise rejection: ' + e.reason);
+      });
+
+      // Only register service worker in web (not in Capacitor)
+      const isLocalDev = ['localhost', '127.0.0.1'].includes(location.hostname);
+      const isCapacitor = window.location.protocol === 'capacitor:';
+      console.log('isCapacitor:', isCapacitor);
+      if ('serviceWorker' in navigator && !isLocalDev && !isCapacitor) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./service-worker.js').then(reg => {
+            // Listen for updates
+            reg.onupdatefound = () => {
+              const installingWorker = reg.installing;
+              installingWorker.onstatechange = () => {
+                if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // New content available
+                  window.dispatchEvent(new Event('pwa-update-available'));
+                }
+              };
+            };
+          });
+        });
+      }
+
+      // Check if root div exists
+      setTimeout(() => {
+        const root = document.getElementById('root');
+        console.log('Root element:', root);
+        console.log('Root innerHTML:', root ? root.innerHTML : 'ROOT NOT FOUND');
+        if (!root || !root.innerHTML) {
+          alert('App failed to mount! Check console.');
+        }
+      }, 3000);
+    </script>
+  </body>
+</html>

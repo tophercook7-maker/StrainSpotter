@@ -593,49 +593,64 @@ export default function Garden({ onBack, onNavigate }) {
         ))}
       </Grid>
 
-      {/* Premium Membership Info */}
-      <Paper sx={{
-        p: 1.5,
-        mt: 1.5,
-        background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.12) 0%, rgba(156, 204, 101, 0.08) 100%)',
-        backdropFilter: 'blur(15px)',
-        border: '1.5px solid rgba(124, 179, 66, 0.3)',
-        borderRadius: 3,
-        boxShadow: '0 2px 12px rgba(124, 179, 66, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-        transition: 'all 0.15s ease',
-        width: '100%',
-        maxWidth: '600px'
-      }}>
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-          <Typography variant="caption" sx={{
-            color: '#e8e8e8',
-            fontSize: '0.7rem',
-            textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
-          }}>
-            <strong style={{ color: '#CDDC39' }}>Plan:</strong> $4.99/mo • Active Member
-          </Typography>
-          <Button
-            variant="text"
-            size="small"
-            sx={{
-              color: '#ff5252',
-              fontSize: '0.65rem',
-              py: 0.25,
-              px: 1,
-              minWidth: 'auto',
-              transition: 'all 0.15s ease',
-              '&:hover': {
-                bgcolor: 'rgba(255, 82, 82, 0.15)',
-                transform: 'scale(1.05)'
-              },
-              '&:active': {
-                transform: 'scale(0.95)',
-                transition: 'all 0.05s ease'
-              }
-            }}
-          >
-            Cancel
-          </Button>
+      <Paper
+        sx={{
+          p: 1.5,
+          mt: 1.5,
+          background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.12) 0%, rgba(156, 204, 101, 0.08) 100%)',
+          backdropFilter: 'blur(15px)',
+          border: '1.5px solid rgba(124, 179, 66, 0.3)',
+          borderRadius: 3,
+          boxShadow: '0 2px 12px rgba(124, 179, 66, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+          width: '100%',
+          maxWidth: '600px'
+        }}
+      >
+        <Stack spacing={1}>
+          <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+            <Typography
+              variant="caption"
+              sx={{ color: '#e8e8e8', fontSize: '0.75rem', textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)' }}
+            >
+              <strong style={{ color: '#CDDC39' }}>Plan:</strong> {isAdmin ? 'Creator Access' : 'Member • $4.99/mo • 200 scans'}
+            </Typography>
+            <Button
+              variant="text"
+              size="small"
+              sx={{
+                color: '#ffeb3b',
+                fontSize: '0.7rem',
+                py: 0.25,
+                px: 1.2,
+                minWidth: 'auto',
+                border: '1px solid rgba(255, 235, 59, 0.4)',
+                borderRadius: 999,
+                '&:hover': {
+                  bgcolor: 'rgba(255, 235, 59, 0.15)',
+                  transform: 'scale(1.05)'
+                }
+              }}
+              onClick={() => setShowBuyScans(true)}
+            >
+              Manage plan
+            </Button>
+          </Stack>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between">
+            <Typography variant="body2" sx={{ color: '#f5f5f5b5' }}>
+              Initial unlock: <strong>$5.99 • 20 scans</strong>
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#f5f5f5b5' }}>
+              Membership: <strong>$4.99/mo • 200 scans</strong>
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              sx={{ color: '#CDDC39', borderColor: 'rgba(124, 179, 66, 0.5)', borderRadius: 2, px: 2 }}
+              onClick={() => setShowBuyScans(true)}
+            >
+              Buy top-ups
+            </Button>
+          </Stack>
         </Stack>
       </Paper>
 

@@ -1,5 +1,7 @@
 import React from 'react';
 import { Box, Container, Typography, Button, Alert, Card, CardContent } from '@mui/material';
+import { API_BASE } from '../config';
+import { supabase } from '../supabaseClient';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -21,6 +23,32 @@ class ErrorBoundary extends React.Component {
     console.error('Error:', error.toString());
     console.error('Component Stack:', errorInfo.componentStack);
     console.error('═══════════════════════════════════════════════════════\n');
+
+    this.sendClientError(error, errorInfo);
+  }
+
+  async sendClientError(error, errorInfo) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+      await fetch(`${API_BASE}/api/admin/errors/client`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          message: error?.toString(),
+          stack: errorInfo?.componentStack,
+          location: window.location.href,
+          currentView: window.location.pathname,
+          platform: navigator?.platform || null,
+          userAgent: navigator?.userAgent || null
+        })
+      });
+    } catch (e) {
+      console.warn('[ErrorBoundary] Failed to report client error:', e);
+    }
   }
 
   render() {

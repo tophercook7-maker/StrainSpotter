@@ -1,47 +1,25 @@
-import { useState, useEffect } from 'react';
 import { Box, Chip, Tooltip, CircularProgress } from '@mui/material';
-import { Bolt as BoltIcon } from '@mui/icons-material';
-import { supabase } from '../supabaseClient';
+import BoltIcon from '@mui/icons-material/Bolt';
+import { useCreditBalance } from '../hooks/useCreditBalance';
 
 /**
  * Credit Balance Display Component
  * Shows user's remaining scan credits in the Garden header
  */
-export default function CreditBalance() {
-  const [credits, setCredits] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [tier, setTier] = useState('free');
+export default function CreditBalance({ summary: externalSummary, loading: externalLoading }) {
+  const shouldUseExternal = typeof externalSummary !== 'undefined' || typeof externalLoading !== 'undefined';
+  const { summary: internalSummary, loading: internalLoading } = useCreditBalance();
 
-  useEffect(() => {
-    fetchCredits();
-  }, []);
-
-  const fetchCredits = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        setLoading(false);
-        return;
-      }
-
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/credits/balance`, {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setCredits(data.creditsRemaining);
-        setTier(data.tier);
-      }
-    } catch (error) {
-      console.error('Failed to fetch credits:', error);
-    } finally {
-      setLoading(false);
-    }
+  const summary = shouldUseExternal ? externalSummary : internalSummary;
+  const loading = shouldUseExternal ? !!externalLoading : internalLoading;
+  const tierAliases = {
+    premium: 'monthly_member',
+    member: 'monthly_member',
+    moderator: 'monthly_member'
   };
+  const rawTier = summary?.tier ?? 'free';
+  const tier = tierAliases[rawTier] || rawTier;
+  const credits = summary?.creditsRemaining ?? null;
 
   if (loading) {
     return (
@@ -55,27 +33,25 @@ export default function CreditBalance() {
     return null;
   }
 
-  // Determine color based on credits remaining
   const getColor = () => {
     if (tier === 'admin') return 'primary';
     if (credits === 0) return 'error';
-    if (credits <= 5) return 'warning';
+    if (credits <= 10) return 'warning';
     return 'success';
   };
 
-  // Determine label
   const getLabel = () => {
     if (tier === 'admin') return '∞ Scans';
     return `${credits} Scans`;
   };
 
-  // Determine tooltip
   const getTooltip = () => {
     if (tier === 'admin') return 'Unlimited scans (Admin)';
     if (tier === 'free') return `${credits} free scans remaining`;
-    if (tier === 'member') return `${credits} scans remaining this month (Member)`;
-    if (tier === 'premium') return `${credits} scans remaining this month (Premium)`;
-    if (tier === 'moderator') return `${credits} scans remaining this month (Moderator)`;
+    if (tier === 'app_purchase') return `${credits} scans from your app unlock`;
+    if (tier === 'monthly_member') {
+      return `${credits} scans remaining (monthly allotment + top-ups)`;
+    }
     return `${credits} scans remaining`;
   };
 
@@ -88,13 +64,13 @@ export default function CreditBalance() {
         size="small"
         sx={{
           fontWeight: 600,
-          background: tier === 'admin' 
+          background: tier === 'admin'
             ? 'linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 165, 0, 0.2) 100%)'
             : undefined,
           backdropFilter: 'blur(10px)',
           border: tier === 'admin' ? '1px solid rgba(255, 215, 0, 0.5)' : undefined,
-          boxShadow: credits <= 5 && tier !== 'admin' 
-            ? '0 0 10px rgba(255, 152, 0, 0.5)' 
+          boxShadow: credits <= 10 && tier !== 'admin'
+            ? '0 0 10px rgba(255, 152, 0, 0.4)'
             : undefined,
           animation: credits === 0 ? 'pulse 2s ease-in-out infinite' : undefined,
           '@keyframes pulse': {

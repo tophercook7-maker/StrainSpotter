@@ -25,6 +25,7 @@ import legalRoutes from './routes/legal.js';
 import trendsRoutes from './routes/trends.js';
 import analyticsRoutes from './routes/analytics.js';
 import adminRoutes from './routes/admin.js';
+import adminErrorsRoutes from './routes/admin-errors.js';
 import devRoutes from './routes/dev.js';
 import growersRoutes from './routes/growers.js';
 import seedsRoutes from './routes/seeds.js';
@@ -248,6 +249,34 @@ app.use((req, res, next) => {
 // Enhanced error logging and handler
 const errorLog = [];
 const MAX_ERROR_LOG = 100;
+let cachedStrains = null;
+let cachedStrainsLoadedAt = 0;
+const STRAIN_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+function sanitizeContextBody(body) {
+  if (!body || typeof body !== 'object') return null;
+  try {
+    const clone = JSON.parse(JSON.stringify(body));
+    if (clone.base64) clone.base64 = '[omitted base64]';
+    if (clone.content && typeof clone.content === 'string' && clone.content.length > 500) {
+      clone.content = `${clone.content.slice(0, 500)}…`;
+    }
+    return clone;
+  } catch {
+    return null;
+  }
+}
+
+async function persistAdminError(entry) {
+  if (!supabaseAdmin) return;
+  try {
+    await supabaseAdmin
+      .from('admin_errors')
+      .insert(entry);
+  } catch (err) {
+    console.warn('[admin_errors] Failed to persist:', err?.message || err);
+  }
+}
 
 function logError(err, req) {
   const timestamp = new Date().toISOString();
@@ -280,6 +309,78 @@ function logError(err, req) {
   // Keep in-memory log (last 100 errors)
   errorLog.unshift(errorEntry);
   if (errorLog.length > MAX_ERROR_LOG) errorLog.pop();
+
+  const context = {
+    body: sanitizeContextBody(req?.body),
+    query: req?.query || undefined,
+    headers: req?.headers ? {
+      'x-request-id': req.headers['x-request-id'] || undefined
+    } : undefined
+  };
+
+  persistAdminError({
+    created_at: timestamp,
+    user_id: errorEntry.userId || null,
+    path: errorEntry.url,
+    method: errorEntry.method,
+    status_code: errorEntry.status,
+    message: errorEntry.error,
+    stack: errorEntry.stack,
+    context
+  });
+}
+
+async function loadStrainLibrary(force = false) {
+  const now = Date.now();
+  if (!force && cachedStrains && now - cachedStrainsLoadedAt < STRAIN_CACHE_TTL_MS) {
+    return cachedStrains;
+  }
+
+  let strains = [];
+  const dataDir = new URL('./data/', import.meta.url).pathname;
+  const primary = path.join(dataDir, 'strain_library.json');
+  const enhanced = path.join(dataDir, 'strain_library_enhanced.json');
+
+  if (fs.existsSync(primary)) {
+    strains = JSON.parse(fs.readFileSync(primary, 'utf8'));
+  } else if (fs.existsSync(enhanced)) {
+    strains = JSON.parse(fs.readFileSync(enhanced, 'utf8'));
+  } else {
+    const { data: dbStrains, error: dbError } = await supabase
+      .from('strains')
+      .select('*');
+    if (dbError) {
+      throw new Error(`Supabase error: ${dbError.message}`);
+    }
+    strains = dbStrains || [];
+  }
+
+  if (!strains?.length) {
+    throw new Error('Strain library unavailable');
+  }
+
+  cachedStrains = strains;
+  cachedStrainsLoadedAt = now;
+  return strains;
+}
+
+function serializeMatch(match) {
+  if (!match) return null;
+  const strain = match.strain || {};
+  return {
+    strain_slug: strain.slug,
+    name: strain.name,
+    type: strain.type,
+    description: strain.description,
+    effects: strain.effects,
+    flavors: strain.flavors,
+    thc: strain.thc,
+    cbd: strain.cbd,
+    lineage: strain.lineage,
+    confidence: match.confidence,
+    score: Math.round(match.score || 0),
+    reasoning: match.reasoning
+  };
 }
 
 // Centralized error handler middleware
@@ -353,16 +454,59 @@ app.get('/', (req, res) => {
 // POST /api/uploads  { filename, contentType, base64, user_id? } - with trial enforcement
 app.post('/api/uploads', writeLimiter, async (req, res, next) => {
   try {
-    const { filename, contentType, base64, user_id } = req.body || {};
-    if (!filename || !base64) return res.status(400).json({ error: 'filename and base64 are required' });
-    if (contentType && !/^image\/(png|jpe?g|webp)$/i.test(contentType)) {
-      return res.status(400).json({ error: 'unsupported contentType' });
+    const payload = req.body || {};
+    const { user_id } = payload;
+    let { filename, contentType, base64 } = payload;
+
+    // Legacy/mobile payloads sometimes send { image: 'data:image/...;base64,XXXX' } or imageData
+    const dataUrlFields = ['image', 'imageData', 'data_url'];
+    for (const field of dataUrlFields) {
+      const value = payload[field];
+      if (!base64 && typeof value === 'string') {
+        const commaIndex = value.indexOf(',');
+        if (value.startsWith('data:') && commaIndex >= 0) {
+          const header = value.slice(0, commaIndex);
+          const matches = /^data:([^;]+);base64$/i.exec(header);
+          if (matches && matches[1] && !contentType) {
+            contentType = matches[1];
+          }
+          base64 = value.slice(commaIndex + 1);
+        } else {
+          base64 = value;
+        }
+      }
     }
 
-    // Allow guest uploads - removed authentication requirement
-    // if (!user_id) {
-    //   return res.status(401).json({ error: 'Sign in required to upload scans. Please log in to continue.' });
-    // }
+    if (!filename) {
+      filename = payload.name || `scan-${Date.now()}.jpg`;
+    }
+
+    if (!base64) {
+      return res.status(400).json({
+        error: 'Base64 payload missing',
+        details: { receivedFields: Object.keys(payload || {}) }
+      });
+    }
+
+    const allowedTypes = [
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+      'image/heic',
+      'image/heif'
+    ];
+
+    let normalizedContentType = contentType ? contentType.toLowerCase() : null;
+    if (normalizedContentType && !allowedTypes.includes(normalizedContentType)) {
+      return res.status(400).json({
+        error: 'unsupported contentType',
+        details: { contentType: normalizedContentType, allowedTypes }
+      });
+    }
+    if (!normalizedContentType) {
+      normalizedContentType = 'image/jpeg';
+    }
 
     // Ensure starter credits exist and membership bundle is aligned before any processing (only if user is logged in)
     if (user_id) {
@@ -370,7 +514,12 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
       await ensureMonthlyBundle(user_id);
     }
 
-    let buffer = Buffer.from(base64, 'base64');
+    let buffer;
+    try {
+      buffer = Buffer.from(base64, 'base64');
+    } catch (err) {
+      return res.status(400).json({ error: 'Invalid base64 payload', details: err.message });
+    }
 
     // Allow anon uploads: if user_id is missing/null, use 'anon' for image_key and owner
     const uploadOwnerId = (user_id && String(user_id)) || (req.headers['x-session-id'] && String(req.headers['x-session-id'])) || req.ip || 'anon';
@@ -407,7 +556,7 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
 
   // Prefer service role for storage writes to bypass RLS
   const storageClient = supabaseAdmin ?? supabase;
-  const { error: upErr } = await storageClient.storage.from(normalizedBucket).upload(normalizedKey, buffer, { contentType });
+  const { error: upErr } = await storageClient.storage.from(normalizedBucket).upload(normalizedKey, buffer, { contentType: normalizedContentType });
     if (upErr) {
       if (upErr.message?.toLowerCase().includes('bucket not found')) {
         // Try to create bucket once (best-effort)
@@ -879,6 +1028,56 @@ app.post('/api/scans/:id/save-match', async (req, res) => {
   }
 });
 
+app.post('/api/scans/:id/match', async (req, res) => {
+  const readClient = supabaseAdmin ?? supabase;
+  const writeClient = supabaseAdmin ?? supabase;
+  try {
+    const { id } = req.params;
+    const { data: scan, error } = await readClient
+      .from('scans')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) return res.status(500).json({ error: error.message });
+    if (!scan) return res.status(404).json({ error: 'Scan not found' });
+    if (!scan.result) {
+      return res.status(400).json({ error: 'Scan has no Vision result yet. Run /api/scans/:id/process first.' });
+    }
+
+    const strains = await loadStrainLibrary();
+    const matches = matchStrainByVisuals(scan.result, strains) || [];
+    const topMatch = matches[0] || null;
+    const payload = {
+      match: serializeMatch(topMatch),
+      candidates: matches.slice(1, 5).map(serializeMatch).filter(Boolean)
+    };
+
+    const updatedResult = {
+      ...scan.result,
+      visualMatches: payload
+    };
+
+    await writeClient
+      .from('scans')
+      .update({
+        result: updatedResult,
+        status: 'done',
+        matched_strain_slug: payload.match?.strain_slug || scan.matched_strain_slug || null,
+        processed_at: scan.processed_at || new Date().toISOString()
+      })
+      .eq('id', id);
+
+    res.json({
+      ok: true,
+      scan_id: id,
+      ...payload
+    });
+  } catch (e) {
+    logError(e, req);
+    res.status(500).json({ error: 'Failed to run visual match. Please try again.' });
+  }
+});
+
 // POST /api/visual-match - Match strain by Vision API results
 app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
   try {
@@ -887,44 +1086,14 @@ app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
       return res.status(400).json({ error: 'visionResult required' });
     }
 
-    // Load strain library (try JSON file first, fallback to Supabase for Vercel)
     let strains = [];
     try {
-      const dataDir = new URL('./data/', import.meta.url).pathname;
-      const primary = path.join(dataDir, 'strain_library.json');
-      const enhanced = path.join(dataDir, 'strain_library_enhanced.json');
-
-      // Try to load from filesystem first (local development)
-      if (fs.existsSync(primary)) {
-        strains = JSON.parse(fs.readFileSync(primary, 'utf8'));
-        console.log(`[VisualMatch] Loaded ${strains.length} strains from primary JSON`);
-      } else if (fs.existsSync(enhanced)) {
-        strains = JSON.parse(fs.readFileSync(enhanced, 'utf8'));
-        console.log(`[VisualMatch] Loaded ${strains.length} strains from enhanced JSON`);
-      } else {
-        // Fallback to Supabase (production/Vercel)
-        console.log('[VisualMatch] JSON files not found, loading from Supabase...');
-        const { data: dbStrains, error: dbError } = await supabase
-          .from('strains')
-          .select('*');
-
-        if (dbError) {
-          throw new Error(`Supabase error: ${dbError.message}`);
-        }
-
-        strains = dbStrains || [];
-        console.log(`[VisualMatch] Loaded ${strains.length} strains from Supabase`);
-      }
-
-      if (!strains || strains.length === 0) {
-        throw new Error('No strains loaded from any source');
-      }
+      strains = await loadStrainLibrary();
     } catch (e) {
       console.error('[VisualMatch] Could not load strain library:', e);
       return res.status(500).json({ error: 'Strain library unavailable', details: e.message });
     }
 
-    // Perform visual matching
     const matches = matchStrainByVisuals(visionResult, strains);
 
     console.log(`[VisualMatch] Found ${matches.length} matches, top score: ${matches[0]?.score || 0}`);
@@ -971,6 +1140,7 @@ app.use('/api/legal', legalRoutes);
 app.use('/api/trends', trendsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/errors', adminErrorsRoutes);
 app.use('/api/dev', devRoutes);
 app.use('/api/growers', growersRoutes);
 app.use('/api/seeds', seedsRoutes);

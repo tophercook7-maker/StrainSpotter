@@ -4,9 +4,9 @@ import { AuthProvider } from './contexts/AuthContext';
 import MobileOnlyGuard from './components/MobileOnlyGuard';
 import AgeGate from './components/AgeGate';
 import Auth from './components/Auth';
-import Scanner from './components/Scanner';
 import ScanHistory from './components/ScanHistory';
 import ScanWizard from './components/ScanWizard';
+import ScanPage from './components/ScanPage';
 // Navigation components removed in favor of on-screen action buttons
 import FeedbackChat from './components/FeedbackChat';
 import { API_BASE } from './config';
@@ -32,6 +32,13 @@ import ErrorViewer from './components/ErrorViewer';
 import ErrorBoundary from './components/ErrorBoundary';
 import EmergencyLogout from './components/EmergencyLogout';
 import OnboardingFlow from './components/OnboardingFlow';
+import FirstRunIntro from './components/FirstRunIntro';
+import JournalPage from './components/JournalPage';
+import FloatingScanButton from './components/FloatingScanButton';
+import ScanBalanceIndicator from './components/ScanBalanceIndicator';
+import BuyScansModal from './components/BuyScansModal';
+import AdminStatus from './components/AdminStatus';
+import { logEvent } from './utils/analyticsClient.js';
 
 import PasswordReset from './components/PasswordReset';
 // Apply full marijuana-themed design with cannabis leaf icon and hero.png
@@ -40,6 +47,17 @@ const theme = createTheme(muiThemeOverrides);
 function App() {
   const [ageVerified, setAgeVerified] = useState(false);
   const [currentView, setCurrentView] = useState('home');
+  const [showIntro, setShowIntro] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    try {
+      return localStorage.getItem('ss_intro_complete') !== 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [showGlobalBuyScans, setShowGlobalBuyScans] = useState(false);
   // Dev-only dashboard removed from navigation
 
   useEffect(() => {
@@ -86,6 +104,20 @@ function App() {
     }
   }, []);
 
+  useEffect(() => {
+    const handler = (event) => {
+      if (event?.detail) {
+        setCurrentView(event.detail);
+      }
+    };
+    window.addEventListener('nav:set-view', handler);
+    return () => window.removeEventListener('nav:set-view', handler);
+  }, []);
+
+  useEffect(() => {
+    logEvent('app_start', { mode: import.meta.env.MODE, apiBase: API_BASE });
+  }, []);
+
   // Stay on Home by default; no auto-redirect to Scanner so users see actions clearly
 
   const handleAgeVerify = () => {
@@ -123,14 +155,25 @@ function App() {
           {/* No navigation bar - all actions are on-screen buttons */}
           <div style={{ position: 'relative', zIndex: 10 }}>
             <OnboardingFlow />
+            <FirstRunIntro
+              open={showIntro}
+              onFinish={() => {
+                try {
+                  localStorage.setItem('ss_intro_complete', 'true');
+                } catch {}
+                setShowIntro(false);
+                setCurrentView('scanner');
+              }}
+            />
+            <ScanBalanceIndicator onBuyCredits={() => setShowGlobalBuyScans(true)} />
             {currentView === 'home' && (
               <Home onNavigate={setCurrentView} />
             )}
-            {currentView === 'scanner' && (
-              <Scanner onViewHistory={() => setCurrentView('history')} onBack={() => setCurrentView('home')} />
-            )}
-            {currentView === 'guest-scan' && (
-              <Scanner onViewHistory={() => setCurrentView('history')} onBack={() => setCurrentView('home')} />
+            {['scanner', 'guest-scan', 'scan'].includes(currentView) && (
+              <ScanPage
+                onBack={() => setCurrentView('home')}
+                onNavigate={(view) => setCurrentView(view)}
+              />
             )}
             {currentView === 'wizard' && (
               <ScanWizard onBack={() => setCurrentView('home')} />
@@ -171,6 +214,12 @@ function App() {
             {currentView === 'friends' && (
               <Friends onBack={() => setCurrentView('home')} />
             )}
+            {currentView === 'admin-status' && (
+              <AdminStatus onBack={() => setCurrentView('home')} onNavigate={setCurrentView} />
+            )}
+            {currentView === 'journal' && (
+              <JournalPage onBack={() => setCurrentView('home')} />
+            )}
             {currentView === 'strains' && (
               <StrainBrowser onNavigate={setCurrentView} />
             )}
@@ -195,10 +244,12 @@ function App() {
             {currentView === 'emergency-logout' && (
               <EmergencyLogout />
             )}
+            <FloatingScanButton onClick={() => setCurrentView('scanner')} />
           </div>
         </GuidelinesGate>
       </ErrorBoundary>
         </MobileOnlyGuard>
+        <BuyScansModal open={showGlobalBuyScans} onClose={() => setShowGlobalBuyScans(false)} />
       </AuthProvider>
     </ThemeProvider>
   );

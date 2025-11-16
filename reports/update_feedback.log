@@ -1,0 +1,7 @@
+# Update Feedback Log
+
+This file records feedback, actions, and status for major updates, deployments, and fixes.
+
+- 2025-10-21: Created feedback log for update actions.
+- 2025-10-21: Backend scan flow fixed, trial bypass enabled if table missing, Vision self-test and full scan working. No new errors in logs except old ESM loader traces (not blocking).
+- 2025-10-21: Proceeding to backend deployment for Vercel and finishing Supabase Edge Function for scanning. Will log all further status here.

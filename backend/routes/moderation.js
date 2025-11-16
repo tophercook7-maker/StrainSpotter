@@ -1,24 +1,12 @@
 import express from 'express';
 import { supabase } from '../supabaseClient.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
+import { requireAdmin, requireModerator } from '../utils/accessControl.js';
+import { logModerationAction } from '../utils/moderationAudit.js';
 
 const router = express.Router();
 const readClient = supabase;
 const writeClient = supabaseAdmin ?? supabase;
-
-// ============================================
-// HELPER: Check if user is moderator
-// ============================================
-async function isModerator(userId) {
-  const { data, error } = await readClient
-    .from('moderators')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .single();
-
-  return !error && data;
-}
 
 // POST /api/moderation/report - Report a message
 router.post('/report', express.json(), async (req, res, next) => {
@@ -57,6 +45,13 @@ router.post('/report', express.json(), async (req, res, next) => {
       return res.status(500).json({ error: error.message });
     }
     
+    await logModerationAction({
+      actorUserId: req.authContext?.user?.id,
+      targetUserId: report?.messages?.sender_id || null,
+      action: 'resolve_report',
+      metadata: { reportId: id, actionTaken: action }
+    });
+
     res.json({ success: true, report: data });
   } catch (e) {
     next(e);
@@ -64,7 +59,7 @@ router.post('/report', express.json(), async (req, res, next) => {
 });
 
 // GET /api/moderation/reports - List all reports (admin)
-router.get('/reports', async (req, res, next) => {
+router.get('/reports', requireAdmin, async (req, res, next) => {
   try {
     const { status = 'pending' } = req.query;
     
@@ -95,7 +90,7 @@ router.get('/reports', async (req, res, next) => {
 });
 
 // POST /api/moderation/reports/:id/resolve - Resolve a report (admin)
-router.post('/reports/:id/resolve', express.json(), async (req, res, next) => {
+router.post('/reports/:id/resolve', requireAdmin, express.json(), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { action, moderator_notes } = req.body;
@@ -153,7 +148,7 @@ router.post('/reports/:id/resolve', express.json(), async (req, res, next) => {
 });
 
 // GET /api/moderation/stats - Moderation statistics (admin)
-router.get('/stats', async (req, res, next) => {
+router.get('/stats', requireAdmin, async (req, res, next) => {
   try {
     const { data: pending } = await readClient
       .from('moderation_reports')
@@ -187,20 +182,8 @@ router.get('/stats', async (req, res, next) => {
  * GET /api/moderation/flagged-messages
  * Get all flagged messages (moderators only)
  */
-router.get('/flagged-messages', async (req, res, next) => {
+router.get('/flagged-messages', requireModerator, async (req, res, next) => {
   try {
-    const { userId } = req.query;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
-    // Check if user is moderator
-    const moderator = await isModerator(userId);
-    if (!moderator) {
-      return res.status(403).json({ error: 'Not authorized. Moderators only.' });
-    }
-
     const { data, error } = await readClient
       .from('messages')
       .select('*, sender:profiles!sender_id(*), conversation:conversations(*)')
@@ -224,20 +207,8 @@ router.get('/flagged-messages', async (req, res, next) => {
  * GET /api/moderation/pending-images
  * Get pending grower profile images (moderators only)
  */
-router.get('/pending-images', async (req, res, next) => {
+router.get('/pending-images', requireModerator, async (req, res, next) => {
   try {
-    const { userId } = req.query;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
-    // Check if user is moderator
-    const moderator = await isModerator(userId);
-    if (!moderator) {
-      return res.status(403).json({ error: 'Not authorized. Moderators only.' });
-    }
-
     const { data, error } = await readClient
       .from('profiles')
       .select('*')
@@ -262,26 +233,16 @@ router.get('/pending-images', async (req, res, next) => {
  * POST /api/moderation/approve-image/:targetUserId
  * Approve a grower profile image (moderators only)
  */
-router.post('/approve-image/:targetUserId', express.json(), async (req, res, next) => {
+router.post('/approve-image/:targetUserId', requireModerator, express.json(), async (req, res, next) => {
   try {
     const { targetUserId } = req.params;
-    const { userId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
-    // Check if user is moderator
-    const moderator = await isModerator(userId);
-    if (!moderator) {
-      return res.status(403).json({ error: 'Not authorized. Moderators only.' });
-    }
+    const moderatorId = req.authContext?.user?.id;
 
     const { data, error } = await writeClient
       .from('profiles')
       .update({
         grower_image_approved: true,
-        grower_image_moderated_by: userId,
+        grower_image_moderated_by: moderatorId,
         grower_image_moderated_at: new Date().toISOString()
       })
       .eq('user_id', targetUserId)
@@ -293,6 +254,13 @@ router.post('/approve-image/:targetUserId', express.json(), async (req, res, nex
       return res.status(500).json({ error: error.message });
     }
 
+    await logModerationAction({
+      actorUserId: moderatorId,
+      targetUserId,
+      action: 'approve_profile_image',
+      metadata: {}
+    });
+
     res.json({ success: true, profile: data });
   } catch (e) {
     next(e);
@@ -303,27 +271,18 @@ router.post('/approve-image/:targetUserId', express.json(), async (req, res, nex
  * POST /api/moderation/reject-image/:targetUserId
  * Reject a grower profile image (moderators only)
  */
-router.post('/reject-image/:targetUserId', express.json(), async (req, res, next) => {
+router.post('/reject-image/:targetUserId', requireModerator, express.json(), async (req, res, next) => {
   try {
     const { targetUserId } = req.params;
-    const { userId, reason } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
-    // Check if user is moderator
-    const moderator = await isModerator(userId);
-    if (!moderator) {
-      return res.status(403).json({ error: 'Not authorized. Moderators only.' });
-    }
+    const moderatorId = req.authContext?.user?.id;
+    const { reason } = req.body;
 
     const { data, error } = await writeClient
       .from('profiles')
       .update({
         grower_profile_image_url: null,
         grower_image_approved: false,
-        grower_image_moderated_by: userId,
+        grower_image_moderated_by: moderatorId,
         grower_image_moderated_at: new Date().toISOString()
       })
       .eq('user_id', targetUserId)
@@ -336,6 +295,13 @@ router.post('/reject-image/:targetUserId', express.json(), async (req, res, next
     }
 
     // TODO: Send notification to user with rejection reason
+
+    await logModerationAction({
+      actorUserId: moderatorId,
+      targetUserId,
+      action: 'reject_profile_image',
+      metadata: { reason }
+    });
 
     res.json({ success: true, profile: data, reason });
   } catch (e) {

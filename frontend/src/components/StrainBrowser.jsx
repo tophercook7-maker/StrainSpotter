@@ -17,9 +17,13 @@ import FavoriteIcon from '@mui/icons-material/Favorite';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import SortIcon from '@mui/icons-material/Sort';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import NoteAltIcon from '@mui/icons-material/NoteAlt';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import { supabase } from '../supabaseClient';
 import { API_BASE } from '../config';
 import SeedVendorFinder from './SeedVendorFinder';
+import JournalDialog from './JournalDialog';
+import EmptyStateCard from './EmptyStateCard';
 
 const STRAINS_PER_PAGE = 100; // Display 100 strains at a time
 const FETCH_BATCH_SIZE = 1000; // Fetch 1000 strains per database query
@@ -51,8 +55,20 @@ export default function StrainBrowser({ onBack }) {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [showSeedFinder, setShowSeedFinder] = useState(false);
   const [seedFinderStrain, setSeedFinderStrain] = useState(null);
+  const [showingFavorites, setShowingFavorites] = useState(false);
+  const [journalDialogOpen, setJournalDialogOpen] = useState(false);
+  const [journalDefaults, setJournalDefaults] = useState(null);
 
   const observerTarget = useRef(null);
+
+  const handleLogExperience = (strain) => {
+    if (!strain) return;
+    setJournalDefaults({
+      strain_name: strain.name,
+      strain_slug: strain.slug
+    });
+    setJournalDialogOpen(true);
+  };
 
   // Detect user location on mount
   useEffect(() => {
@@ -231,6 +247,7 @@ export default function StrainBrowser({ onBack }) {
 
   // Filter strains when search/type/sort/thc changes
   const filterStrains = useCallback(() => {
+    setShowingFavorites(false);
     let filtered = [...strains];
 
     if (searchQuery) {
@@ -498,8 +515,14 @@ export default function StrainBrowser({ onBack }) {
             </Box>
           )}
           <Grid container spacing={2} sx={{ mt: 2 }}>
+            <Grid item xs={6} sm={3}>
+              <Paper sx={{ p: 2, bgcolor: 'rgba(124, 179, 66, 0.15)', borderRadius: 2 }}>
+                <Typography variant="caption" sx={{ color: '#e0e0e0' }}>Type</Typography>
+                <Typography variant="h6" sx={{ color: '#fff', textTransform: 'capitalize' }}>{selectedStrain.type || 'Unknown'}</Typography>
+              </Paper>
+            </Grid>
             {selectedStrain.thc && (
-              <Grid item xs={6}>
+              <Grid item xs={6} sm={3}>
                 <Paper sx={{ p: 2, bgcolor: 'rgba(124, 179, 66, 0.2)', borderRadius: 2 }}>
                   <Typography variant="caption" sx={{ color: '#e0e0e0' }}>THC</Typography>
                   <Typography variant="h5" sx={{ color: '#7cb342', fontWeight: 700 }}>{selectedStrain.thc}%</Typography>
@@ -507,13 +530,29 @@ export default function StrainBrowser({ onBack }) {
               </Grid>
             )}
             {selectedStrain.cbd && (
-              <Grid item xs={6}>
+              <Grid item xs={6} sm={3}>
                 <Paper sx={{ p: 2, bgcolor: 'rgba(33, 150, 243, 0.2)', borderRadius: 2 }}>
                   <Typography variant="caption" sx={{ color: '#e0e0e0' }}>CBD</Typography>
                   <Typography variant="h5" sx={{ color: '#2196f3', fontWeight: 700 }}>{selectedStrain.cbd}%</Typography>
                 </Paper>
               </Grid>
             )}
+            <Grid item xs={12} sm={selectedStrain.cbd ? 3 : 6}>
+              <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.08)', borderRadius: 2 }}>
+                <Typography variant="caption" sx={{ color: '#e0e0e0' }}>Common effects</Typography>
+                <Typography variant="body2" sx={{ color: '#fff' }}>
+                  {selectedStrain.effects?.slice(0, 3).join(', ') || '—'}
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.08)', borderRadius: 2 }}>
+                <Typography variant="caption" sx={{ color: '#e0e0e0' }}>Flavors</Typography>
+                <Typography variant="body2" sx={{ color: '#fff' }}>
+                  {selectedStrain.flavors?.slice(0, 3).join(', ') || '—'}
+                </Typography>
+              </Paper>
+            </Grid>
           </Grid>
         </Box>
       );
@@ -844,6 +883,19 @@ export default function StrainBrowser({ onBack }) {
               </>
             )}
           </Typography>
+          {showingFavorites && (
+            <Button
+              size="small"
+              variant="text"
+              onClick={() => {
+                setShowingFavorites(false);
+                filterStrains();
+              }}
+              sx={{ color: '#7cb342' }}
+            >
+              Show all strains
+            </Button>
+          )}
           {favorites.length > 0 && (
             <Tooltip title="View favorites">
               <Chip
@@ -851,12 +903,19 @@ export default function StrainBrowser({ onBack }) {
                 icon={<FavoriteIcon sx={{ fontSize: 16 }} />}
                 label={`${favorites.length}`}
                 onClick={() => {
-                  // Filter to show only favorites
-                  setSearchQuery('');
-                  setTypeFilter('all');
-                  const favStrains = strains.filter(s => favorites.includes(s.slug));
-                  setFilteredStrains(favStrains);
-                  setSnackbar({ open: true, message: 'Showing favorites only', severity: 'info' });
+                      if (favorites.length === 0) {
+                        setSnackbar({ open: true, message: 'No favorites yet. Tap the heart on any strain to save it.', severity: 'warning' });
+                        return;
+                      }
+                      // Filter to show only favorites
+                      setSearchQuery('');
+                      setTypeFilter('all');
+                      const favStrains = strains.filter(s => favorites.includes(s.slug));
+                      setFilteredStrains(favStrains);
+                      setDisplayedStrains(favStrains.slice(0, STRAINS_PER_PAGE));
+                      setHasMore(false);
+                      setShowingFavorites(true);
+                      setSnackbar({ open: true, message: 'Showing favorites only', severity: 'info' });
                 }}
                 sx={{
                   bgcolor: 'rgba(255, 64, 129, 0.2)',
@@ -871,6 +930,18 @@ export default function StrainBrowser({ onBack }) {
           )}
         </Stack>
       </Paper>
+
+      {!loading && favorites.length === 0 && (
+        <Box sx={{ mb: 3 }}>
+          <EmptyStateCard
+            title="No favorites yet"
+            description="Tap the heart icon on any strain to pin it here for quick access."
+            icon={<FavoriteBorderIcon sx={{ fontSize: 48, color: '#ff4081' }} />}
+            actionLabel="Browse strains"
+            onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          />
+        </Box>
+      )}
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress sx={{ color: '#7cb342' }} /></Box>
@@ -1045,12 +1116,34 @@ export default function StrainBrowser({ onBack }) {
           borderBottom: '1px solid rgba(124, 179, 66, 0.3)',
           pt: 'calc(env(safe-area-inset-top) + 16px)'
         }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Box>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
+            <Box sx={{ flex: 1 }}>
               <Typography variant="h5" sx={{ fontWeight: 700, fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>{selectedStrain?.name}</Typography>
               <Chip label={selectedStrain?.type || 'Unknown'} size="small" sx={{ bgcolor: getTypeColor(selectedStrain?.type), color: '#fff', fontWeight: 600, mt: 1 }} />
             </Box>
-            <IconButton onClick={() => setDetailsOpen(false)} sx={{ color: '#fff' }}><CloseIcon /></IconButton>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<NoteAltIcon />}
+                onClick={() => handleLogExperience(selectedStrain)}
+              >
+                Log experience
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<LibraryBooksIcon />}
+                onClick={() => {
+                  setDetailsOpen(false);
+                  window.dispatchEvent(new CustomEvent('nav:set-view', { detail: 'grow-coach' }));
+                }}
+                sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.3)' }}
+              >
+                Grow log
+              </Button>
+              <IconButton onClick={() => setDetailsOpen(false)} sx={{ color: '#fff' }}><CloseIcon /></IconButton>
+            </Stack>
           </Stack>
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -1079,6 +1172,15 @@ export default function StrainBrowser({ onBack }) {
           {snackbar.message}
         </Alert>
       </Snackbar>
+      <JournalDialog
+        open={journalDialogOpen}
+        defaults={journalDefaults}
+        onClose={() => setJournalDialogOpen(false)}
+        onSaved={() => {
+          setJournalDialogOpen(false);
+          setSnackbar({ open: true, message: 'Journal entry saved.', severity: 'success' });
+        }}
+      />
     </Box>
   );
 }

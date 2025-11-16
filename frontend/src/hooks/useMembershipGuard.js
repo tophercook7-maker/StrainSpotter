@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import { API_BASE } from '../config';
 
 /**
  * Hook to monitor membership status and prevent logout until payment is resolved
@@ -17,26 +18,34 @@ export function useMembershipGuard() {
       const currentUser = session?.user || null;
       setUser(currentUser);
 
-      if (currentUser) {
-        const membership = currentUser.user_metadata?.membership;
-        const membershipStarted = currentUser.user_metadata?.membership_started;
-        
-        setIsMember(membership === 'club');
+      let inferredTier = null;
 
-        // Check if membership is expired (example: 30 days grace period)
-        if (membership === 'club' && membershipStarted) {
-          const startDate = new Date(membershipStarted);
-          const now = new Date();
-          const daysSinceStart = (now - startDate) / (1000 * 60 * 60 * 24);
-          
-          // If more than 30 days and no payment, mark as expired
-          // In production, this would check actual subscription status from payment provider
-          setIsExpired(daysSinceStart > 30);
+      if (currentUser?.id && session?.access_token) {
+        try {
+          const resp = await fetch(`${API_BASE}/api/credits/balance`, {
+            headers: { Authorization: `Bearer ${session.access_token}` }
+          });
+          if (resp.ok) {
+            const payload = await resp.json();
+            inferredTier = payload?.tier || null;
+          }
+        } catch (err) {
+          console.warn('useMembershipGuard: failed to fetch credit balance', err);
         }
-      } else {
-        setIsMember(false);
-        setIsExpired(false);
       }
+
+      if (!inferredTier && currentUser) {
+        const metadataTier = (currentUser.user_metadata?.membership || '').toLowerCase();
+        if (metadataTier.includes('club')) {
+          inferredTier = 'monthly_member';
+        }
+      }
+
+      const normalizedTier = (inferredTier || '').toLowerCase();
+      const memberTiers = new Set(['monthly_member', 'admin']);
+
+      setIsMember(memberTiers.has(normalizedTier));
+      setIsExpired(false);
     } catch (e) {
       console.error('Membership check failed:', e);
     } finally {
@@ -56,7 +65,14 @@ export function useMembershipGuard() {
 
   // Admin users can always logout
   // Regular users can only logout if they're not a member or if membership is not expired
-  const isAdmin = user?.email === 'strainspotter25@gmail.com' || user?.email === 'admin@strainspotter.com';
+  const adminEmails = new Set([
+    'topher.cook7@gmail.com',
+    'andrewbeck209@gmail.com',
+    'strainspotter25feedback@gmail.com',
+    'strainspotter25@gmail.com',
+    'admin@strainspotter.com'
+  ]);
+  const isAdmin = adminEmails.has((user?.email || '').toLowerCase());
   const canLogout = isAdmin || !isMember || !isExpired;
 
   return {

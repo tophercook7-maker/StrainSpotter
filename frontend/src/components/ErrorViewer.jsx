@@ -12,6 +12,7 @@ import {
   Divider
 } from '@mui/material';
 import { API_BASE } from '../config';
+import { supabase } from '../supabaseClient';
 
 export default function ErrorViewer({ onBack }) {
   const [errors, setErrors] = useState([]);
@@ -21,7 +22,15 @@ export default function ErrorViewer({ onBack }) {
   const loadErrors = async () => {
     setLoading(true);
     try {
-      const resp = await fetch(`${API_BASE}/api/errors/recent`);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setMessage('Sign in as an admin to view recent errors.');
+        setErrors([]);
+        return;
+      }
+      const resp = await fetch(`${API_BASE}/api/admin/errors/recent?limit=100`, {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
       if (!resp.ok) {
         const text = await resp.text();
         setMessage(text || 'Failed to load errors');
@@ -81,37 +90,45 @@ export default function ErrorViewer({ onBack }) {
             <Card 
               key={idx}
               sx={{ 
-                bgcolor: err.status >= 500 ? 'rgba(211, 47, 47, 0.05)' : 'rgba(255, 152, 0, 0.05)',
-                border: `1px solid ${err.status >= 500 ? '#d32f2f44' : '#ff980044'}`
+                bgcolor: (err.status_code || 0) >= 500 ? 'rgba(211, 47, 47, 0.05)' : 'rgba(255, 152, 0, 0.05)',
+                border: `1px solid ${(err.status_code || 0) >= 500 ? '#d32f2f44' : '#ff980044'}`
               }}
             >
               <CardContent>
                 <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
                   <Chip 
-                    label={`${err.status}`} 
-                    color={getStatusColor(err.status)} 
+                    label={`${err.status_code ?? 'n/a'}`} 
+                    color={getStatusColor(err.status_code ?? 0)} 
                     size="small" 
                   />
                   <Chip 
-                    label={err.method} 
+                    label={err.method || 'SERVER'} 
                     variant="outlined" 
                     size="small" 
                   />
                   <Typography variant="caption" color="text.secondary">
-                    {new Date(err.timestamp).toLocaleString()}
+                    {new Date(err.created_at).toLocaleString()}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-                    User: {err.userId}
+                    User: {err.user_id || 'n/a'}
                   </Typography>
                 </Stack>
 
                 <Typography variant="body2" fontWeight="bold" sx={{ mb: 1 }}>
-                  Endpoint: <code>{err.url}</code>
+                  Endpoint: <code>{err.path}</code>
                 </Typography>
 
                 <Typography variant="body1" color="error.main" sx={{ mb: 2 }}>
-                  ❌ {err.error}
+                  ❌ {err.message}
                 </Typography>
+
+                {err.context?.client && (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    Client crash on {err.context.client.currentView || err.context.client.location || 'unknown view'}
+                    <br />
+                    {err.context.client.userAgent}
+                  </Alert>
+                )}
 
                 {err.stack && (
                   <>

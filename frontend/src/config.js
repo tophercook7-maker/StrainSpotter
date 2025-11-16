@@ -18,7 +18,7 @@ const DEFAULT_REMOTE_API = 'https://strainspotter.onrender.com';
 // If we're on localhost but VITE_API_BASE points to a remote server (e.g., Vercel), use the local backend to avoid CORS in dev.
 // If we're in Capacitor (mobile app), always use the remote API
 const resolvedForLocal = isCapacitor
-  ? (fromEnv || DEFAULT_REMOTE_API)
+  ? (!fromEnv || /localhost|127\.0\.0\.1/.test(fromEnv) ? DEFAULT_REMOTE_API : fromEnv)
   : isLocalhost
     ? (isEnvLocal ? fromEnv : 'http://localhost:5181')
     : (fromEnv || DEFAULT_REMOTE_API);
@@ -29,6 +29,10 @@ export const API_BASE = resolvedForLocal.replace(/\/$/, '');
 console.log('[Config] API_BASE:', API_BASE);
 console.log('[Config] isCapacitor:', isCapacitor);
 console.log('[Config] isLocalhost:', isLocalhost);
+
+if (!isLocalhost && !isCapacitor && !fromEnv) {
+  console.warn('[Config] VITE_API_BASE not set. Falling back to default remote API.');
+}
 
 // Functions base (Edge Functions if provided, otherwise fall back to backend API routes)
 // This ensures uploads/processing work even if Supabase Edge Functions aren't deployed yet.

@@ -549,7 +549,7 @@ export default function GardenGate({ onSuccess, onBack }) {
               Join the Club
             </Typography>
             <Typography variant="body1" sx={{ mb: 3, color: '#e0e0e0' }}>
-              Get unlimited access to all features for just $4.99/month
+              Unlock StrainSpotter (20 scans) and add Monthly Member for $4.99/month (200 scans/month + perks)
             </Typography>
             
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -563,7 +563,7 @@ export default function GardenGate({ onSuccess, onBack }) {
                 <Box sx={{ p: 3, bgcolor: 'rgba(0,0,0,0.3)', borderRadius: 2, mb: 2 }}>
                   <Typography variant="h6" sx={{ color: '#fff', mb: 1 }}>Membership Benefits:</Typography>
                   <Typography variant="body2" sx={{ color: '#e0e0e0', textAlign: 'left' }}>
-                    ✓ Unlimited AI scans<br />
+                    ✓ 200 AI scans per month + extra top-ups (50/200/500)<br />
                     ✓ Leave reviews & ratings<br />
                     ✓ Access to community groups<br />
                     ✓ Grow coach & expert tips<br />

@@ -3,10 +3,14 @@ import { Box, Button, Typography, Stack, Container, Fab } from '@mui/material';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import SpaIcon from '@mui/icons-material/Spa';
 import FeedbackIcon from '@mui/icons-material/Feedback';
+import TroubleshootIcon from '@mui/icons-material/Troubleshoot';
 import ScanWizard from './ScanWizard';
+import ScanPage from './ScanPage';
 import GardenGate from './GardenGate';
 import Garden from './Garden';
 import FeedbackModal from './FeedbackModal';
+import { useAuth } from '../hooks/useAuth';
+import { isAdminEmail } from '../utils/roles';
 
 // Ultra-Simple Landing Page - Just Scan & Garden
 
@@ -15,9 +19,11 @@ export default function Home({ onNavigate }) {
   const [showGarden, setShowGarden] = useState(false);
   const [inGarden, setInGarden] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = isAdminEmail(user?.email);
 
   if (showScan) {
-    return <ScanWizard onBack={() => setShowScan(false)} />;
+    return <ScanPage onBack={() => setShowScan(false)} onNavigate={onNavigate} />;
   }
 
   if (showGarden && !inGarden) {
@@ -223,6 +229,17 @@ export default function Home({ onNavigate }) {
           >
             35,000+ Strains • Instant Results • AI-Powered
           </Typography>
+          {isAdmin && (
+            <Button
+              variant="text"
+              size="small"
+              startIcon={<TroubleshootIcon fontSize="small" />}
+              onClick={() => onNavigate('admin-status')}
+              sx={{ color: '#A5D6A7', textTransform: 'none' }}
+            >
+              Status & Debug tools
+            </Button>
+          )}
         </Stack>
       </Container>
 

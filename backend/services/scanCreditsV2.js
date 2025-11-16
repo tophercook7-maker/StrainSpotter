@@ -1,18 +1,23 @@
 /**
  * Scan Credits Service V2
- * 
- * Implements tiered credit system:
- * - Free: 10 scans lifetime
- * - Member ($4.99): 200 scans/month
- * - Premium ($14.99): 1200 scans/month
- * - Moderator: 500 scans/month
- * - Admin: Unlimited
+ *
+ * New simplified plan:
+ * - free: default trial bucket (10 scans lifetime)
+ * - app_purchase: one-time unlock (20 scans lifetime)
+ * - monthly_member: $4.99 / 200 scans per month
+ * - admin: unlimited (internal use)
+ *
+ * Moderators now receive discounted pricing but STILL pay for plans / top-ups.
+ * Discount application happens in the credits routes, not here—deduction logic
+ * remains identical regardless of profile.role.
  */
 
 import { supabase } from '../supabaseClient.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 
 const db = supabaseAdmin ?? supabase;
+
+const VALID_TIERS = ['free', 'app_purchase', 'monthly_member', 'admin'];
 
 /**
  * Get user's credit balance and tier info
@@ -155,8 +160,7 @@ export async function upgradeTier(userId, newTier) {
     throw new Error('User ID required');
   }
 
-  const validTiers = ['free', 'member', 'premium', 'moderator', 'admin'];
-  if (!validTiers.includes(newTier)) {
+  if (!VALID_TIERS.includes(newTier)) {
     throw new Error(`Invalid tier: ${newTier}`);
   }
 
@@ -221,17 +225,20 @@ export async function getCreditSummary(userId) {
     const balance = await getCreditBalance(userId);
     const hasAvailableCredits = await hasCredits(userId);
 
-    return {
+    const baseSummary = {
       tier: balance.tier,
       creditsRemaining: balance.creditsRemaining,
       monthlyLimit: balance.monthlyLimit,
       usedThisMonth: balance.usedThisMonth,
       lifetimeScansUsed: balance.lifetimeScansUsed,
       resetAt: balance.resetAt,
+      bonusCredits: balance.bonusCredits ?? balance.lifetimeCredits ?? 0,
       hasCredits: hasAvailableCredits,
       isUnlimited: balance.tier === 'admin',
-      needsUpgrade: !hasAvailableCredits && balance.tier === 'free'
+      needsUpgrade: !hasAvailableCredits && (balance.tier === 'free' || balance.tier === 'app_purchase')
     };
+
+    return baseSummary;
   } catch (e) {
     console.error('[scanCreditsV2] getCreditSummary exception:', e);
     throw e;

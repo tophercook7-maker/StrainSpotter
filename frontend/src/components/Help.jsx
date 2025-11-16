@@ -130,7 +130,7 @@ export default function Help({ onNavigate, onBack }) {
                 <Typography variant="body2"><strong>2. Enable Location:</strong> Allow location access for nearby dispensaries and grower directory.</Typography>
                 <Typography variant="body2"><strong>3. Start Scanning:</strong> Tap the Scanner tile and take a photo of your cannabis to identify the strain.</Typography>
                 <Typography variant="body2"><strong>4. Join the Community:</strong> Use Groups & Chat to connect with other cannabis enthusiasts.</Typography>
-                <Typography variant="body2"><strong>5. Upgrade to Premium:</strong> Get unlimited scans, exclusive features, and support the app.</Typography>
+                <Typography variant="body2"><strong>5. Unlock + Membership:</strong> One-time app unlock (20 scans) plus $4.99/mo for 200 scans and community perks. Add 50/200/500 top-ups whenever you need more.</Typography>
               </Stack>
             </CardContent>
           </Card>

@@ -57,6 +57,10 @@ export default function MembershipJoin() {
   });
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [pricingPackages, setPricingPackages] = useState([]);
+  const [pricingRole, setPricingRole] = useState(null);
+  const [pricingLoading, setPricingLoading] = useState(true);
+  const [pricingError, setPricingError] = useState(null);
 
   const getSessionId = useCallback(() => {
     let sid = localStorage.getItem('ss-session-id');
@@ -85,6 +89,25 @@ export default function MembershipJoin() {
   useEffect(() => {
     loadStatus();
   }, [loadStatus]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/credits/packages`);
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Unable to load pricing');
+        }
+        setPricingPackages(Array.isArray(data.packages) ? data.packages : []);
+        setPricingRole(data.role || null);
+      } catch (e) {
+        console.error('Pricing load error:', e);
+        setPricingError(e.message || 'Failed to load pricing');
+      } finally {
+        setPricingLoading(false);
+      }
+    })();
+  }, []);
 
   // Login handler (Supabase Auth)
   const handleLogin = async () => {
@@ -178,6 +201,18 @@ export default function MembershipJoin() {
   }
 
 
+  const appUnlockPackage = pricingPackages.find((pkg) => pkg.type === 'app_purchase');
+  const membershipPackage = pricingPackages.find((pkg) => pkg.type === 'membership');
+  const topUpPackages = pricingPackages.filter((pkg) => pkg.type === 'top_up');
+
+  const priceLabel = (pkg) => (pkg ? `$${pkg.effectivePrice.toFixed(2)}` : '');
+  const perScanLabel = (pkg) => {
+    if (!pkg?.credits) return '';
+    const cost = pkg.effectivePrice / pkg.credits;
+    if (cost < 1) return `${(cost * 100).toFixed(1)}¢ per scan`;
+    return `$${cost.toFixed(2)} per scan`;
+  };
+
   return (
 
     <Container maxWidth="md" sx={{ py: 4, position: 'relative' }}>
@@ -216,6 +251,71 @@ export default function MembershipJoin() {
       <Typography variant="h4" sx={{ mb: 3, fontWeight: 700, color: '#2e7d32', textShadow: '0 2px 12px rgba(46,125,50,0.2)' }}>
         Welcome to StrainSpotter Membership
       </Typography>
+      <Card sx={{ mb: 3, borderRadius: 3, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(56,142,60,0.18)', backdropFilter: 'blur(8px)' }}>
+        <CardContent>
+          <Typography variant="h6" sx={{ color: '#388e3c', mb: 1 }}>Simple Pricing</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            One-time unlock for the first 20 scans, then $4.99/month for 200 scans + optional top-ups (50 / 200 / 500).
+          </Typography>
+          {pricingLoading ? (
+            <LinearProgress />
+          ) : pricingError ? (
+            <Alert severity="warning">{pricingError}</Alert>
+          ) : (
+            <>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
+                {appUnlockPackage && (
+                  <Card variant="outlined" sx={{ flex: 1, borderColor: 'rgba(56,142,60,0.25)' }}>
+                    <CardContent>
+                      <Typography variant="subtitle2" color="text.secondary">Step 1</Typography>
+                      <Typography variant="h6" sx={{ color: '#2e7d32', mb: 1 }}>Unlock the App</Typography>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: '#1b5e20' }}>
+                        {priceLabel(appUnlockPackage)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        20 scans included. Unlock Groups, Grow Coach, and The Garden forever.
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                )}
+                {membershipPackage && (
+                  <Card variant="outlined" sx={{ flex: 1, borderColor: 'rgba(56,142,60,0.25)' }}>
+                    <CardContent>
+                      <Typography variant="subtitle2" color="text.secondary">Step 2</Typography>
+                      <Typography variant="h6" sx={{ color: '#2e7d32', mb: 1 }}>Monthly Member</Typography>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: '#1b5e20' }}>
+                        {priceLabel(membershipPackage)}
+                        <Typography component="span" variant="body2" color="text.secondary">/month</Typography>
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        200 AI scans each month + priority support. Cancel anytime.
+                      </Typography>
+                      {pricingRole === 'moderator' && membershipPackage.moderatorDiscount && (
+                        <Chip label={`${membershipPackage.moderatorDiscount.percent}% moderator discount`} size="small" color="success" sx={{ mt: 1 }} />
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </Stack>
+              {topUpPackages.length > 0 && (
+                <Stack spacing={1}>
+                  <Typography variant="subtitle2" color="text.secondary">Need more scans?</Typography>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                    {topUpPackages.map((pkg) => (
+                      <Chip
+                        key={pkg.id}
+                        label={`${pkg.credits} scans • ${priceLabel(pkg)} • ${perScanLabel(pkg)}`}
+                        variant="outlined"
+                        sx={{ borderColor: 'rgba(56,142,60,0.4)' }}
+                      />
+                    ))}
+                  </Stack>
+                </Stack>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
       {status?.isMember ? (
         <Box sx={{
           mt: 3,

@@ -1,0 +1,10 @@
+Starting project at /Users/christophercook/Projects/strainspotter/StrainSpotterMobile
+Starting Metro Bundler
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+iOS StrainSpotterMobile/index.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+| (node:82609) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+iOS Bundled 609ms StrainSpotterMobile/index.js (1439 modules)
+iOS StrainSpotterMobile/index.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+iOS Bundled 64ms StrainSpotterMobile/index.js (1 module)

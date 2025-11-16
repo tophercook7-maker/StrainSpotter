@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -23,6 +23,7 @@ import {
   Alert
 } from '@mui/material';
 import { API_BASE } from '../config';
+import { supabase } from '../supabaseClient';
 
 export default function MembershipAdmin({ onBack }) {
   const [tab, setTab] = useState(0);
@@ -38,15 +39,65 @@ export default function MembershipAdmin({ onBack }) {
     tier: 'full',
     expires_at: ''
   });
+  const [sessionToken, setSessionToken] = useState(null);
+  const [accessAllowed, setAccessAllowed] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    checkAccess();
+  }, []);
+
+  useEffect(() => {
+    if (accessAllowed && sessionToken) {
+      loadData();
+    }
+  }, [tab, accessAllowed, sessionToken]);
+
+  const checkAccess = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setError('Sign in required to view membership management.');
+        setAuthChecked(true);
+        return;
+      }
+
+      const res = await fetch(`${API_BASE}/api/users/onboarding-status`, {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+
+      if (!res.ok) {
+        setError('Unable to verify permissions.');
+        setAuthChecked(true);
+        return;
+      }
+
+      const payload = await res.json();
+      if (payload?.profile?.role === 'admin') {
+        setAccessAllowed(true);
+        setSessionToken(session.access_token);
+      } else {
+        setError('Admin access required.');
+      }
+    } catch (e) {
+      console.error('[MembershipAdmin] Access check failed:', e);
+      setError('Unable to verify permissions.');
+    } finally {
+      setAuthChecked(true);
+    }
+  };
 
   const loadData = async () => {
+    if (!sessionToken) return;
     setLoading(true);
     try {
+      const headers = { Authorization: `Bearer ${sessionToken}` };
       if (tab === 0) {
-        const res = await fetch(`${API_BASE}/api/membership/applications`);
+        const res = await fetch(`${API_BASE}/api/membership/applications`, { headers });
         if (res.ok) setApplications(await res.json().then(d => d.applications));
       } else {
-        const res = await fetch(`${API_BASE}/api/membership/members`);
+        const res = await fetch(`${API_BASE}/api/membership/members`, { headers });
         if (res.ok) setMembers(await res.json().then(d => d.members));
       }
     } catch (e) {
@@ -62,7 +113,10 @@ export default function MembershipAdmin({ onBack }) {
     try {
       const res = await fetch(`${API_BASE}/api/membership/applications/${selectedApp.id}/approve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionToken}`
+        },
         body: JSON.stringify(approveData)
       });
 
@@ -87,6 +141,29 @@ export default function MembershipAdmin({ onBack }) {
       default: return 'default';
     }
   };
+
+  if (!authChecked || loading) {
+    return (
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Typography>Loading...</Typography>
+      </Container>
+    );
+  }
+
+  if (!accessAllowed) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 6 }}>
+        {onBack && (
+          <Button onClick={onBack} size="small" variant="contained" sx={{ mb: 2 }}>
+            Home
+          </Button>
+        )}
+        <Alert severity="warning">
+          {error || 'Admin access required to view membership management.'}
+        </Alert>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>

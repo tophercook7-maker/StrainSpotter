@@ -1,16 +1,26 @@
 import express from 'express';
-import { supabase } from '../supabaseClient.js';
+import { requireAuthenticated } from '../utils/accessControl.js';
+import { getUserScopedClient } from '../utils/rlsMode.js';
+
 const router = express.Router();
+
+router.use(requireAuthenticated);
+
+const isAdmin = (profile) => (profile?.role || '').toLowerCase() === 'admin';
 
 // Get grow logs for a user
 router.get('/', async (req, res) => {
   try {
-    const { user_id } = req.query;
-    if (!user_id) return res.status(400).json({ error: 'user_id is required' });
-    const { data, error } = await supabase
+    const requester = req.authContext;
+    const targetUserId = isAdmin(requester.profile) && req.query.user_id
+      ? req.query.user_id
+      : requester.user.id;
+
+    const client = getUserScopedClient();
+    const { data, error } = await client
       .from('grow_logs')
       .select('*')
-      .eq('user_id', user_id)
+      .eq('user_id', targetUserId)
       .order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     res.json(data || []);
@@ -22,8 +32,13 @@ router.get('/', async (req, res) => {
 // Add a grow log
 router.post('/', async (req, res) => {
   try {
-    const payload = { ...req.body };
-    const { data, error } = await supabase.from('grow_logs').insert(payload).select().single();
+    const requester = req.authContext;
+    const payload = {
+      ...req.body,
+      user_id: requester.user.id
+    };
+    const client = getUserScopedClient();
+    const { data, error } = await client.from('grow_logs').insert(payload).select().single();
     if (error) return res.status(500).json({ error: error.message });
     res.json(data);
   } catch (e) {
@@ -34,10 +49,13 @@ router.post('/', async (req, res) => {
 // Update a grow log
 router.put('/:id', async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const requester = req.authContext;
+    const client = getUserScopedClient();
+    const { data, error } = await client
       .from('grow_logs')
       .update(req.body)
       .eq('id', req.params.id)
+      .eq('user_id', requester.user.id)
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
@@ -51,7 +69,13 @@ router.put('/:id', async (req, res) => {
 // Delete a grow log
 router.delete('/:id', async (req, res) => {
   try {
-    const { error } = await supabase.from('grow_logs').delete().eq('id', req.params.id);
+    const requester = req.authContext;
+    const client = getUserScopedClient();
+    const { error } = await client
+      .from('grow_logs')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', requester.user.id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
   } catch (e) {

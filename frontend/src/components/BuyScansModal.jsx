@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -22,6 +22,8 @@ import {
   LocalOffer as OfferIcon
 } from '@mui/icons-material';
 import { supabase } from '../supabaseClient';
+import { API_BASE } from '../config';
+import { logEvent } from '../utils/analyticsClient';
 
 /**
  * Buy Scans Modal
@@ -29,7 +31,7 @@ import { supabase } from '../supabaseClient';
  */
 export default function BuyScansModal({ open, onClose, currentTier = 'free', creditsRemaining = 0 }) {
   const [packages, setPackages] = useState([]);
-  const [tiers, setTiers] = useState([]);
+  const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
   const [error, setError] = useState(null);
@@ -37,28 +39,40 @@ export default function BuyScansModal({ open, onClose, currentTier = 'free', cre
 
   useEffect(() => {
     if (open) {
+      logEvent('credits_modal_opened');
       fetchPackages();
     }
   }, [open]);
 
   const fetchPackages = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/credits/packages`);
-      const data = await response.json();
-      
-      if (data.success) {
-        setPackages(data.packages);
-        setTiers(data.tiers);
+      let token = null;
+      if (supabase) {
+        const { data: { session } } = await supabase.auth.getSession();
+        token = session?.access_token || null;
       }
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await fetch(`${API_BASE}/api/credits/packages`, { headers });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Unable to load packages');
+      }
+
+      setPackages(Array.isArray(data.packages) ? data.packages : []);
+      setRole(data.role || null);
     } catch (err) {
       console.error('Failed to fetch packages:', err);
-      setError('Failed to load packages');
+      setError(err.message || 'Failed to load packages');
     } finally {
       setLoading(false);
     }
   };
 
   const handlePurchasePackage = async (packageId) => {
+    logEvent('credits_cta_clicked', { type: 'top_up', packageId });
     setPurchasing(true);
     setError(null);
     setSuccess(null);
@@ -74,9 +88,9 @@ export default function BuyScansModal({ open, onClose, currentTier = 'free', cre
 
       // TODO: Integrate with Stripe payment
       // For now, show a message
-      setError('Payment integration coming soon! Please contact support to purchase credits.');
+      setError('Top-up purchases are coming soon! Contact support and mention the package you want.');
       
-      // const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/credits/purchase`, {
+      // const response = await fetch(`${API_BASE}/api/credits/purchase`, {
       //   method: 'POST',
       //   headers: {
       //     'Content-Type': 'application/json',
@@ -107,6 +121,7 @@ export default function BuyScansModal({ open, onClose, currentTier = 'free', cre
   };
 
   const handleUpgradeTier = async (tierId) => {
+    logEvent('credits_cta_clicked', { type: 'membership', tierId });
     setPurchasing(true);
     setError(null);
     setSuccess(null);
@@ -121,7 +136,7 @@ export default function BuyScansModal({ open, onClose, currentTier = 'free', cre
       }
 
       // TODO: Integrate with Stripe subscription
-      setError('Membership upgrades coming soon! Please contact support to upgrade.');
+      setError('Membership billing inside the app is coming soon. Contact support to upgrade manually.');
       
     } catch (err) {
       console.error('Upgrade error:', err);
@@ -130,6 +145,55 @@ export default function BuyScansModal({ open, onClose, currentTier = 'free', cre
       setPurchasing(false);
     }
   };
+
+  const tierAliases = useMemo(() => ({
+    premium: 'monthly_member',
+    member: 'monthly_member',
+    moderator: 'monthly_member'
+  }), []);
+
+  const normalizedTier = useMemo(() => {
+    const lowered = (currentTier || '').toLowerCase();
+    return tierAliases[lowered] || lowered || 'free';
+  }, [currentTier, tierAliases]);
+
+  const packageGroups = useMemo(() => {
+    return {
+      appUnlock: packages.find((pkg) => pkg.type === 'app_purchase'),
+      membership: packages.find((pkg) => pkg.type === 'membership'),
+      topUps: packages.filter((pkg) => pkg.type === 'top_up')
+    };
+  }, [packages]);
+
+  const priceLabel = (pkg) => {
+    if (!pkg) return '';
+    return `$${pkg.effectivePrice.toFixed(2)}`;
+  };
+
+  const perScanLabel = (pkg) => {
+    if (!pkg?.credits) return '';
+    const cost = pkg.effectivePrice / pkg.credits;
+    if (cost < 1) return `${(cost * 100).toFixed(1)}¢ per scan`;
+    return `$${cost.toFixed(2)} per scan`;
+  };
+
+  const renderPriceStack = (pkg, { showRecurringLabel = false } = {}) => (
+    <Box>
+      <Typography variant="h4" color="primary" gutterBottom>
+        {priceLabel(pkg)}
+        {showRecurringLabel && (
+          <Typography component="span" variant="body2" color="text.secondary">
+            /month
+          </Typography>
+        )}
+      </Typography>
+      {pkg?.moderatorDiscount && (
+        <Typography variant="body2" color="text.secondary" sx={{ textDecoration: 'line-through' }}>
+          ${pkg.price.toFixed(2)}
+        </Typography>
+      )}
+    </Box>
+  );
 
   return (
     <Dialog 
@@ -182,74 +246,108 @@ export default function BuyScansModal({ open, onClose, currentTier = 'free', cre
             {/* Current Status */}
             <Box sx={{ mb: 3, p: 2, background: 'rgba(124, 179, 66, 0.1)', borderRadius: 2 }}>
               <Typography variant="body2" color="text.secondary">
-                Current Plan: <strong>{currentTier.toUpperCase()}</strong>
+                Current Plan: <strong>{normalizedTier.replace('_', ' ').toUpperCase()}</strong>
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Scans Remaining: <strong>{creditsRemaining}</strong>
               </Typography>
             </Box>
 
-            {/* Membership Tiers */}
-            {currentTier === 'free' && (
+            {/* Membership Options */}
+            {(packageGroups.appUnlock || packageGroups.membership) && (
               <>
                 <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                   <StarIcon sx={{ color: '#FFD700' }} />
-                  Upgrade Membership
+                  Membership & Unlocks
                 </Typography>
+                {role === 'moderator' && (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    Moderator pricing applied automatically.
+                  </Alert>
+                )}
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 4 }}>
-                  {tiers.filter(t => t.id !== 'free').map((tier) => (
-                    <Card 
-                      key={tier.id}
+                  {packageGroups.appUnlock && normalizedTier === 'free' && (
+                    <Card
+                      key="app_purchase"
                       sx={{
-                        background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.1) 0%, rgba(156, 204, 101, 0.1) 100%)',
-                        border: '1px solid rgba(124, 179, 66, 0.3)',
-                        position: 'relative',
-                        overflow: 'visible'
+                        background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.12) 0%, rgba(156, 204, 101, 0.08) 100%)',
+                        border: '1px solid rgba(124, 179, 66, 0.25)'
                       }}
                     >
-                      {tier.id === 'member' && (
-                        <Chip 
-                          label="BEST VALUE" 
-                          size="small" 
-                          color="success"
-                          sx={{ 
-                            position: 'absolute', 
-                            top: -10, 
-                            right: 10,
-                            fontWeight: 700
-                          }}
-                        />
-                      )}
                       <CardContent>
                         <Typography variant="h6" gutterBottom>
-                          {tier.name}
+                          Unlock StrainSpotter
                         </Typography>
-                        <Typography variant="h4" color="primary" gutterBottom>
-                          ${tier.price}
-                          <Typography component="span" variant="body2" color="text.secondary">
-                            /month
-                          </Typography>
-                        </Typography>
+                        {renderPriceStack(packageGroups.appUnlock)}
                         <Typography variant="body1" color="text.secondary" gutterBottom>
-                          {tier.scans} scans/month
+                          {packageGroups.appUnlock.scans} starter scans (one-time)
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {tier.description}
+                          Own the app forever and unlock Groups, Grower tools, and the Garden.
                         </Typography>
                       </CardContent>
                       <CardActions>
-                        <Button 
-                          fullWidth 
-                          variant="contained" 
+                        <Button
+                          fullWidth
+                          variant="contained"
                           color="primary"
                           disabled={purchasing}
-                          onClick={() => handleUpgradeTier(tier.id)}
+                          onClick={() => handleUpgradeTier('app_purchase')}
                         >
-                          Upgrade to {tier.name}
+                          Unlock for {priceLabel(packageGroups.appUnlock)}
                         </Button>
                       </CardActions>
                     </Card>
-                  ))}
+                  )}
+
+                  {packageGroups.membership && (
+                    <Card
+                      key="monthly_member"
+                      sx={{
+                        background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.15) 0%, rgba(156, 204, 101, 0.12) 100%)',
+                        border: '1px solid rgba(124, 179, 66, 0.35)',
+                        position: 'relative'
+                      }}
+                    >
+                      <Chip
+                        label="BEST VALUE"
+                        size="small"
+                        color="success"
+                        sx={{ position: 'absolute', top: -10, right: 12, fontWeight: 700 }}
+                      />
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                          Monthly Member
+                        </Typography>
+                        {renderPriceStack(packageGroups.membership, { showRecurringLabel: true })}
+                        <Typography variant="body1" color="text.secondary" gutterBottom>
+                          {packageGroups.membership.scansPerMonth || 200} scans/month + community perks
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Includes Groups, Grow Coach, Grower Directory, error reporting, and more.
+                        </Typography>
+                        {packageGroups.membership.moderatorDiscount && (
+                          <Chip
+                            label={`${packageGroups.membership.moderatorDiscount.percent}% moderator discount`}
+                            size="small"
+                            color="success"
+                            sx={{ mt: 1 }}
+                          />
+                        )}
+                      </CardContent>
+                      <CardActions>
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          color="primary"
+                          disabled={purchasing || normalizedTier === 'monthly_member'}
+                          onClick={() => handleUpgradeTier('monthly_member')}
+                        >
+                          {normalizedTier === 'monthly_member' ? 'Membership Active' : 'Upgrade to Monthly Member'}
+                        </Button>
+                      </CardActions>
+                    </Card>
+                  )}
                 </Box>
               </>
             )}
@@ -260,7 +358,7 @@ export default function BuyScansModal({ open, onClose, currentTier = 'free', cre
               Buy Credit Packs
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-              {packages.map((pkg) => (
+              {packageGroups.topUps.map((pkg) => (
                 <Card 
                   key={pkg.id}
                   sx={{
@@ -277,12 +375,18 @@ export default function BuyScansModal({ open, onClose, currentTier = 'free', cre
                     <Typography variant="h6" gutterBottom>
                       {pkg.credits} Scans
                     </Typography>
-                    <Typography variant="h5" color="primary" gutterBottom>
-                      ${pkg.price.toFixed(2)}
-                    </Typography>
+                    {renderPriceStack(pkg)}
                     <Typography variant="body2" color="text.secondary">
-                      ${(pkg.perScanCost * 100).toFixed(1)}¢ per scan
+                      {perScanLabel(pkg)}
                     </Typography>
+                    {pkg.moderatorDiscount && (
+                      <Chip
+                        label={`${pkg.moderatorDiscount.percent}% moderator discount`}
+                        size="small"
+                        color="success"
+                        sx={{ mt: 1 }}
+                      />
+                    )}
                   </CardContent>
                   <CardActions>
                     <Button 

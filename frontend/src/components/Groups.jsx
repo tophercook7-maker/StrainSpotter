@@ -27,7 +27,9 @@ import {
   Alert,
   Tabs,
   Tab,
-  Badge
+  Badge,
+  ToggleButtonGroup,
+  ToggleButton
 } from '@mui/material';
 import FlagIcon from '@mui/icons-material/Flag';
 import GroupsIcon from '@mui/icons-material/Groups';
@@ -59,6 +61,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   const [usersError, setUsersError] = useState(null); // Error loading users
   const [loadingUsers, setLoadingUsers] = useState(false); // Loading state for users
   const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [dmFilter, setDmFilter] = useState('recent');
 
   // Check if current user is admin
   const isCurrentUserAdmin = authUser?.email === 'topher.cook7@gmail.com' ||
@@ -908,9 +911,16 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         onNavigate && onNavigate('login');
         return;
       }
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
       const res = await fetch(`${API_BASE}/api/moderation/report`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           message_id: reportingMessage.id,
           reported_by: userId,
@@ -1280,10 +1290,33 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                       }}
                     />
 
-                    <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
-                      <Typography variant="subtitle2" sx={{ color: '#CDDC39', fontWeight: 700, flex: 1 }}>
-                        All Users
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }} sx={{ mb: 1 }}>
+                      <Typography variant="subtitle2" sx={{ color: '#CDDC39', fontWeight: 700 }}>
+                        Direct Messages
                       </Typography>
+                      <ToggleButtonGroup
+                        color="success"
+                        exclusive
+                        value={dmFilter}
+                        onChange={(_e, next) => next && setDmFilter(next)}
+                        size="small"
+                        sx={{
+                          borderRadius: 999,
+                          '& .MuiToggleButton-root': {
+                            color: '#9CCC65',
+                            borderColor: 'rgba(124,179,66,0.3)',
+                            textTransform: 'none',
+                            fontSize: '0.8rem'
+                          },
+                          '& .Mui-selected': {
+                            color: '#0c220f',
+                            backgroundColor: 'rgba(124,179,66,0.7) !important'
+                          }
+                        }}
+                      >
+                        <ToggleButton value="recent">Recent</ToggleButton>
+                        <ToggleButton value="all">All Users</ToggleButton>
+                      </ToggleButtonGroup>
                       <Button
                         size="small"
                         onClick={loadAllUsers}
@@ -1324,7 +1357,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                     )}
 
                     {/* Recent Chats Section */}
-                    {filteredDirectChats.length > 0 && (
+                    {dmFilter === 'recent' && filteredDirectChats.length > 0 && (
                       <Box sx={{ mb: 3 }}>
                         <Typography variant="subtitle2" sx={{ color: '#CDDC39', fontWeight: 700, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
                           💬 Recent Chats
@@ -1392,14 +1425,20 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                       </Box>
                     )}
 
+                    {dmFilter === 'recent' && !loadingUsers && !usersError && filteredDirectChats.length === 0 && (
+                      <Typography variant="body2" sx={{ color: '#9CCC65' }}>
+                        No recent chats yet. Switch to “All Users” to start a new conversation.
+                      </Typography>
+                    )}
+
                     {/* All Users Section */}
-                    {!loadingUsers && !usersError && filteredUsers.length === 0 && filteredDirectChats.length === 0 && (
+                    {dmFilter === 'all' && !loadingUsers && !usersError && filteredUsers.length === 0 && (
                       <Typography variant="body2" sx={{ color: '#9CCC65' }}>
                         No other users found. Click Refresh to try again.
                       </Typography>
                     )}
 
-                    {!loadingUsers && !usersError && filteredUsers.length > 0 && (
+                    {dmFilter === 'all' && !loadingUsers && !usersError && filteredUsers.length > 0 && (
                       <Box>
                         <Typography variant="subtitle2" sx={{ color: '#9CCC65', fontWeight: 700, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
                           👥 All Users

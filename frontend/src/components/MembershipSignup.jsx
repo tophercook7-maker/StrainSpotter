@@ -81,7 +81,7 @@ export default function MembershipSignup({ supabase, onSuccess, onCancel }) {
         textAlign: 'center'
       }}>
         <h2>Join StrainSpotter Club</h2>
-        <p>Unlock unlimited scans, advanced strain matching, and exclusive features.</p>
+        <p>Unlock 200 scans per month, advanced strain matching, and exclusive features.</p>
         <p style={{ fontSize: 24, fontWeight: 'bold', margin: '16px 0' }}>$4.99/month</p>
         
         <button

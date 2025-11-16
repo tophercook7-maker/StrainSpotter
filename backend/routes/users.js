@@ -2,15 +2,11 @@ import express from 'express';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 import { supabase } from '../supabaseClient.js';
 import { ensureUserRecord } from '../utils/ensureUser.js';
+import { ADMIN_EMAILS } from '../utils/accessControl.js';
 
 const router = express.Router();
 const writeClient = supabaseAdmin ?? supabase;
-const adminEmails = new Set([
-  'topher.cook7@gmail.com',
-  'strainspotter25@gmail.com',
-  'admin@strainspotter.com',
-  'andrewbeck209@gmail.com'
-]);
+const adminEmails = ADMIN_EMAILS;
 
 const allowedRoles = ['member', 'grower', 'operator', 'budtender', 'moderator', 'admin', 'enthusiast'];
 
@@ -144,7 +140,7 @@ router.get('/directory', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     const callerRole = await fetchProfileRole(auth.user.id);
-    if (callerRole !== 'admin' && callerRole !== 'moderator') {
+    if (callerRole !== 'admin') {
       return res.status(403).json({ error: 'Forbidden' });
     }
 

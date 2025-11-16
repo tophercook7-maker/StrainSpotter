@@ -11,6 +11,23 @@ import FeedbackIcon from '@mui/icons-material/Feedback';
 import { supabase, SUPABASE_ANON_KEY } from '../supabaseClient';
 import { API_BASE, FUNCTIONS_BASE } from '../config';
 
+const ConfidenceCallout = ({ confidence }) => {
+  if (confidence == null) return null;
+  const normalized = confidence > 1 ? confidence : confidence * 100;
+  const pct = Math.max(0, Math.min(100, Math.round(normalized)));
+  let severity = 'success';
+  if (pct < 50) severity = 'warning';
+  if (pct < 25) severity = 'error';
+  return (
+    <Alert
+      severity={severity}
+      sx={{ mt: 2, bgcolor: 'rgba(124,179,66,0.08)', border: '1px solid rgba(124,179,66,0.3)' }}
+    >
+      AI confidence: {pct}%
+    </Alert>
+  );
+};
+
 export default function ScanWizard({ onBack }) {
   const fileInputRef = useRef(null);
   const [membershipComplete, setMembershipComplete] = useState(true); // Skip membership for now
@@ -47,10 +64,9 @@ export default function ScanWizard({ onBack }) {
   const [showTopUpDialog, setShowTopUpDialog] = useState(false);
   const [topUpMessage, setTopUpMessage] = useState('');
   const topUpOptions = [
-    { credits: 10, price: '$4.99' },
-    { credits: 20, price: '$7.99' },
-    { credits: 50, price: '$17.99' },
-    { credits: 100, price: '$29.99' }
+    { credits: 50, price: '$4.99' },
+    { credits: 200, price: '$9.99' },
+    { credits: 500, price: '$19.99' }
   ];
 
   const membershipTier = (currentUser?.user_metadata?.membership || currentUser?.user_metadata?.tier || '').toString().toLowerCase();
@@ -337,11 +353,11 @@ export default function ScanWizard({ onBack }) {
             let message = errorPayload.message || 'No scan credits remaining.';
 
             if (needsUpgrade) {
-              message = '🎯 You\'ve used all 10 free scans! Upgrade to Member ($4.99/mo) for 200 scans/month or buy a top-up pack!';
-            } else if (tier === 'member') {
-              message = '📊 You\'ve used all 200 scans this month! Upgrade to Premium ($14.99/mo) for 1200 scans/month or buy a top-up pack!';
+              message = '🎯 You\'ve used all 10 free scans! Unlock StrainSpotter (20 scans) or join Monthly Member ($4.99/mo) for 200 scans/month. Top-up packs (50 • 200 • 500) are also available.';
+            } else if (tier === 'member' || tier === 'monthly_member') {
+              message = '📊 You\'ve used all 200 scans this month! Add a top-up pack (50 • 200 • 500 scans) or wait for your next monthly refresh.';
             } else if (tier === 'premium') {
-              message = '🚀 You\'ve used all 1200 scans this month! Buy a top-up pack to continue scanning.';
+              message = '🚀 You\'ve used the legacy premium allotment. Grab a top-up pack (50 • 200 • 500 scans) to keep scanning.';
             }
 
             setAlertMsg(message);

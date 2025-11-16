@@ -1,6 +1,7 @@
 import express from 'express';
 import { supabase } from '../supabaseClient.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
+import { getRlsConfig } from '../utils/rlsMode.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -104,7 +105,8 @@ router.get('/', async (req, res) => {
     googleVisionConfigured,
     visionMethod,
     bucketExists,
-    rlsPermissive
+    rlsPermissive,
+    rls: getRlsConfig()
   });
 });
 

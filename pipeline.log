@@ -1,0 +1,674 @@
+[full_pipeline] Running: scrape_strain_sources.mjs 
+Installing required packages...
+
+up to date, audited 144 packages in 854ms
+
+27 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+Starting scrape...
+
+Scraping allbud...
+[allbud] Fetching sativa strains...
+[allbud] Fetching indica strains...
+[allbud] Fetching hybrid strains...
+[allbud] Found 490 strains
+[allbud] Saved to /Users/christophercook/Projects/strainspotter/backend/data/sources/allbud.json
+
+Scraping cannaconnection...
+[cannaconnection] Fetching strain list...
+[cannaconnection] Found 29 strains
+[cannaconnection] Saved to /Users/christophercook/Projects/strainspotter/backend/data/sources/cannaconnection.json
+
+Scraping seedfinder...
+[seedfinder] Fetching letter A...
+[seedfinder] Fetching letter B...
+[seedfinder] Fetching letter C...
+[seedfinder] Fetching letter D...
+[seedfinder] Fetching letter E...
+[seedfinder] Fetching letter F...
+[seedfinder] Fetching letter G...
+[seedfinder] Fetching letter H...
+[seedfinder] Fetching letter I...
+[seedfinder] Fetching letter J...
+[seedfinder] Fetching letter K...
+[seedfinder] Fetching letter L...
+[seedfinder] Fetching letter M...
+[seedfinder] Fetching letter N...
+[seedfinder] Fetching letter O...
+[seedfinder] Fetching letter P...
+[seedfinder] Fetching letter Q...
+[seedfinder] Fetching letter R...
+[seedfinder] Fetching letter S...
+[seedfinder] Fetching letter T...
+[seedfinder] Fetching letter U...
+[seedfinder] Fetching letter V...
+[seedfinder] Fetching letter W...
+[seedfinder] Fetching letter X...
+[seedfinder] Fetching letter Y...
+[seedfinder] Fetching letter Z...
+[seedfinder] Fetching letter 0...
+[seedfinder] Fetching letter 1...
+[seedfinder] Fetching letter 2...
+[seedfinder] Fetching letter 3...
+[seedfinder] Fetching letter 4...
+[seedfinder] Fetching letter 5...
+[seedfinder] Fetching letter 6...
+[seedfinder] Fetching letter 7...
+[seedfinder] Fetching letter 8...
+[seedfinder] Fetching letter 9...
+[seedfinder] Found 75568 strains
+[seedfinder] Saved to /Users/christophercook/Projects/strainspotter/backend/data/sources/seedfinder.json
+
+Scraping ilovegrowingmarijuana...
+[ilovegrowingmarijuana] Fetching strain database...
+[ilovegrowingmarijuana] error: HTTP 404
+[ilovegrowingmarijuana] Found 0 strains
+[ilovegrowingmarijuana] Saved to /Users/christophercook/Projects/strainspotter/backend/data/sources/ilovegrowingmarijuana.json
+[full_pipeline] Running: enhance_library.mjs 
+
+🔄 Enhanced Strain Library Merger
+
+==================================================
+📚 Existing library: 35137 strains
+
+📥 Processing allbud.json: 490 entries
+  ✅ Added: 0, Skipped: 468, Invalid: 22
+
+📥 Processing cannaconnection.json: 29 entries
+  ✅ Added: 0, Skipped: 492, Invalid: 27
+
+📥 Processing ilovegrowingmarijuana.json: 0 entries
+  ✅ Added: 0, Skipped: 492, Invalid: 27
+
+📥 Processing seedfinder.json: 75568 entries
+  ✅ Added: 0, Skipped: 75979, Invalid: 108
+
+==================================================
+
+✅ Final Results:
+  Original: 35137
+  Added: 0
+  Total: 35137
+  Gain: +0 strains (0.0% increase)
+
+📁 Saved to: /Users/christophercook/Projects/strainspotter/backend/data/strain_library_enhanced.json
+[full_pipeline] Copied enhanced library to main import file.
+[full_pipeline] Running: import_to_supabase_robust.mjs 
+[dotenv@17.2.3] injecting env (4) from env/.env.local -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+[progress] 250/35137 -> ok=250 updatedByName=0 fail=0
+[progress] 500/35137 -> ok=500 updatedByName=0 fail=0
+[progress] 750/35137 -> ok=750 updatedByName=0 fail=0
+[progress] 1000/35137 -> ok=1000 updatedByName=0 fail=0
+[progress] 1250/35137 -> ok=1250 updatedByName=0 fail=0
+[progress] 1500/35137 -> ok=1500 updatedByName=0 fail=0
+[progress] 1750/35137 -> ok=1750 updatedByName=0 fail=0
+[progress] 2000/35137 -> ok=2000 updatedByName=0 fail=0
+[progress] 2250/35137 -> ok=2250 updatedByName=0 fail=0
+[progress] 2500/35137 -> ok=2500 updatedByName=0 fail=0
+[progress] 2750/35137 -> ok=2750 updatedByName=0 fail=0
+[progress] 3000/35137 -> ok=3000 updatedByName=0 fail=0
+[progress] 3250/35137 -> ok=3250 updatedByName=0 fail=0
+[progress] 3500/35137 -> ok=3500 updatedByName=0 fail=0
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 73366,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 62934,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 25171,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 74486,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 67286,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 70012,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 89332,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 69384,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 29488,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 88582,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 32211,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 89381,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 47913,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 12881,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 12445,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 72964,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 93178,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 86548,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 77854,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 99548,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 62275,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 47602,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 46625,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 53607,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 32831,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 13279,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 82482,
+  stdout: null,
+  stderr: null
+}
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 95490,
+  stdout: null,
+  stderr: null
+}

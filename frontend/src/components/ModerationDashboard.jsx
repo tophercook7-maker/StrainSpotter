@@ -23,15 +23,28 @@ import {
   TableRow,
   Paper,
   IconButton,
-  Tooltip
+  Tooltip,
+  Tabs,
+  Tab
 } from '@mui/material';
 import { API_BASE } from '../config';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DeleteIcon from '@mui/icons-material/Delete';
 import WarningIcon from '@mui/icons-material/Warning';
+import { supabase } from '../supabaseClient';
+
+const STATUS_TABS = [
+  { value: 'pending', label: 'New' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'resolved', label: 'Resolved' }
+];
 
 export default function ModerationDashboard({ onBack }) {
-  const [reports, setReports] = useState([]);
+  const [reportsByStatus, setReportsByStatus] = useState({
+    pending: [],
+    in_progress: [],
+    resolved: []
+  });
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState(null);
@@ -39,24 +52,80 @@ export default function ModerationDashboard({ onBack }) {
   const [moderatorNotes, setModeratorNotes] = useState('');
   const [actionType, setActionType] = useState('approve');
   const [error, setError] = useState(null);
+  const [activeStatus, setActiveStatus] = useState('pending');
+  const [sessionToken, setSessionToken] = useState(null);
+  const [accessAllowed, setAccessAllowed] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    loadData();
+    checkAccess();
   }, []);
+
+  useEffect(() => {
+    if (accessAllowed && sessionToken) {
+      loadData();
+    }
+  }, [accessAllowed, sessionToken]);
+
+  const checkAccess = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setError('Sign in required to access moderation tools.');
+        setAuthChecked(true);
+        return;
+      }
+
+      const res = await fetch(`${API_BASE}/api/users/onboarding-status`, {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+
+      if (!res.ok) {
+        setError('Failed to verify permissions.');
+        setAuthChecked(true);
+        return;
+      }
+
+      const payload = await res.json();
+      const role = payload?.profile?.role;
+      if (role === 'admin' || role === 'moderator') {
+        setAccessAllowed(true);
+        setSessionToken(session.access_token);
+      } else {
+        setError('Moderator access required.');
+      }
+    } catch (e) {
+      console.error('[Moderation] Access check failed:', e);
+      setError('Unable to verify access.');
+    } finally {
+      setAuthChecked(true);
+    }
+  };
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [reportsRes, statsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/moderation/reports?status=pending`),
-        fetch(`${API_BASE}/api/moderation/stats`)
-      ]);
-      
-      if (reportsRes.ok) {
-        const reportsData = await reportsRes.json();
-        setReports(reportsData.reports || []);
-      }
-      
+      const headers = { Authorization: `Bearer ${sessionToken}` };
+      const reportResponses = await Promise.all(
+        STATUS_TABS.map(tab =>
+          fetch(`${API_BASE}/api/moderation/reports?status=${tab.value}`, { headers })
+        )
+      );
+
+      const nextReports = {};
+      await Promise.all(reportResponses.map(async (resp, idx) => {
+        const tab = STATUS_TABS[idx];
+        if (resp.ok) {
+          const data = await resp.json();
+          nextReports[tab.value] = data.reports || [];
+        } else {
+          nextReports[tab.value] = [];
+        }
+      }));
+
+      setReportsByStatus((prev) => ({ ...prev, ...nextReports }));
+
+      const statsRes = await fetch(`${API_BASE}/api/moderation/stats`, { headers });
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         setStats(statsData);
@@ -76,7 +145,10 @@ export default function ModerationDashboard({ onBack }) {
       setError(null);
       const res = await fetch(`${API_BASE}/api/moderation/reports/${selectedReport.id}/resolve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionToken}`
+        },
         body: JSON.stringify({
           action: actionType,
           moderator_notes: moderatorNotes
@@ -103,13 +175,30 @@ export default function ModerationDashboard({ onBack }) {
     setResolveDialogOpen(true);
   };
 
-  if (loading) {
+  if (!authChecked || loading) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <LinearProgress />
       </Container>
     );
   }
+
+  if (!accessAllowed) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 6 }}>
+        {onBack && (
+          <Button onClick={onBack} size="small" variant="contained" sx={{ mb: 2 }}>
+            Home
+          </Button>
+        )}
+        <Alert severity="warning">
+          {error || 'Moderator access required to view this dashboard.'}
+        </Alert>
+      </Container>
+    );
+  }
+
+  const currentReports = reportsByStatus[activeStatus] || [];
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -166,11 +255,27 @@ export default function ModerationDashboard({ onBack }) {
       <Card>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
-            Pending Reports
+            Report Triage
           </Typography>
           
-          {reports.length === 0 ? (
-            <Alert severity="info">No pending reports. Great job!</Alert>
+          <Tabs
+            value={activeStatus}
+            onChange={(_, value) => setActiveStatus(value)}
+            sx={{ mb: 2 }}
+            variant="scrollable"
+            allowScrollButtonsMobile
+          >
+            {STATUS_TABS.map((tab) => (
+              <Tab
+                key={tab.value}
+                value={tab.value}
+                label={`${tab.label} (${reportsByStatus[tab.value]?.length || 0})`}
+              />
+            ))}
+          </Tabs>
+          
+          {currentReports.length === 0 ? (
+            <Alert severity="info">No reports in this queue. Great job!</Alert>
           ) : (
             <TableContainer component={Paper} variant="outlined">
               <Table>
@@ -179,12 +284,13 @@ export default function ModerationDashboard({ onBack }) {
                     <TableCell>Report ID</TableCell>
                     <TableCell>Reason</TableCell>
                     <TableCell>Message Content</TableCell>
+                    <TableCell>Reporter</TableCell>
                     <TableCell>Reported</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {reports.map((report) => (
+                  {currentReports.map((report) => (
                     <TableRow key={report.id} hover>
                       <TableCell>
                         <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
@@ -205,6 +311,17 @@ export default function ModerationDashboard({ onBack }) {
                         {report.details && (
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                             Details: {report.details}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {report.reported_by ? (
+                          <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                            {report.reported_by.slice(0, 8)}...
+                          </Typography>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">
+                            Anonymous
                           </Typography>
                         )}
                       </TableCell>

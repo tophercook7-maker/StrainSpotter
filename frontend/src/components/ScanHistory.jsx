@@ -20,6 +20,8 @@ import { useNavigate } from 'react-router-dom';
 import CannabisLeafIcon from './CannabisLeafIcon';
 import { API_BASE } from '../config';
 import { supabase } from '../supabaseClient';
+import EmptyStateCard from './EmptyStateCard';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
 
 function ScanHistory({ onBack }) {
   const navigate = useNavigate();
@@ -130,9 +132,15 @@ function ScanHistory({ onBack }) {
         )}
 
         {!loading && !error && scans.length === 0 && (
-          <Alert severity="info">
-            No scans found yet. Run a scan to see it appear here.
-          </Alert>
+          <EmptyStateCard
+            title="No scans yet"
+            description="Upload your first bud photo to see AI matches and build your history."
+            icon={<CameraAltIcon sx={{ fontSize: 56, color: '#7cb342' }} />}
+            actionLabel="Start a scan"
+            onAction={() => window.dispatchEvent(new CustomEvent('nav:set-view', { detail: 'scanner' }))}
+            secondaryActionLabel="Back to home"
+            onSecondaryAction={onBack}
+          />
         )}
 
         {!loading && !error && scans.length > 0 && (

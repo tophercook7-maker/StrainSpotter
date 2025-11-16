@@ -1,6 +1,7 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import { requireAdmin } from '../utils/accessControl.js';
 
 const router = express.Router();
 
@@ -23,14 +24,14 @@ function readJsonSafe(p) {
 }
 
 // GET /api/pipeline/history - full scrape/run history
-router.get('/history', (req, res) => {
+router.get('/history', requireAdmin, (req, res) => {
   const data = readJsonSafe(historyPath);
   if (!data) return res.status(404).json({ error: 'pipeline history not found' });
   res.json(data);
 });
 
 // GET /api/pipeline/latest - most recent run summary
-router.get('/latest', (req, res) => {
+router.get('/latest', requireAdmin, (req, res) => {
   const data = readJsonSafe(historyPath);
   if (!data) return res.status(404).json({ error: 'pipeline history not found' });
   const latest = Array.isArray(data) && data.length ? data[data.length - 1] : data;
@@ -38,7 +39,7 @@ router.get('/latest', (req, res) => {
 });
 
 // GET /api/pipeline/import-report - detailed import metrics from last run
-router.get('/import-report', (req, res) => {
+router.get('/import-report', requireAdmin, (req, res) => {
   const data = readJsonSafe(importReportPath);
   if (!data) return res.status(404).json({ error: 'import report not found' });
   res.json(data);

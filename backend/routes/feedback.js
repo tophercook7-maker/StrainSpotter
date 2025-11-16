@@ -1,6 +1,8 @@
 import express from 'express';
 import { supabase } from '../supabaseClient.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
+import { requireAdmin, requireAuthenticated } from '../utils/accessControl.js';
+import { logModerationAction } from '../utils/moderationAudit.js';
 
 const router = express.Router();
 const readClient = supabase;
@@ -60,7 +62,7 @@ async function getOrCreateFeedbackConversation() {
   return created;
 }
 
-router.get('/messages', async (req, res) => {
+router.get('/messages', requireAdmin, async (req, res) => {
   try {
     const conversation = await getOrCreateFeedbackConversation();
 
@@ -125,19 +127,13 @@ router.get('/messages', async (req, res) => {
 import { rejectIfProfane, checkAndCleanMessage } from '../middleware/moderation.js';
 import { sendMail, isEmailConfigured } from '../services/mailer.js';
 
-router.post('/messages', rejectIfProfane, async (req, res) => {
+router.post('/messages', requireAuthenticated, rejectIfProfane, async (req, res) => {
   try {
-    let { user_id = null, content } = req.body || {};
+    let { content } = req.body || {};
     if (!content || !String(content).trim()) {
       return res.status(400).json({ error: 'content is required' });
     }
-
-    // Validate user_id: must be a valid UUID
-    if (!user_id || !/^[0-9a-fA-F-]{36}$/.test(user_id)) {
-      return res.status(401).json({
-        error: 'Authentication required. Please log in to submit feedback.'
-      });
-    }
+    const userId = req.authContext?.user?.id;
 
     const conversation = await getOrCreateFeedbackConversation();
     const { cleaned } = checkAndCleanMessage(content);
@@ -147,7 +143,7 @@ router.post('/messages', rejectIfProfane, async (req, res) => {
       .from('messages')
       .insert({
         conversation_id: conversation.id,
-        sender_id: user_id,
+        sender_id: userId,
         content: cleaned,
         message_type: 'text'
       })
@@ -160,14 +156,14 @@ router.post('/messages', rejectIfProfane, async (req, res) => {
     }
 
     // Log feedback to console for monitoring
-    console.log(`[FEEDBACK] User ${user_id} submitted: ${cleaned.substring(0, 100)}...`);
+    console.log(`[FEEDBACK] User ${userId} submitted: ${cleaned.substring(0, 100)}...`);
 
     // Email notification (optional if SMTP configured)
     try {
       const to = process.env.EMAIL_TO;
       if (to && isEmailConfigured()) {
         const subject = 'New StrainSpotter Feedback';
-        const text = `New feedback from user ${user_id} at ${new Date().toISOString()}\n\n${cleaned}`;
+        const text = `New feedback from user ${userId} at ${new Date().toISOString()}\n\n${cleaned}`;
         await sendMail({ to, subject, text });
       } else if (!to) {
         console.warn('[FEEDBACK] EMAIL_TO not set. Skipping email notification.');
@@ -184,31 +180,9 @@ router.post('/messages', rejectIfProfane, async (req, res) => {
 });
 
 // DELETE endpoint - Admin only
-router.delete('/messages/:messageId', async (req, res) => {
+router.delete('/messages/:messageId', requireAdmin, async (req, res) => {
   try {
     const { messageId } = req.params;
-    const { admin_user_id } = req.body;
-
-    // Verify admin user
-    const ADMIN_EMAILS = ['strainspotter25@gmail.com', 'admin@strainspotter.com', 'topher.cook7@gmail.com', 'andrewbeck209@gmail.com'];
-
-    if (!admin_user_id) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
-    // Check if user is admin
-    const { data: profile } = await writeClient
-      .from('profiles')
-      .select('id, username')
-      .eq('id', admin_user_id)
-      .single();
-
-    // Get user email from auth.users
-    const { data: authUser } = await writeClient.auth.admin.getUserById(admin_user_id);
-
-    if (!authUser || !ADMIN_EMAILS.includes(authUser.user?.email)) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
 
     // Delete the message
     const { error } = await writeClient
@@ -221,7 +195,15 @@ router.delete('/messages/:messageId', async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    console.log(`[FEEDBACK] Admin ${admin_user_id} deleted message ${messageId}`);
+    const actorId = req.authContext?.user?.id;
+    await logModerationAction({
+      actorUserId: actorId,
+      targetUserId: null,
+      action: 'delete_feedback_message',
+      metadata: { messageId }
+    });
+
+    console.log(`[FEEDBACK] Admin ${actorId} deleted message ${messageId}`);
     res.json({ success: true });
   } catch (e) {
     console.error('[FEEDBACK] Delete error:', e);
