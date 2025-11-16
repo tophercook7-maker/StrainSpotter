@@ -1,189 +1,144 @@
-
-import { AppBar, Toolbar, Button, Box, Typography, Stack, IconButton, Drawer, List, ListItem, ListItemButton, ListItemText } from '@mui/material';
+import AppBar from '@mui/material/AppBar';
+import Toolbar from '@mui/material/Toolbar';
+import Typography from '@mui/material/Typography';
+import IconButton from '@mui/material/IconButton';
+import Button from '@mui/material/Button';
+import Stack from '@mui/material/Stack';
+import Box from '@mui/material/Box';
 import MenuIcon from '@mui/icons-material/Menu';
+import SpaIcon from '@mui/icons-material/Spa';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import CannabisLeafIcon from './CannabisLeafIcon';
-import { cannabisTheme } from '../theme/cannabisTheme';
-import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '../supabaseClient';
-import { API_BASE } from '../config';
 
-const BASE_TABS = [
-  { id: 'scanner', label: 'Scanner' },
-  { id: 'strains', label: 'Browse Strains' },
-  { id: 'history', label: 'History' },
-  { id: 'friends', label: 'Friends' },
-  { id: 'growers', label: 'Growers' },
-  { id: 'register', label: 'Register' },
-  { id: 'seeds', label: 'Seeds' },
-  { id: 'dispensaries', label: 'Dispensaries' },
-  { id: 'groups', label: 'Groups' },
-  { id: 'help', label: 'Help' },
-  { id: 'guidelines', label: 'Guidelines' },
-  { id: 'feedback', label: 'Feedback' },
-  { id: 'pipeline', label: 'Pipeline' },
-  { id: 'moderation', label: 'Moderation' }
-];
-
-// Add errors tab only in development
-const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
+// Simple, no-auth top nav. No "Sign in to start scanning" banner.
 export default function TopNav({ current, onNavigate }) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [strainCount, setStrainCount] = useState(null);
-
-  // Track auth state so we can show Home only for new (logged-out) users
-  useEffect(() => {
-    let sub;
-    (async () => {
-      try {
-        if (!supabase) return;
-        const { data } = await supabase.auth.getSession();
-        setIsLoggedIn(!!data?.session?.user);
-      } catch (e) {
-        console.debug('TopNav: getSession failed', e);
-      }
-    })();
-    if (supabase) {
-      const listener = supabase.auth.onAuthStateChange((_event, session) => {
-        setIsLoggedIn(!!session?.user);
-      });
-      sub = listener?.data?.subscription;
-    }
-    return () => sub?.unsubscribe?.();
-  }, []);
-
-  // Fetch strain count for subtle header counter
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const resp = await fetch(`${API_BASE}/api/strains/count`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-        if (!cancelled) setStrainCount(typeof data.count === 'number' ? data.count : null);
-      } catch {
-        // Silent fail; counter is optional UI
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const navTabs = useMemo(() => {
-    const tabs = [...BASE_TABS];
-    if (!isLoggedIn) {
-      // Show Home first for new users, plus a Login entry to keep auth fully in-app
-      tabs.unshift({ id: 'home', label: 'Home' });
-      tabs.push({ id: 'login', label: 'Login' });
-    }
-    // Add error viewer in development only
-    if (isDev) {
-      tabs.push({ id: 'errors', label: '🚨 Errors' });
-    }
-    return tabs;
-  }, [isLoggedIn]);
-
-  const handleDrawerToggle = () => setDrawerOpen((v) => !v);
-
-  const Tab = ({ id, label }) => (
-    <Button
-      color={current === id ? 'primary' : 'inherit'}
-      variant={current === id ? 'contained' : 'text'}
-      onClick={() => onNavigate(id)}
-      sx={{
-        mr: 1,
-        fontWeight: current === id ? 700 : 400,
-        boxShadow: current === id ? '0 0 0 2px #4caf50' : undefined,
-        outline: current === id ? '2px solid #4caf50' : undefined,
-        outlineOffset: current === id ? '2px' : undefined,
-        borderRadius: 2,
-        transition: 'all 0.15s',
-        '&:focus': {
-          outline: '2px solid #ffeb3b',
-          outlineOffset: '2px',
-        }
-      }}
-      tabIndex={0}
-      aria-current={current === id ? 'page' : undefined}
-    >
-      {label}
-    </Button>
-  );
+  const handleNav = (view) => () => {
+    if (onNavigate) onNavigate(view);
+  };
 
   return (
-    <>
-      <AppBar 
-        position="sticky" 
-        sx={{ 
-          mb: 2, 
-          backgroundImage: cannabisTheme.gradients.dark,
-          borderBottom: cannabisTheme.borders.primary
-        }}
-      >
-        <Toolbar>
-          <IconButton
-            edge="start"
-            color="inherit"
-            aria-label="menu"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { xs: 'inline-flex', md: 'none' } }}
+    <AppBar
+      position="sticky"
+      elevation={0}
+      sx={{
+        top: 0,
+        background: 'linear-gradient(90deg, rgba(0,0,0,0.9), rgba(20,40,20,0.95))',
+        borderBottom: '1px solid rgba(124, 179, 66, 0.5)',
+        backdropFilter: 'blur(14px)',
+      }}
+    >
+      <Toolbar sx={{ minHeight: 64, px: 2 }}>
+        {/* Left: Logo + Title */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexGrow: 1 }}>
+          <Box
+            sx={{
+              width: 34,
+              height: 34,
+              borderRadius: '50%',
+              overflow: 'hidden',
+              border: '2px solid rgba(156, 204, 101, 0.9)',
+              boxShadow: '0 0 16px rgba(124, 179, 66, 0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(0,0,0,0.6)',
+            }}
           >
-            <MenuIcon />
-          </IconButton>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mr: 3 }}>
-            <Box component="img" src="/hero.png" alt="StrainSpotter Logo" sx={{ width: 32, height: 32, mr: 1, filter: 'drop-shadow(0 0 6px #4caf5088)' }} draggable={false} />
-            <Typography 
-              variant="h6" 
-              sx={{ 
-                fontWeight: 700,
-                color: cannabisTheme.colors.primary.light,
-                letterSpacing: '0.5px'
+            {/* Hero-based icon */}
+            <img
+              src="/hero.png?v=13"
+              alt="StrainSpotter"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 800,
+                letterSpacing: 0.5,
+                background: 'linear-gradient(135deg, #CDDC39 0%, #9CCC65 50%, #7CB342 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
               }}
             >
               StrainSpotter
             </Typography>
-          </Stack>
-          <Box sx={{ flexGrow: 1 }} />
-          <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center' }}>
-            {navTabs.map(tab => (
-              <Tab key={tab.id} id={tab.id} label={tab.label} />
-            ))}
-            {strainCount !== null && (
-              <Typography variant="caption" sx={{ ml: 2, opacity: 0.8, color: '#c8e6c9' }}>
-                {strainCount.toLocaleString()} strains • and climbing
-              </Typography>
-            )}
+            <Typography
+              variant="caption"
+              sx={{ color: 'rgba(200, 230, 200, 0.8)', display: 'flex', alignItems: 'center', gap: 0.5 }}
+            >
+              <CannabisLeafIcon size={14} />
+              AI Strain Scanner
+            </Typography>
           </Box>
-        </Toolbar>
-      </AppBar>
-      <Drawer
-        anchor="left"
-        open={drawerOpen}
-        onClose={handleDrawerToggle}
-        sx={{ zIndex: 1300 }}
-      >
-        <Box sx={{ width: 240 }} role="presentation" onClick={handleDrawerToggle}>
-          <List>
-            {navTabs.map(tab => (
-              <ListItem key={tab.id} disablePadding>
-                <ListItemButton
-                  selected={current === tab.id}
-                  onClick={() => onNavigate(tab.id)}
-                  tabIndex={0}
-                  aria-current={current === tab.id ? 'page' : undefined}
-                >
-                  <ListItemText primary={tab.label} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-            {strainCount !== null && (
-              <ListItem key="strain-count" sx={{ px: 2 }}>
-                <ListItemText primaryTypographyProps={{ variant: 'caption', sx: { opacity: 0.8 } }} primary={`${strainCount.toLocaleString()} strains • and climbing`} />
-              </ListItem>
-            )}
-          </List>
         </Box>
-      </Drawer>
-    </>
+
+        {/* Right: Simple nav buttons */}
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center' }}
+        >
+          <Button
+            size="small"
+            onClick={handleNav('home')}
+            sx={{
+              textTransform: 'none',
+              fontWeight: current === 'home' ? 700 : 500,
+              color: current === 'home' ? '#CDDC39' : 'rgba(230, 240, 230, 0.85)',
+            }}
+          >
+            Home
+          </Button>
+
+          <Button
+            size="small"
+            startIcon={<CameraAltIcon sx={{ fontSize: 18 }} />}
+            onClick={handleNav('scanner')}
+            sx={{
+              textTransform: 'none',
+              fontWeight: current === 'scanner' ? 700 : 500,
+              color: current === 'scanner' ? '#CDDC39' : 'rgba(230, 240, 230, 0.85)',
+            }}
+          >
+            Scan
+          </Button>
+
+          <Button
+            size="small"
+            startIcon={<SpaIcon sx={{ fontSize: 18 }} />}
+            onClick={handleNav('groups')}
+            sx={{
+              textTransform: 'none',
+              fontWeight: current === 'groups' ? 700 : 500,
+              color: current === 'groups' ? '#CDDC39' : 'rgba(230, 240, 230, 0.85)',
+            }}
+          >
+            Garden
+          </Button>
+
+          <IconButton
+            size="small"
+            onClick={handleNav('help')}
+            sx={{ color: current === 'help' ? '#CDDC39' : 'rgba(230, 240, 230, 0.85)' }}
+          >
+            <HelpOutlineIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+
+        {/* Compact menu on very small screens - still no sign-in banner */}
+        <IconButton
+          edge="end"
+          sx={{ display: { xs: 'flex', sm: 'none' }, color: 'rgba(230, 240, 230, 0.9)' }}
+          onClick={handleNav('home')}
+          aria-label="Home menu"
+        >
+          <MenuIcon />
+        </IconButton>
+      </Toolbar>
+    </AppBar>
   );
 }

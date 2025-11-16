@@ -556,40 +556,108 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
 
   // Prefer service role for storage writes to bypass RLS
   const storageClient = supabaseAdmin ?? supabase;
-  const { error: upErr } = await storageClient.storage.from(normalizedBucket).upload(normalizedKey, buffer, { contentType: normalizedContentType });
+  try {
+    const { error: upErr, data: uploadData } = await storageClient.storage.from(normalizedBucket).upload(normalizedKey, buffer, { contentType: normalizedContentType });
     if (upErr) {
+      console.error('[uploads:error] Storage upload failed:', {
+        status: upErr.status || null,
+        message: upErr.message || 'unknown error',
+        error: upErr.error || null,
+        hint: upErr.hint || null,
+        stack: upErr.stack || null,
+        bucket: normalizedBucket,
+        key: normalizedKey
+      });
+      
       if (upErr.message?.toLowerCase().includes('bucket not found')) {
         // Try to create bucket once (best-effort)
         const ensured = await ensureBucketExists(normalizedBucket, { public: true });
         if (ensured?.ok) {
-          const retry = await storageClient.storage.from(normalizedBucket).upload(normalizedKey, buffer, { contentType });
-          if (retry.error) return res.status(500).json({ error: retry.error.message });
+          const retry = await storageClient.storage.from(normalizedBucket).upload(normalizedKey, buffer, { contentType: normalizedContentType });
+          if (retry.error) {
+            console.error('[uploads:error] Storage retry failed:', {
+              status: retry.error.status || null,
+              message: retry.error.message || 'unknown error',
+              error: retry.error.error || null,
+              hint: retry.error.hint || null
+            });
+            return res.status(500).json({ 
+              error: retry.error.message || 'Storage upload failed',
+              hint: retry.error.hint || null
+            });
+          }
         } else {
-          return res.status(500).json({ error: `Storage bucket '${normalizedBucket}' not found and could not be created. ${ensured?.error || ensured?.reason || ''}`.trim() });
+          return res.status(500).json({ 
+            error: `Storage bucket '${normalizedBucket}' not found and could not be created. ${ensured?.error || ensured?.reason || ''}`.trim(),
+            hint: 'Ensure the scans bucket exists in Supabase Storage'
+          });
         }
       } else {
-        return res.status(500).json({ error: upErr.message });
+        return res.status(500).json({ 
+          error: upErr.message || 'Storage upload failed',
+          hint: upErr.hint || null
+        });
       }
     }
+  } catch (storageErr) {
+    console.error('[uploads:error] Storage upload exception:', {
+      message: storageErr?.message || 'unknown exception',
+      stack: storageErr?.stack || null,
+      name: storageErr?.name || null
+    });
+    return res.status(500).json({ 
+      error: storageErr?.message || 'Storage upload failed',
+      hint: 'Check backend logs for details'
+    });
+  }
 
     const { data: urlData } = storageClient.storage.from(normalizedBucket).getPublicUrl(normalizedKey);
     const publicUrl = urlData?.publicUrl || null;
 
     // Use service role for table insert to bypass RLS
     const dbClient = supabaseAdmin ?? supabase;
-    const insert = await dbClient.from('scans').insert({ image_url: publicUrl, image_key: normalizedKey, status: 'pending', user_id }).select();
-    if (insert.error) {
-      const msg = insert.error.message || 'insert failed';
-      const rlsHint = (!supabaseAdmin && /row-level security/i.test(msg))
-        ? 'Supabase RLS blocked anon insert. Add SUPABASE_SERVICE_ROLE_KEY to env/.env.local and restart the backend.'
-        : null;
-      return res.status(500).json({ error: msg, hint: rlsHint });
-    }
+    try {
+      const insert = await dbClient.from('scans').insert({ image_url: publicUrl, image_key: normalizedKey, status: 'pending', user_id }).select();
+      if (insert.error) {
+        console.error('[uploads:error] Database insert failed:', {
+          status: insert.error.status || null,
+          message: insert.error.message || 'unknown error',
+          error: insert.error.error || null,
+          hint: insert.error.hint || null,
+          code: insert.error.code || null,
+          details: insert.error.details || null
+        });
+        
+        const msg = insert.error.message || 'Database insert failed';
+        const hint = insert.error.hint || ((!supabaseAdmin && /row-level security/i.test(msg))
+          ? 'Supabase RLS blocked anon insert. Add SUPABASE_SERVICE_ROLE_KEY to env/.env.local and restart the backend.'
+          : null);
+        return res.status(500).json({ error: msg, hint });
+      }
 
-    const scan = Array.isArray(insert.data) ? insert.data[0] : insert.data;
-    res.json({ id: scan?.id || null, image_url: publicUrl });
+      const scan = Array.isArray(insert.data) ? insert.data[0] : insert.data;
+      res.json({ id: scan?.id || null, image_url: publicUrl });
+    } catch (dbErr) {
+      console.error('[uploads:error] Database insert exception:', {
+        message: dbErr?.message || 'unknown exception',
+        stack: dbErr?.stack || null,
+        name: dbErr?.name || null
+      });
+      return res.status(500).json({ 
+        error: dbErr?.message || 'Database insert failed',
+        hint: 'Check backend logs for details'
+      });
+    }
   } catch (e) {
-    res.status(500).json({ error: String(e) });
+    console.error('[uploads:error] Unexpected exception:', {
+      message: e?.message || String(e),
+      stack: e?.stack || null,
+      name: e?.name || null
+    });
+    res.status(500).json({ 
+      error: e?.message || String(e),
+      hint: 'Check backend logs for full error details'
+    });
   }
 });
 
