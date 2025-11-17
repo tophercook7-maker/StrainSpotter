@@ -29,6 +29,13 @@ const CANNABINOIDS = [
   'cbc'
 ];
 
+/**
+ * Normalize strain name for text matching (remove special chars, lowercase)
+ */
+function normalizeStrainName(name) {
+  return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 function extractLabelInsights(detectedText) {
   if (!detectedText) return null;
 
@@ -175,6 +182,41 @@ function extractLabelInsights(detectedText) {
     }
   }
 
+  // Extract likely strain name from label text
+  // Instead of rejecting lines with generic words, filter them out and keep the rest
+  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  
+  const genericWords = [
+    'net', 'wt', 'activation', 'time', 'approx', 'tested', 'manufactured',
+    'batch', 'permit', 'ext', 'made', 'test', 'thc', 'cbd', 'vape', 'cart',
+    'edible', 'gummies', 'flower', 'hybrid', 'indica', 'sativa',
+    '1g', '1.0g', 'gram', 'g'
+  ];
+  
+  let strainName = null;
+  for (const line of lines) {
+    // Clean the line: remove non-alphanumeric characters except spaces and apostrophes
+    const cleaned = line.replace(/[^A-Za-z0-9 ']/g, ' ').trim();
+    
+    // Split into words
+    const words = cleaned.split(/\s+/).filter(w => w.length > 0);
+    
+    // Filter to get candidate words:
+    // - Must contain at least one letter
+    // - Must not be in genericWords (case-insensitive)
+    const candidateWords = words.filter(word => {
+      if (!/[a-z]/i.test(word)) return false; // Must have at least one letter
+      const wordLower = word.toLowerCase();
+      return !genericWords.includes(wordLower); // Not a generic word
+    });
+    
+    // If we have candidate words, use them as the strain name
+    if (candidateWords.length > 0) {
+      strainName = candidateWords.join(' ').trim();
+      break; // Use the first line that yields candidate words
+    }
+  }
+
   return {
     // Potency
     thcPercent: thcPercent != null ? parseFloat(thcPercent) : null,
@@ -202,6 +244,7 @@ function extractLabelInsights(detectedText) {
     // Terpenes & raw
     terpenes,
     rawText: raw,
+    strainName, // Detected strain name from label
   };
 }
 
@@ -243,6 +286,26 @@ export function matchStrainByVisuals(visionResult, strains) {
   // Score each strain
   const scored = strains.map(strain => {
     const scoreBreakdown = calculateVisualScore(strain, features, isMacro);
+    
+    // Extra boost if labelInsights suggests this strain name matches
+    // (This handles cases where OCR clearly identifies a strain name)
+    if (labelInsights && features.detectedText) {
+      const normalizedText = normalizeStrainName(features.detectedText);
+      const normalizedStrainName = normalizeStrainName(strain.name);
+      // If the detected text contains the strain name (normalized), give extra boost
+      if (normalizedText.includes(normalizedStrainName) || normalizedStrainName.includes(normalizedText)) {
+        scoreBreakdown.textMatch += 150; // Additional big bonus
+        // Recalculate total with the boosted textMatch
+        scoreBreakdown.total = 
+          scoreBreakdown.colorMatch +
+          scoreBreakdown.typeIndicators +
+          (scoreBreakdown.textMatch * 2) +
+          scoreBreakdown.webMatch +
+          scoreBreakdown.effectLabels +
+          scoreBreakdown.flavorLabels;
+      }
+    }
+    
     return {
       strain,
       score: scoreBreakdown.total,
@@ -281,9 +344,55 @@ export function matchStrainByVisuals(visionResult, strains) {
   const matches = candidateList.slice(0, 5); // Top 5 matches
 
   // If we still have no matches but strains exist, return at least the top scored one
-  const finalMatches = matches.length > 0 
+  let finalMatches = matches.length > 0 
     ? matches 
     : (allScored.length > 0 ? [allScored[0]] : []);
+
+  // Force detected strain name from label to become top match
+  if (labelInsights && labelInsights.strainName) {
+    const labelNorm = normalizeStrainName(labelInsights.strainName);
+    if (labelNorm) {
+      // Find matching strain in database
+      const found = strains.find(s => {
+        const sName = normalizeStrainName(s.name || s.strain_name || s.slug);
+        return sName === labelNorm;
+      });
+      
+      if (found) {
+        // Check if this strain is already in matches
+        const existingIndex = finalMatches.findIndex(m => {
+          const mName = normalizeStrainName(
+            m.strain && (m.strain.name || m.strain.strain_name || m.strain.slug)
+          );
+          return mName === labelNorm;
+        });
+        
+        if (existingIndex !== -1) {
+          // Move existing match to top and boost score
+          const boostingTarget = finalMatches[existingIndex];
+          finalMatches.splice(existingIndex, 1);
+          finalMatches.unshift({
+            ...boostingTarget,
+            score: boostingTarget.score + 500,
+            reason: 'labelNameExact'
+          });
+        } else {
+          // Add new match at top with high score
+          // Need to create a proper match object with all required fields
+          const scoreBreakdown = calculateVisualScore(found, features, isMacro);
+          finalMatches.unshift({
+            strain: found,
+            score: 500,
+            confidence: calculateConfidence(500),
+            reasoning: 'Exact match from label text',
+            scoreBreakdown,
+            labelInsights, // Include label insights for consistency
+            reason: 'labelNameExact'
+          });
+        }
+      }
+    }
+  }
 
   // Debug logging for top results before returning
   const matchesArray = Array.isArray(finalMatches) ? finalMatches : [];
@@ -390,17 +499,30 @@ function calculateVisualScore(strain, features, isMacro = false) {
   }
 
   // 3. Text detection - ignore for macro images
+  // Make label text (strain name on package) heavily influence matching
   if (!isMacro && features.detectedText) {
-    const cleanText = features.detectedText.toLowerCase()
+    const rawText = features.detectedText || '';
+    const normalizedText = normalizeStrainName(rawText);
+    const normalizedStrainName = normalizeStrainName(strain.name);
+    
+    // Check for exact full-name match (normalized)
+    if (normalizedText.includes(normalizedStrainName) || normalizedStrainName.includes(normalizedText)) {
+      // Strong bonus for exact match
+      breakdown.textMatch += 200;
+    } else {
+      // Partial word matches with increased bonus
+      const strainWords = normalizedStrainName.split(/\s+/).filter(w => w.length > 3);
+      const matchedWords = strainWords.filter(word => normalizedText.includes(word));
+      breakdown.textMatch += matchedWords.length * 30;
+    }
+    
+    // Also check original text for additional matches (case-insensitive)
+    const cleanText = rawText.toLowerCase()
       .replace(/[^\w\s'-]/g, ' ')
       .trim();
-    const strainName = strain.name.toLowerCase();
-    if (cleanText.includes(strainName)) {
-      breakdown.textMatch += 50;
-    } else {
-      const strainWords = strainName.split(/\s+/).filter(w => w.length > 3);
-      const matchedWords = strainWords.filter(word => cleanText.includes(word));
-      breakdown.textMatch += matchedWords.length * 10;
+    const strainNameLower = strain.name.toLowerCase();
+    if (cleanText.includes(strainNameLower) && breakdown.textMatch < 200) {
+      breakdown.textMatch += 150; // Additional boost if found in original text
     }
   }
 
@@ -441,10 +563,11 @@ function calculateVisualScore(strain, features, isMacro = false) {
   }
 
   // Calculate total
+  // Amplify textMatch so label text can outweigh generic visual features on package scans
   breakdown.total = 
     breakdown.colorMatch +
     breakdown.typeIndicators +
-    breakdown.textMatch +
+    (breakdown.textMatch * 2) + // Double weight for text matches
     breakdown.webMatch +
     breakdown.effectLabels +
     breakdown.flavorLabels;

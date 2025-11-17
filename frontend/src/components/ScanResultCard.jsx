@@ -46,6 +46,28 @@ export default function ScanResultCard({
     return `${value}${unit}`;
   };
 
+  // Normalize confidence value to 0-100% display
+  const normalizeConfidence = (raw) => {
+    if (raw == null || Number.isNaN(raw)) return null;
+    const num = Number(raw);
+    if (num <= 0) return 0;
+    
+    let normalized;
+    if (num <= 1.5) {
+      // Assume it's already 0-1 scale
+      normalized = num;
+    } else if (num <= 100) {
+      // Assume it's 0-100 scale, convert to 0-1
+      normalized = num / 100;
+    } else {
+      // Clamp and normalize (was scaled too high)
+      normalized = Math.min(num, 100) / 100;
+    }
+    
+    const confidencePercent = Math.round(normalized * 100);
+    return Math.max(0, Math.min(100, confidencePercent)); // Clamp 0-100
+  };
+
   return (
     <Box
       sx={{
@@ -82,7 +104,7 @@ export default function ScanResultCard({
                 variant="caption"
                 sx={{ color: 'rgba(224, 242, 241, 0.85)' }}
               >
-                Match confidence: {Math.round(confidence * 100)}%
+                Match confidence: {normalizeConfidence(confidence)}%
               </Typography>
             )}
           </Stack>
