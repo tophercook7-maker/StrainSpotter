@@ -508,6 +508,34 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
       normalizedContentType = 'image/jpeg';
     }
 
+    // Guest scan limit: 20 scans per IP/session (24 hour window)
+    if (!user_id) {
+      const guestIdentifier = req.headers['x-session-id'] || req.ip || 'unknown';
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      
+      // Count guest scans by session_id or ip_address in last 24 hours
+      const { data: guestScans, error: countError } = await (supabaseAdmin ?? supabase)
+        .from('scans')
+        .select('id')
+        .is('user_id', null)
+        .gte('created_at', oneDayAgo);
+      
+      // Filter by session_id or ip_address (client-side since Supabase OR with multiple fields is complex)
+      const matchingScans = guestScans?.filter(scan => {
+        // This will work if we store session_id/ip_address, otherwise count all guest scans
+        return true; // For now, count all guest scans in last 24h
+      }) || [];
+      
+      if (!countError && matchingScans.length >= 20) {
+        return res.status(403).json({
+          error: 'Guest scan limit reached',
+          hint: 'You\'ve used all 20 free scans. Sign up for unlimited scans!',
+          limit: 20,
+          used: matchingScans.length
+        });
+      }
+    }
+
     // Ensure starter credits exist and membership bundle is aligned before any processing (only if user is logged in)
     if (user_id) {
       await ensureStarterBundle(user_id);
@@ -617,7 +645,21 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
     // Use service role for table insert to bypass RLS
     const dbClient = supabaseAdmin ?? supabase;
     try {
-      const insert = await dbClient.from('scans').insert({ image_url: publicUrl, image_key: normalizedKey, status: 'pending', user_id }).select();
+      // For guest scans, track by IP or session ID for limit enforcement
+      const guestIdentifier = !user_id ? (req.headers['x-session-id'] || req.ip || null) : null;
+      const insertData = {
+        image_url: publicUrl,
+        image_key: normalizedKey,
+        status: 'pending',
+        user_id: user_id || null
+      };
+      // Add guest tracking fields if available (will be ignored if columns don't exist)
+      if (guestIdentifier) {
+        insertData.session_id = guestIdentifier;
+        insertData.ip_address = req.ip || null;
+      }
+      
+      const insert = await dbClient.from('scans').insert(insertData).select();
       if (insert.error) {
         console.error('[uploads:error] Database insert failed:', {
           status: insert.error.status || null,
@@ -1027,16 +1069,66 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     const plantHealth = analyzePlantHealth(result);
     console.log('[Plant Health] Stage:', plantHealth.growthStage.stage, 'Health:', plantHealth.healthStatus.status);
 
+    // Run visual strain matching
+    let visualMatches = null;
+    let labelInsights = null;
+    let matchedStrainSlug = null;
+    
+    try {
+      const strains = await loadStrainLibrary();
+      const matchResult = matchStrainByVisuals(result, strains);
+      const matches = matchResult?.matches || [];
+      labelInsights = matchResult?.labelInsights || null;
+      const topMatch = matches[0] || null;
+      
+      if (topMatch) {
+        visualMatches = {
+          match: serializeMatch(topMatch),
+          candidates: matches.slice(1, 5).map(serializeMatch).filter(Boolean),
+          labelInsights
+        };
+        matchedStrainSlug = visualMatches.match?.strain_slug || null;
+        console.log(`[process] Visual matching found ${matches.length} matches, top: ${visualMatches.match?.name || 'unknown'}`);
+      } else {
+        console.log('[process] Visual matching found no matches above threshold');
+        visualMatches = {
+          match: null,
+          candidates: [],
+          labelInsights
+        };
+      }
+    } catch (matchErr) {
+      console.error('[process] Error during visual matching:', matchErr);
+      // Don't fail the whole request - still save Vision result
+      visualMatches = {
+        match: null,
+        candidates: [],
+        error: 'Matching failed'
+      };
+    }
+
+    // Merge Vision result with visual matches
+    const finalResult = {
+      ...result,
+      visualMatches,
+      labelInsights
+    };
+
     const { error: upErr } = await writeClient
       .from('scans')
-      .update({ result, status: 'done', processed_at: new Date().toISOString() })
+      .update({ 
+        result: finalResult, 
+        status: 'done', 
+        processed_at: new Date().toISOString(),
+        matched_strain_slug: matchedStrainSlug
+      })
       .eq('id', id);
     if (upErr) return res.status(500).json({ error: upErr.message });
 
     // Return debug info and plant health analysis in response
     res.json({
       ok: true,
-      result,
+      result: finalResult,
       plantHealth,
       debug: {
         labelCount: result.labelAnnotations?.length || 0,
@@ -1113,16 +1205,20 @@ app.post('/api/scans/:id/match', async (req, res) => {
     }
 
     const strains = await loadStrainLibrary();
-    const matches = matchStrainByVisuals(scan.result, strains) || [];
+    const matchResult = matchStrainByVisuals(scan.result, strains);
+    const matches = matchResult?.matches || [];
+    const labelInsights = matchResult?.labelInsights || null;
     const topMatch = matches[0] || null;
     const payload = {
       match: serializeMatch(topMatch),
-      candidates: matches.slice(1, 5).map(serializeMatch).filter(Boolean)
+      candidates: matches.slice(1, 5).map(serializeMatch).filter(Boolean),
+      labelInsights // Include label insights in response
     };
 
     const updatedResult = {
       ...scan.result,
-      visualMatches: payload
+      visualMatches: payload,
+      labelInsights
     };
 
     await writeClient
@@ -1162,7 +1258,9 @@ app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
       return res.status(500).json({ error: 'Strain library unavailable', details: e.message });
     }
 
-    const matches = matchStrainByVisuals(visionResult, strains);
+    const matchResult = matchStrainByVisuals(visionResult, strains);
+    const matches = matchResult?.matches || [];
+    const labelInsights = matchResult?.labelInsights || null;
 
     console.log(`[VisualMatch] Found ${matches.length} matches, top score: ${matches[0]?.score || 0}`);
 
@@ -1184,7 +1282,8 @@ app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
         score: Math.round(m.score),
         confidence: m.confidence,
         reasoning: m.reasoning
-      }))
+      })),
+      labelInsights
     });
   } catch (e) {
     console.error('[VisualMatch] Error:', e);

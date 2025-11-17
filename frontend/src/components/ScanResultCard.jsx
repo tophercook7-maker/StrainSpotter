@@ -1,289 +1,412 @@
 // frontend/src/components/ScanResultCard.jsx
 
-import React from 'react'
+import React, { useState } from 'react';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
+  Stack,
   Button,
   Chip,
-  Stack,
   Divider,
-} from '@mui/material'
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+} from '@mui/material';
 
-/**
- * Props:
- * - result: {
- *     topMatch: {
- *       id,
- *       name,
- *       type,          // e.g. "Hybrid"
- *       description,   // long strain description text
- *       confidence,    // 0–1 or 0–100
- *     },
- *     otherMatches: [
- *       { id, name, type, description, confidence }
- *     ]
- *   }
- * - onSaveMatch(match)
- * - onLogExperience(match)
- * - onReportMismatch(match)
- * - onViewStrain(match)
- */
 export default function ScanResultCard({
   result,
+  isGuest,
   onSaveMatch,
   onLogExperience,
   onReportMismatch,
   onViewStrain,
 }) {
-  if (!result || !result.topMatch) return null
+  const [showLabelDialog, setShowLabelDialog] = useState(false);
 
-  const { topMatch, otherMatches = [] } = result
+  const top = result?.topMatch || result?.bestMatch || result?.strain || {};
+  const name = top.name || 'Unknown strain';
+  const type = top.type || 'Hybrid';
+  const description = top.description || '';
+  const confidence = top.confidence ?? null;
 
-  const confidencePercent =
-    topMatch.confidence > 1 ? Math.round(topMatch.confidence) : Math.round(topMatch.confidence * 100)
+  // Extract database metadata from the strain object
+  const dbMeta = top.dbMeta || {};
 
-  const handleSave = () => onSaveMatch && onSaveMatch(topMatch)
-  const handleLog = () => onLogExperience && onLogExperience(topMatch)
-  const handleMismatch = () => onReportMismatch && onReportMismatch(topMatch)
+  const labelInsights = result?.labelInsights || null;
+  const otherMatches = result?.otherMatches || [];
+
+  const seedsQuery = encodeURIComponent(`${name} cannabis seeds`);
+
+  const formatPercent = (v) =>
+    v != null && !Number.isNaN(v) ? `${v}%` : '—';
+
+  const formatWeight = (value, unit) => {
+    if (value == null || !unit) return '—';
+    return `${value}${unit}`;
+  };
 
   return (
-    <Box sx={{ mt: 3, mb: 6 }}>
-      <Card
-        sx={{
-          backgroundColor: '#262b26',
-          borderRadius: 3,
-          border: '1px solid #4b8b3b',
-          boxShadow: '0 12px 30px rgba(0,0,0,0.6)',
-          overflow: 'hidden',
-        }}
-      >
-        <CardContent sx={{ p: { xs: 3, md: 4 } }}>
-          {/* Top match header */}
-          <Stack
-            direction="row"
-            alignItems="center"
-            justifyContent="space-between"
-            spacing={2}
-            sx={{ mb: 2 }}
+    <Box
+      sx={{
+        borderRadius: 3,
+        p: 2.5,
+        background: 'rgba(12, 20, 12, 0.96)',
+        border: '1px solid rgba(124, 179, 66, 0.7)',
+        boxShadow: '0 18px 40px rgba(0,0,0,0.7)',
+      }}
+    >
+      <Stack spacing={2}>
+        {/* Main strain info */}
+        <Box>
+          <Typography
+            variant="h6"
+            sx={{ color: '#E8F5E9', fontWeight: 700, mb: 0.5 }}
           >
-            <Typography
-              variant="overline"
-              sx={{
-                color: '#c8e6c9',
-                letterSpacing: 1.2,
-              }}
-            >
-              Top match
-            </Typography>
+            {name}
+          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
             <Chip
-              label={`${confidencePercent}% confidence`}
-              sx={{
-                backgroundColor: '#ffb74d',
-                color: '#1b1b1b',
-                fontWeight: 600,
-                fontSize: 13,
-              }}
+              label={type}
               size="small"
+              sx={{
+                bgcolor: 'rgba(124, 179, 66, 0.25)',
+                color: '#C5E1A5',
+                borderColor: 'rgba(124, 179, 66, 0.8)',
+                borderWidth: 1,
+                borderStyle: 'solid',
+              }}
             />
-          </Stack>
-
-          {/* Strain name + type */}
-          <Typography
-            variant="h4"
-            sx={{
-              color: '#ffffff',
-              fontWeight: 700,
-              mb: 0.5,
-            }}
-          >
-            {topMatch.name}
-          </Typography>
-          {topMatch.type && (
-            <Typography
-              variant="subtitle1"
-              sx={{
-                color: '#9ccc65',
-                mb: 2,
-                fontWeight: 500,
-              }}
-            >
-              {topMatch.type}
-            </Typography>
-          )}
-
-          {/* Description */}
-          {topMatch.description && (
-            <Typography
-              variant="body1"
-              sx={{
-                color: '#d8f5c0',
-                mb: 3,
-                lineHeight: 1.5,
-              }}
-            >
-              {topMatch.description}
-            </Typography>
-          )}
-
-          {/* Explicit call to action: this is the part that used to trail off */}
-          <Typography
-            variant="body2"
-            sx={{
-              color: '#b2df8a',
-              mb: 3,
-              lineHeight: 1.5,
-            }}
-          >
-            Have you tried this strain before? Tap{' '}
-            <strong>Log experience</strong> below to leave a review of how it
-            looked, tasted, and felt. Your notes will be saved to your journal
-            so you can come back to them later.
-          </Typography>
-
-          {/* Primary actions */}
-          <Stack spacing={1.5} sx={{ mb: 3 }}>
-            <Button
-              fullWidth
-              variant="contained"
-              onClick={handleSave}
-              sx={{
-                backgroundColor: '#4caf50',
-                '&:hover': { backgroundColor: '#43a047' },
-                textTransform: 'none',
-                fontWeight: 600,
-                py: 1.2,
-              }}
-            >
-              Save this match
-            </Button>
-
-            <Button
-              fullWidth
-              variant="outlined"
-              onClick={handleLog}
-              sx={{
-                borderColor: '#8bc34a',
-                color: '#c5e1a5',
-                '&:hover': {
-                  borderColor: '#aed581',
-                  backgroundColor: 'rgba(139,195,74,0.08)',
-                },
-                textTransform: 'none',
-                fontWeight: 600,
-                py: 1.2,
-              }}
-            >
-              Leave a review / log experience
-            </Button>
-
-            <Button
-              fullWidth
-              variant="text"
-              onClick={handleMismatch}
-              sx={{
-                color: '#ef9a9a',
-                textTransform: 'none',
-                fontWeight: 500,
-                py: 1.1,
-                opacity: 0.9,
-                '&:hover': {
-                  backgroundColor: 'rgba(239,154,154,0.1)',
-                },
-              }}
-            >
-              Report mismatch
-            </Button>
-          </Stack>
-
-          {/* Other matches */}
-          {otherMatches.length > 0 && (
-            <>
-              <Divider
-                sx={{
-                  my: 2.5,
-                  borderColor: 'rgba(255,255,255,0.08)',
-                }}
-              />
+            {confidence != null && (
               <Typography
-                variant="subtitle1"
-                sx={{ color: '#f5f5f5', mb: 1.5, fontWeight: 600 }}
+                variant="caption"
+                sx={{ color: 'rgba(224, 242, 241, 0.85)' }}
               >
-                Other possible matches
+                Match confidence: {Math.round(confidence * 100)}%
+              </Typography>
+            )}
+          </Stack>
+          {description && (
+            <Typography
+              variant="body2"
+              sx={{ color: 'rgba(224, 242, 241, 0.9)' }}
+            >
+              {description}
+            </Typography>
+          )}
+        </Box>
+
+        {/* Database info / Strain profile */}
+        {Object.keys(dbMeta).length > 0 && (
+          <Box
+            sx={{
+              mt: 1,
+              p: 2,
+              borderRadius: 2,
+              bgcolor: 'rgba(0,0,0,0.3)',
+              border: '1px solid rgba(124,179,66,0.4)',
+            }}
+          >
+            <Typography
+              variant="subtitle2"
+              sx={{ color: '#C5E1A5', mb: 1 }}
+            >
+              Database info / Strain profile
+            </Typography>
+
+            <Stack spacing={0.5}>
+              {dbMeta.lineage && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  Genetics: {Array.isArray(dbMeta.lineage)
+                    ? dbMeta.lineage.join(' × ')
+                    : dbMeta.lineage}
+                </Typography>
+              )}
+
+              {(dbMeta.thc != null || dbMeta.cbd != null) && (
+                <>
+                  {dbMeta.thc != null && (
+                    <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                      THC: {typeof dbMeta.thc === 'number' ? `${dbMeta.thc}%` : dbMeta.thc}
+                    </Typography>
+                  )}
+                  {dbMeta.cbd != null && (
+                    <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                      CBD: {typeof dbMeta.cbd === 'number' ? `${dbMeta.cbd}%` : dbMeta.cbd}
+                    </Typography>
+                  )}
+                </>
+              )}
+
+              {dbMeta.effects && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  Effects: {Array.isArray(dbMeta.effects)
+                    ? dbMeta.effects.join(', ')
+                    : dbMeta.effects}
+                </Typography>
+              )}
+
+              {dbMeta.flavors && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  Flavors: {Array.isArray(dbMeta.flavors)
+                    ? dbMeta.flavors.join(', ')
+                    : dbMeta.flavors}
+                </Typography>
+              )}
+            </Stack>
+          </Box>
+        )}
+
+        {/* Label details */}
+        {labelInsights && (
+          <Box
+            sx={{
+              mt: 1,
+              p: 2,
+              borderRadius: 2,
+              bgcolor: 'rgba(0,0,0,0.35)',
+              border: '1px solid rgba(124,179,66,0.6)',
+            }}
+          >
+            <Typography
+              variant="subtitle2"
+              sx={{ color: '#C5E1A5', mb: 1 }}
+            >
+              Label details
+            </Typography>
+
+            <Stack spacing={0.5}>
+              {/* Potency */}
+              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                THC: {formatPercent(labelInsights.thcPercent)}
+                {labelInsights.thcMg != null
+                  ? ` (${labelInsights.thcMg} mg)`
+                  : ''}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                CBD: {formatPercent(labelInsights.cbdPercent)}
+                {labelInsights.cbdMg != null
+                  ? ` (${labelInsights.cbdMg} mg)`
+                  : ''}
               </Typography>
 
-              <Stack spacing={1.5}>
-                {otherMatches.map((m) => {
-                  const otherConfidence =
-                    m.confidence > 1
-                      ? Math.round(m.confidence)
-                      : Math.round(m.confidence * 100)
+              {/* Other cannabinoids */}
+              {Array.isArray(labelInsights.cannabinoids) &&
+                labelInsights.cannabinoids.length > 0 && (
+                  <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                    Other cannabinoids:{' '}
+                    {labelInsights.cannabinoids
+                      .map((c) => {
+                        const parts = [c.name];
+                        if (c.percent != null)
+                          parts.push(`${c.percent}%`);
+                        if (c.mg != null) parts.push(`${c.mg} mg`);
+                        return parts.join(' ');
+                      })
+                      .join(', ')}
+                  </Typography>
+                )}
 
-                  const handleView = () =>
-                    onViewStrain && onViewStrain(m)
+              {/* Product/meta */}
+              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                Product type: {labelInsights.productType || '—'}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                Net weight:{' '}
+                {formatWeight(
+                  labelInsights.netWeightValue,
+                  labelInsights.netWeightUnit
+                )}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                Brand: {labelInsights.brand || '—'}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                Batch / lot: {labelInsights.batchId || '—'}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                License / permit: {labelInsights.licenseNumber || '—'}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                Test lab: {labelInsights.labName || '—'}
+              </Typography>
 
-                  return (
-                    <Stack
-                      key={m.id ?? m.name}
-                      direction="row"
-                      alignItems="center"
-                      justifyContent="space-between"
-                      spacing={2}
-                    >
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography
-                          variant="body1"
-                          sx={{
-                            color: '#c8e6c9',
-                            fontWeight: 500,
-                            mb: 0.3,
-                            whiteSpace: 'nowrap',
-                            textOverflow: 'ellipsis',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {m.name}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            color: '#a5d6a7',
-                            fontSize: 13,
-                          }}
-                        >
-                          Confidence {otherConfidence}% • {m.type || 'Hybrid'}
-                        </Typography>
-                      </Box>
+              {/* Dates */}
+              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                Packaged on: {labelInsights.packageDate || '—'}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                Test date: {labelInsights.testDate || '—'}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                Expiration: {labelInsights.expirationDate || '—'}
+              </Typography>
 
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={handleView}
-                        sx={{
-                          borderColor: '#8bc34a',
-                          color: '#c5e1a5',
-                          textTransform: 'none',
-                          fontWeight: 600,
-                          px: 2.2,
-                          whiteSpace: 'nowrap',
-                          '&:hover': {
-                            borderColor: '#aed581',
-                            backgroundColor: 'rgba(139,195,74,0.08)',
-                          },
-                        }}
-                      >
-                        View strain
-                      </Button>
-                    </Stack>
-                  )
-                })}
-              </Stack>
-            </>
-          )}
-        </CardContent>
-      </Card>
+              {/* Terpenes */}
+              {Array.isArray(labelInsights.terpenes) &&
+                labelInsights.terpenes.length > 0 && (
+                  <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                    Terpenes:{' '}
+                    {labelInsights.terpenes
+                      .map((t) =>
+                        t.percent != null
+                          ? `${t.name} ${t.percent}%`
+                          : t.name
+                      )
+                      .join(', ')}
+                  </Typography>
+                )}
+
+              <Button
+                variant="text"
+                size="small"
+                sx={{
+                  mt: 0.5,
+                  alignSelf: 'flex-start',
+                  textTransform: 'none',
+                }}
+                onClick={() => setShowLabelDialog(true)}
+              >
+                View full label text
+              </Button>
+            </Stack>
+          </Box>
+        )}
+
+        {/* Other matches */}
+        {Array.isArray(otherMatches) && otherMatches.length > 0 && (
+          <Box>
+            <Divider sx={{ mb: 1, borderColor: 'rgba(255,255,255,0.08)' }} />
+            <Typography
+              variant="subtitle2"
+              sx={{ color: '#C5E1A5', mb: 1 }}
+            >
+              Similar strains
+            </Typography>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              {otherMatches.map((m) => (
+                <Chip
+                  key={m.id || m.name}
+                  label={m.name}
+                  size="small"
+                  sx={{
+                    mb: 1,
+                    bgcolor: 'rgba(255,255,255,0.04)',
+                    color: '#E8F5E9',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    borderWidth: 1,
+                    borderStyle: 'solid',
+                  }}
+                  onClick={
+                    onViewStrain
+                      ? () => onViewStrain(m)
+                      : undefined
+                  }
+                />
+              ))}
+            </Stack>
+          </Box>
+        )}
+
+        {/* Actions */}
+        <Stack spacing={1.2}>
+          <Button
+            variant="contained"
+            fullWidth
+            disabled={!onViewStrain}
+            onClick={() => onViewStrain && onViewStrain(top)}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 999,
+            }}
+          >
+            View strain details
+          </Button>
+
+          <Button
+            variant="outlined"
+            fullWidth
+            disabled={isGuest || !onSaveMatch}
+            onClick={() => !isGuest && onSaveMatch && onSaveMatch(top)}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 999,
+            }}
+          >
+            {isGuest ? 'Sign in to save' : 'Save this match'}
+          </Button>
+
+          <Button
+            variant="outlined"
+            fullWidth
+            disabled={isGuest || !onLogExperience}
+            onClick={() =>
+              !isGuest && onLogExperience && onLogExperience(top)
+            }
+            sx={{
+              textTransform: 'none',
+              borderRadius: 999,
+            }}
+          >
+            {isGuest ? 'Sign in to log experience' : 'Log experience'}
+          </Button>
+
+          <Button
+            variant="text"
+            fullWidth
+            disabled={!onReportMismatch}
+            onClick={() =>
+              onReportMismatch && onReportMismatch(top)
+            }
+            sx={{
+              textTransform: 'none',
+              color: 'rgba(244, 199, 144, 0.9)',
+            }}
+          >
+            Report mismatch
+          </Button>
+
+          <Button
+            variant="outlined"
+            fullWidth
+            onClick={() =>
+              window.open(
+                `https://www.google.com/search?q=${seedsQuery}`,
+                '_blank'
+              )
+            }
+            sx={{
+              textTransform: 'none',
+              borderRadius: 999,
+              borderColor: 'rgba(124, 179, 66, 0.8)',
+              color: '#C5E1A5',
+            }}
+          >
+            Find seeds for {name}
+          </Button>
+        </Stack>
+      </Stack>
+
+      {/* Label text dialog */}
+      <Dialog
+        open={showLabelDialog}
+        onClose={() => setShowLabelDialog(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Label text</DialogTitle>
+        <DialogContent dividers>
+          <Typography
+            variant="body2"
+            sx={{ whiteSpace: 'pre-wrap' }}
+          >
+            {labelInsights?.rawText || 'No label text captured.'}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowLabelDialog(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
-  )
+  );
 }

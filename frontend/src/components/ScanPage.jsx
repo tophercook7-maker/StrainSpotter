@@ -11,71 +11,161 @@ import {
   CircularProgress,
   Alert,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import ScanResultCard from './ScanResultCard';
 import { useAuth } from '../hooks/useAuth';
+import { API_BASE } from '../config';
 
-// Helper to build API URL based on VITE_API_BASE_URL if present
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+const GUEST_LIMIT = 20;
+
+function getGuestScansUsed() {
+  if (typeof window === 'undefined') return 0;
+  const raw = window.localStorage.getItem('ss_guest_scans_used');
+  const n = raw ? parseInt(raw, 10) : 0;
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function setGuestScansUsed(n) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem('ss_guest_scans_used', String(n));
+}
 
 function apiUrl(path) {
   if (!path.startsWith('/')) path = `/${path}`;
-  return API_BASE ? `${API_BASE}${path}` : path;
+  return `${API_BASE}${path}`;
 }
 
-// Convert backend scan row into the shape ScanResultCard expects
+// Normalize backend scan row into the shape ScanResultCard expects,
+// including labelInsights from the backend.
 function normalizeScanResult(scan) {
   if (!scan || !scan.result) return null;
 
-  const matches = scan.result.matches || scan.result.match || [];
-  const list = Array.isArray(matches) ? matches : [matches];
-  if (!list.length) return null;
+  const result = scan?.result || {};
+  
+  // Build matches from visualMatches structure
+  let matchesFromVisual = [];
+  if (result.visualMatches) {
+    // visualMatches.match is the top match (single object)
+    // visualMatches.candidates is an array of additional candidates
+    const topMatch = result.visualMatches.match;
+    const candidates = Array.isArray(result.visualMatches.candidates) 
+      ? result.visualMatches.candidates 
+      : [];
+    
+    if (topMatch) {
+      matchesFromVisual = [topMatch, ...candidates];
+    } else if (candidates.length > 0) {
+      matchesFromVisual = candidates;
+    }
+  }
+  
+  // Build matches from flat structure (fallback)
+  let matchesFromFlat = [];
+  if (Array.isArray(result.matches)) {
+    matchesFromFlat = result.matches;
+  } else if (result.match) {
+    matchesFromFlat = [result.match];
+  }
+  
+  // Decide which list to use (prefer visualMatches if available)
+  const allMatches = matchesFromVisual.length > 0 ? matchesFromVisual : matchesFromFlat;
+  
+  // If no matches found, return null so UI shows "No strain match found yet"
+  if (allMatches.length === 0) {
+    return null;
+  }
 
-  const [first, ...rest] = list;
-  const toItem = (m) => {
-    const s = m.strain || {};
-    const confidence = m.confidence ?? m.score ?? 0;
+  // Map each match to normalized format
+  const toItem = (candidate) => {
+    // Candidates may be serialized (strain fields directly) or have nested strain
+    const strainObj = candidate.strain || candidate;
+    const confidence = 
+      candidate.confidence ?? 
+      candidate.score ?? 
+      candidate.probability ?? 
+      0;
+    
     return {
-      id: s.slug || s.id || s.name || 'unknown',
-      name: s.name || 'Unknown strain',
-      type: s.type || 'Hybrid',
-      description: s.description || '',
+      id: strainObj.strain_slug || strainObj.slug || strainObj.id || strainObj.name || 'unknown',
+      name: strainObj.name || 'Unknown strain',
+      type: strainObj.type || strainObj.category || 'Hybrid',
+      description: strainObj.description || strainObj.summary || '',
       confidence,
+      // IMPORTANT: pass through any DB metadata on the strain, if present
+      dbMeta: strainObj, // we'll use this in ScanResultCard
     };
   };
+
+  const [first, ...rest] = allMatches;
+
+  // Extract labelInsights from various possible locations
+  const labelInsights = 
+    result.labelInsights || 
+    result.visualMatches?.labelInsights || 
+    null;
 
   return {
     topMatch: toItem(first),
     otherMatches: rest.map(toItem),
+    labelInsights,
   };
 }
 
 export default function ScanPage({ onBack, onNavigate }) {
   const { user } = useAuth();
+  const isGuest = !user;
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
   const [scanResult, setScanResult] = useState(null);
   const [error, setError] = useState(null);
+  const [guestScansUsed, setGuestScansUsedState] = useState(() => getGuestScansUsed());
+  const [showPlans, setShowPlans] = useState(false);
 
   const handleBack = () => {
     if (onBack) onBack();
   };
 
-  const handleFileChange = async (event) => {
+  // Helper function to start a scan for a given file
+  const startScanForFile = async (file) => {
+    if (!file) {
+      setError('Choose a photo first.');
+      return;
+    }
+
+    // Check guest limit before starting
+    if (isGuest && guestScansUsed >= GUEST_LIMIT) {
+      setShowPlans(true);
+      return;
+    }
+
+    setError(null);
+    setScanResult(null);
+    await startScan(file);
+  };
+
+  const handleFileChange = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Clear previous state
     setError(null);
     setScanResult(null);
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
+    setIsUploading(false);
+    setIsPolling(false);
 
-    await startScan(file);
+    // Auto-start scan when file is selected
+    startScanForFile(file);
   };
 
   const handlePickImageClick = () => {
@@ -85,12 +175,16 @@ export default function ScanPage({ onBack, onNavigate }) {
     }
   };
 
+  const handleStartScan = async () => {
+    // Re-run scan for the currently selected file
+    await startScanForFile(selectedFile);
+  };
+
   async function startScan(file) {
     try {
       setIsUploading(true);
       setIsPolling(false);
       setError(null);
-      setScanResult(null);
 
       const base64 = await fileToBase64(file);
 
@@ -108,15 +202,33 @@ export default function ScanPage({ onBack, onNavigate }) {
         body: JSON.stringify(payload),
       });
 
+      const data = await safeJson(res);
+
       if (!res.ok) {
-        const data = await safeJson(res);
-        throw new Error(data?.error || `Upload failed (${res.status})`);
+        // Check if it's a guest limit error
+        if (res.status === 403 && data?.error === 'Guest scan limit reached') {
+          setShowPlans(true);
+          return;
+        }
+        throw new Error(data?.error || data?.hint || `Upload failed (${res.status})`);
       }
 
-      const data = await res.json();
       const scanId = data.id || data.scan_id || data.scanId;
       if (!scanId) {
         throw new Error('Did not receive a scan id from the server.');
+      }
+
+      // Trigger Vision processing
+      try {
+        const processRes = await fetch(apiUrl(`/api/scans/${scanId}/process`), {
+          method: 'POST',
+        });
+        if (!processRes.ok) {
+          console.warn('[startScan] Process endpoint returned non-OK:', processRes.status);
+        }
+      } catch (e) {
+        console.error('[startScan] Error triggering scan processing', e);
+        // Do not throw here; we'll let pollScan handle timeouts/errors
       }
 
       setIsUploading(false);
@@ -132,7 +244,7 @@ export default function ScanPage({ onBack, onNavigate }) {
   }
 
   async function pollScan(scanId, attempt = 0) {
-    const maxAttempts = 25; // ~37.5s at 1.5s delay
+    const maxAttempts = 30; // ~45s at 1.5s delay
     const delayMs = 1500;
 
     try {
@@ -143,34 +255,82 @@ export default function ScanPage({ onBack, onNavigate }) {
         throw new Error(data?.error || `Scan lookup failed (${res.status})`);
       }
 
-      const scan = data.scan || data;
-      const status = scan.status || scan.state || 'unknown';
+      // Backend may return wrapped { scan: {...} } or direct scan object
+      const scan = data?.scan || data;
+      
+      // Temporary debug log
+      console.log('[pollScan] response', data);
 
-      if (status === 'complete' || status === 'done' || scan.result) {
+      if (!scan) {
+        throw new Error('Invalid scan response from server');
+      }
+
+      const status = scan?.status || scan?.state || 'unknown';
+      const result = scan?.result;
+
+      // Check if scan has a result (matches or visualMatches)
+      const hasResult = !!(
+        result && (
+          (result.visualMatches && (result.visualMatches.match || result.visualMatches.candidates?.length > 0)) ||
+          (Array.isArray(result.matches) && result.matches.length > 0) ||
+          result.match
+        )
+      );
+
+      // Check if scan is complete
+      const isComplete = 
+        status === 'done' || 
+        status === 'complete' || 
+        status === 'completed' || 
+        status === 'success';
+
+      // Check if scan has an error
+      const isError = 
+        status === 'error' || 
+        status === 'failed' || 
+        !!scan?.error || 
+        !!scan?.errorMessage;
+
+      // If scan is complete OR has a result, stop polling and show results
+      if (isComplete || hasResult) {
         setIsPolling(false);
+        
+        // Temporary debug log
+        console.log('[pollScan] done', { status, hasResult, result: scan.result });
+        
         const normalized = normalizeScanResult(scan);
         if (!normalized) {
           setError('No strain match found yet. Try a clearer photo or different angle.');
           setScanResult(null);
         } else {
           setScanResult(normalized);
+
+          // Count successful guest scans
+          if (isGuest) {
+            const used = guestScansUsed + 1;
+            setGuestScansUsedState(used);
+            setGuestScansUsed(used);
+          }
         }
         return;
       }
 
-      if (status === 'error') {
+      // If scan has an error status or error field, stop polling and show error
+      if (isError) {
         setIsPolling(false);
-        setError(scan.error || 'Scan failed on the server.');
+        const errorMessage = scan?.error || scan?.errorMessage || 'Scan failed on the server.';
+        setError(errorMessage);
         return;
       }
 
+      // If we've hit max attempts, stop polling
       if (attempt >= maxAttempts) {
         setIsPolling(false);
         setError('Scan is taking too long. Please try again with a clearer photo.');
         return;
       }
 
-      // Wait before polling again
+      // Otherwise, schedule another poll attempt
       setTimeout(() => {
         pollScan(scanId, attempt + 1);
       }, delayMs);
@@ -206,6 +366,7 @@ export default function ScanPage({ onBack, onNavigate }) {
     }
   }
 
+
   return (
     <Box
       sx={{
@@ -237,7 +398,7 @@ export default function ScanPage({ onBack, onNavigate }) {
         sx={{
           position: 'relative',
           zIndex: 1,
-          pt: 2,
+          pt: 'calc(env(safe-area-inset-top) + 20px)',
           pb: 4,
           flex: 1,
           display: 'flex',
@@ -245,7 +406,7 @@ export default function ScanPage({ onBack, onNavigate }) {
         }}
       >
         {/* Back button */}
-        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ mb: 2, mt: 0, pt: 0, display: 'flex', alignItems: 'center' }}>
           <IconButton
             onClick={handleBack}
             sx={{
@@ -280,13 +441,12 @@ export default function ScanPage({ onBack, onNavigate }) {
             variant="body2"
             sx={{ color: 'rgba(224, 242, 241, 0.9)' }}
           >
-            Upload a photo of a cannabis product or bud. We’ll analyze the
-            label, colors, and visual features to find the closest strains in
-            your library.
+            Choose or take a photo of a cannabis product or bud. We'll analyze
+            it and show you the closest strain matches.
           </Typography>
         </Box>
 
-        {/* User hint (non-blocking) */}
+        {/* Signed-in hint (non-blocking) */}
         {user && (
           <Typography
             variant="caption"
@@ -337,7 +497,8 @@ export default function ScanPage({ onBack, onNavigate }) {
                     variant="body2"
                     sx={{ color: 'rgba(224, 242, 241, 0.9)' }}
                   >
-                    Tap below to choose a photo of a label or bud.
+                    Tap below to take a new photo or choose one from your
+                    library.
                   </Typography>
                 </Stack>
               )}
@@ -377,7 +538,31 @@ export default function ScanPage({ onBack, onNavigate }) {
                   },
                 }}
               >
-                Choose photo to scan
+                Take or choose photo
+              </Button>
+
+              <Button
+                variant="outlined"
+                fullWidth
+                size="large"
+                onClick={handleStartScan}
+              disabled={!selectedFile || isUploading || isPolling}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 700,
+                py: 1.1,
+                borderRadius: 2,
+                borderColor: selectedFile ? '#9CCC65' : 'rgba(200, 230, 201, 0.4)',
+                color: selectedFile ? '#C5E1A5' : 'rgba(224, 242, 241, 0.6)',
+                '&:hover': {
+                  borderColor: selectedFile ? '#CDDC39' : 'rgba(200, 230, 201, 0.4)',
+                  backgroundColor: selectedFile
+                    ? 'rgba(156, 204, 101, 0.12)'
+                    : 'transparent',
+                },
+              }}
+            >
+              {selectedFile ? 'Start scan' : 'Choose a photo to enable scan'}
               </Button>
 
               <Typography
@@ -429,10 +614,11 @@ export default function ScanPage({ onBack, onNavigate }) {
         {scanResult && (
           <ScanResultCard
             result={scanResult}
-            onSaveMatch={() => {}}
-            onLogExperience={() => {}}
-            onReportMismatch={() => {}}
-            onViewStrain={() => {}}
+            isGuest={isGuest}
+            onSaveMatch={undefined}
+            onLogExperience={undefined}
+            onReportMismatch={undefined}
+            onViewStrain={undefined}
           />
         )}
 
@@ -444,11 +630,52 @@ export default function ScanPage({ onBack, onNavigate }) {
               textAlign: 'center',
             }}
           >
-            After you scan, we’ll show you the best match and similar strains
+            After you scan, we'll show you the best match and similar strains
             here.
           </Typography>
         )}
       </Container>
+
+      {/* Plans popup for guests who hit the limit */}
+      <Dialog
+        open={showPlans}
+        onClose={() => setShowPlans(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Get more scans</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            You've used your 20 free guest scans. Join the garden to unlock full
+            access and auto-refreshing monthly scan bundles.
+          </Typography>
+          <Stack spacing={2}>
+            <Button
+              variant="contained"
+              fullWidth
+              onClick={() => {
+                setShowPlans(false);
+                onNavigate?.('membership');
+              }}
+            >
+              View membership plans
+            </Button>
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={() => {
+                setShowPlans(false);
+                onNavigate?.('buy-scans');
+              }}
+            >
+              Buy additional scan packs
+            </Button>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowPlans(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

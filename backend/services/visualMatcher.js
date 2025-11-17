@@ -5,6 +5,206 @@
  * extracted from Google Vision API (colors, labels, web matches, etc.)
  */
 
+// --- Intense label insights from OCR text ---
+
+const LABEL_TERPENES = [
+  'myrcene',
+  'limonene',
+  'caryophyllene',
+  'pinene',
+  'linalool',
+  'humulene',
+  'terpinolene',
+  'ocimene'
+];
+
+const CANNABINOIDS = [
+  'thc',
+  'thca',
+  'thcv',
+  'cbd',
+  'cbda',
+  'cbg',
+  'cbn',
+  'cbc'
+];
+
+function extractLabelInsights(detectedText) {
+  if (!detectedText) return null;
+
+  const raw = detectedText;
+  const lower = raw.toLowerCase();
+
+  // Helper: first match or null
+  const firstMatch = (re) => {
+    const m = lower.match(re);
+    return m ? m[1].trim() : null;
+  };
+
+  // THC / CBD % and mg (best effort)
+  const thcPercent = firstMatch(/thc[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*%/);
+  const cbdPercent = firstMatch(/cbd[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*%/);
+
+  const thcMg = firstMatch(/thc[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*mg/);
+  const cbdMg = firstMatch(/cbd[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*mg/);
+
+  // Other cannabinoids (best effort map)
+  const cannabinoids = [];
+  for (const cann of CANNABINOIDS) {
+    const rePct = new RegExp(cann + "[^0-9]{0,10}([0-9]+(?:\\.[0-9]+)?)\\s*%", "i");
+    const reMg = new RegExp(cann + "[^0-9]{0,10}([0-9]+(?:\\.[0-9]+)?)\\s*mg", "i");
+
+    const pctMatch = raw.match(rePct);
+    const mgMatch = raw.match(reMg);
+
+    if (pctMatch || mgMatch) {
+      cannabinoids.push({
+        name: cann.toUpperCase(),
+        percent: pctMatch ? parseFloat(pctMatch[1]) : null,
+        mg: mgMatch ? parseFloat(mgMatch[1]) : null
+      });
+    }
+  }
+
+  // Product type: flower, preroll, vape, edible, concentrate
+  let productType = null;
+  if (lower.includes('pre-roll') || lower.includes('preroll') || lower.includes('pre roll')) {
+    productType = 'Pre-roll';
+  } else if (lower.includes('concentrate') || lower.includes('wax') || lower.includes('shatter') || lower.includes('rosin') || lower.includes('dab')) {
+    productType = 'Concentrate';
+  } else if (lower.includes('vape') || lower.includes('cart') || lower.includes('cartridge')) {
+    productType = 'Vape / Cartridge';
+  } else if (lower.includes('edible') || lower.includes('gummy') || lower.includes('chocolate') || lower.includes('cookie')) {
+    productType = 'Edible';
+  } else if (lower.includes('flower') || lower.includes('bud') || lower.includes('whole bud')) {
+    productType = 'Flower';
+  }
+
+  // Net weight (g, mg, oz)
+  // Examples: "Net Wt 1g", "3.5 g", "100 mg"
+  let netWeightValue = null;
+  let netWeightUnit = null;
+  const weightMatch = lower.match(/(?:net wt|net weight|net|weight)?[^0-9]{0,5}([0-9]+(?:\.[0-9]+)?)\s*(g|grams|mg|milligrams|oz|ounce|ounces)\b/);
+  if (weightMatch) {
+    netWeightValue = parseFloat(weightMatch[1]);
+    const unitRaw = weightMatch[2];
+    if (/^g|grams$/.test(unitRaw)) netWeightUnit = 'g';
+    else if (/^mg|milligrams$/.test(unitRaw)) netWeightUnit = 'mg';
+    else if (/^oz|ounce|ounces$/.test(unitRaw)) netWeightUnit = 'oz';
+  }
+
+  // Brand / producer: look for "manufactured by", "produced by", or "distributed by"
+  let brand = null;
+  const brandMarkers = ['manufactured by', 'produced by', 'distributed by', 'cultivated by', 'grown by'];
+  for (const marker of brandMarkers) {
+    const idx = lower.indexOf(marker);
+    if (idx !== -1) {
+      const tail = raw.slice(idx, idx + 160);
+      const m = tail.match(new RegExp(marker + "\\s+([A-Za-z0-9 &'\\-]+)"));
+      if (m) {
+        brand = m[1].trim();
+        break;
+      }
+    }
+  }
+
+  // Batch / lot ID (Batch, Lot)
+  const batchId =
+    firstMatch(/batch[^a-z0-9]{0,5}([a-z0-9\-]+)/) ||
+    firstMatch(/lot[^a-z0-9]{0,5}([a-z0-9\-]+)/);
+
+  // License / permit (License, Lic #, Permit #, Lic. No., etc.)
+  const licenseNumber =
+    firstMatch(/license[^a-z0-9]{0,5}([a-z0-9\-]+)/) ||
+    firstMatch(/lic[^a-z0-9]{0,5}([a-z0-9\-]+)/) ||
+    firstMatch(/permit[^a-z0-9]{0,5}([a-z0-9\-]+)/);
+
+  // Test lab name: look for "tested by" or "lab"
+  let labName = null;
+  const testedIdx = lower.indexOf('tested by');
+  if (testedIdx !== -1) {
+    const tail = raw.slice(testedIdx, testedIdx + 160);
+    const m = tail.match(/tested by\s+([A-Za-z0-9 &'\\-]+)/i);
+    if (m) {
+      labName = m[1].trim();
+    }
+  } else {
+    const labIdx = lower.indexOf('laboratories');
+    if (labIdx !== -1) {
+      const tail = raw.slice(labIdx - 40, labIdx + 40);
+      const m = tail.match(/([A-Za-z0-9 &'\\-]+laborator(?:y|ies))/i);
+      if (m) {
+        labName = m[1].trim();
+      }
+    }
+  }
+
+  // Dates: package / test / expiration
+  // We just best-effort parse ISO-ish or MM/DD/YYYY patterns
+  const datePatterns = [
+    /packaged on[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
+    /packaged[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
+    /tested on[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
+    /test date[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
+    /expires[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
+    /exp[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
+  ];
+
+  let packageDate = null;
+  let testDate = null;
+  let expirationDate = null;
+
+  for (const re of datePatterns) {
+    const m = lower.match(re);
+    if (!m) continue;
+    if (re.source.startsWith('packaged')) packageDate = m[1];
+    else if (re.source.startsWith('tested on') || re.source.startsWith('test date')) testDate = m[1];
+    else if (re.source.startsWith('expires') || re.source.startsWith('exp')) expirationDate = m[1];
+  }
+
+  // Terpenes: { name, percent }
+  const terpenes = [];
+  for (const terp of LABEL_TERPENES) {
+    const re = new RegExp(terp + "[^0-9]{0,10}([0-9]+(?:\\.[0-9]+)?)\\s*%", "i");
+    const m = raw.match(re);
+    if (m) {
+      terpenes.push({
+        name: terp,
+        percent: parseFloat(m[1]),
+      });
+    }
+  }
+
+  return {
+    // Potency
+    thcPercent: thcPercent != null ? parseFloat(thcPercent) : null,
+    cbdPercent: cbdPercent != null ? parseFloat(cbdPercent) : null,
+    thcMg: thcMg != null ? parseFloat(thcMg) : null,
+    cbdMg: cbdMg != null ? parseFloat(cbdMg) : null,
+    cannabinoids,
+
+    // Product meta
+    productType,
+    netWeightValue,
+    netWeightUnit,
+
+    // Producer / tracking
+    brand,
+    batchId,
+    licenseNumber,
+    labName,
+
+    // Dates
+    packageDate,
+    testDate,
+    expirationDate,
+
+    // Terpenes & raw
+    terpenes,
+    rawText: raw,
+  };
+}
+
 /**
  * Main function: Match a scan's Vision API results against strain database
  * @param {Object} visionResult - Full Google Vision API response
@@ -12,8 +212,18 @@
  * @returns {Array} Top 10 matches with scores and reasoning
  */
 export function matchStrainByVisuals(visionResult, strains) {
+  // Debug logging at start
+  console.log('[VisualMatcher] start', {
+    visionHasText: !!(visionResult && visionResult.textAnnotations && visionResult.textAnnotations.length),
+    visionHasLabels: !!(visionResult && visionResult.labelAnnotations && visionResult.labelAnnotations.length),
+    strainCount: Array.isArray(strains) ? strains.length : 0,
+  });
+
   // Extract features from Vision API result
   const features = extractVisualFeatures(visionResult);
+
+  // Extract label insights (THC, CBD, terpenes, brand)
+  const labelInsights = extractLabelInsights(features.detectedText);
 
   // Detect macro/sugar leaf image: lots of 'leaf', 'macro', 'trichome', 'close-up', 'herb', 'green', 'weed' labels, no text
   const macroLabels = ['leaf', 'macro', 'trichome', 'close-up', 'herb', 'green', 'weed', 'perennial plant'];
@@ -26,7 +236,8 @@ export function matchStrainByVisuals(visionResult, strains) {
     dominantColor: features.dominantColor,
     webMatchesCount: features.webMatches.length,
     detectedText: features.detectedText.substring(0, 100),
-    isMacro
+    isMacro,
+    labelInsights: labelInsights ? { thc: labelInsights.thcPercent, cbd: labelInsights.cbdPercent, terpeneCount: labelInsights.terpenes.length } : null
   });
 
   // Score each strain
@@ -37,15 +248,56 @@ export function matchStrainByVisuals(visionResult, strains) {
       score: scoreBreakdown.total,
       confidence: calculateConfidence(scoreBreakdown.total),
       reasoning: generateReasoning(scoreBreakdown, strain, features),
-      scoreBreakdown
+      scoreBreakdown,
+      labelInsights // Include label insights with each match
     };
   });
 
-  // Return top matches above minimum threshold
-  return scored
-    .filter(s => s.score >= 10) // Minimum score threshold
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 10);
+  // Debug logging after scores are computed
+  console.log('[VisualMatcher] scored summary', {
+    totalScored: scored.length,
+    nonZero: scored.filter(s => s.score > 0).length,
+    topScores: scored
+      .filter(s => s.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map(s => ({
+        name: s.strain?.name || s.strain?.strain_name || s.strain?.slug || 'unknown',
+        score: s.score
+      }))
+  });
+
+  // Sort all scored strains by score descending
+  const allScored = scored
+    .filter(s => s.score > 0) // Only exclude truly zero scores
+    .sort((a, b) => b.score - a.score);
+
+  // Try filtering by a low threshold first (more permissive)
+  const filtered = allScored.filter(s => s.score >= 1);
+
+  // Always return at least the top 5 matches (or all if fewer exist)
+  // If filtered is empty but we have scored strains, use allScored instead
+  const candidateList = filtered.length > 0 ? filtered : allScored;
+  const matches = candidateList.slice(0, 5); // Top 5 matches
+
+  // If we still have no matches but strains exist, return at least the top scored one
+  const finalMatches = matches.length > 0 
+    ? matches 
+    : (allScored.length > 0 ? [allScored[0]] : []);
+
+  // Debug logging for top results before returning
+  const matchesArray = Array.isArray(finalMatches) ? finalMatches : [];
+  console.log('[VisualMatcher] top matches', matchesArray.slice(0, 5).map(m => ({
+    name: m.strain && (m.strain.name || m.strain.strain_name || m.strain.slug || 'unknown'),
+    score: m.score,
+    confidence: m.confidence
+  })));
+
+  // Attach label insights to the result set
+  return {
+    matches: finalMatches,
+    labelInsights
+  };
 }
 
 /**
