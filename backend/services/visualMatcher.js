@@ -208,6 +208,15 @@ function extractLabelInsights(detectedText) {
       continue; // Skip marketing lines like "Scan to Learn M00329P11249111786"
     }
     
+    // REJECT producer/test lab lines (these are brands, not strain names)
+    if (normalized.includes('manufactured by') ||
+        normalized.includes('tested by') ||
+        normalized.includes('distributed by') ||
+        normalized.includes('producer:') ||
+        normalized.includes('processor:')) {
+      continue; // Skip producer/brand lines like "Manufactured by Dark Horse"
+    }
+    
     // REJECT lines immediately if they match batch/ID patterns
     // Long alphanumeric strings (≥8 consecutive alphanumerics)
     if (/[a-z0-9]{8,}/i.test(line)) {
