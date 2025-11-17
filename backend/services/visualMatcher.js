@@ -183,31 +183,63 @@ function extractLabelInsights(detectedText) {
   }
 
   // Extract likely strain name from label text
-  // Evaluate all lines and pick the best candidate (not just the first)
+  // Strict rules to guarantee multi-word plant/product names, never batch IDs or weights
   const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   
   const genericWords = [
     'net', 'wt', 'activation', 'time', 'approx', 'tested', 'manufactured',
     'batch', 'permit', 'ext', 'made', 'test', 'thc', 'cbd', 'vape', 'cart',
     'edible', 'gummies', 'flower', 'hybrid', 'indica', 'sativa',
-    '1g', '1.0g', 'gram', 'g'
+    '1g', '1.0g', 'gram', 'g', 'cartridge'
   ];
   
   let bestCandidate = null;
   let bestScore = -Infinity;
   
   for (const line of lines) {
-    // Clean the line: remove non-alphanumeric characters except spaces and apostrophes
-    const cleaned = line.replace(/[^A-Za-z0-9 ']/g, ' ').trim();
+    // Pre-process: normalize to lowercase, strip weird characters except letters, numbers, spaces, apostrophes
+    const normalized = line.toLowerCase().replace(/[^a-z0-9 ']/g, ' ').trim();
     
-    // Split into words
-    const words = cleaned.split(/\s+/).filter(w => w.length > 0);
+    // Ignore empty lines
+    if (!normalized) continue;
     
-    // Filter to get candidate words:
-    // - Must contain at least one letter
-    // - Must not be in genericWords (case-insensitive)
+    // REJECT lines immediately if they match batch/ID patterns
+    // Long alphanumeric strings (≥8 consecutive alphanumerics)
+    if (/[a-z0-9]{8,}/i.test(line)) {
+      continue; // Skip batch IDs like "M00329P11249111786"
+    }
+    
+    // Batch/lot/permit/license patterns
+    if (/batch|lot|permit|license/i.test(line)) {
+      continue; // Skip lines with these keywords
+    }
+    
+    // REJECT weight or quantity patterns
+    if (/[0-9]+(\.[0-9]+)?\s*(g|mg|oz)$/i.test(line) || /net wt/i.test(line) || /^1g$|^1\.0g$/i.test(line)) {
+      continue; // Skip weight lines
+    }
+    
+    // REJECT lines that are mostly numbers or special chars
+    const letterCount = (line.match(/[a-z]/gi) || []).length;
+    const totalChars = line.replace(/\s/g, '').length;
+    if (totalChars > 0 && letterCount / totalChars < 0.3) {
+      continue; // Skip if less than 30% letters
+    }
+    
+    // REJECT lines that contain mostly generic words
+    const genericWordCount = genericWords.filter(gw => normalized.includes(gw)).length;
+    const wordCount = normalized.split(/\s+/).filter(w => w.length > 0).length;
+    if (wordCount > 0 && genericWordCount / wordCount > 0.5) {
+      continue; // Skip if more than 50% generic words
+    }
+    
+    // Extract candidate words
+    const words = normalized.split(/\s+/).filter(w => w.length > 0);
+    
+    // Filter out generic words, words with no letters, and short words
     const candidateWords = words.filter(word => {
       if (!/[a-z]/i.test(word)) return false; // Must have at least one letter
+      if (word.length <= 2) return false; // Filter out single- or two-letter words
       const wordLower = word.toLowerCase();
       return !genericWords.includes(wordLower); // Not a generic word
     });
@@ -215,33 +247,49 @@ function extractLabelInsights(detectedText) {
     // Build candidate name
     const candidateName = candidateWords.join(' ').trim();
     
-    // Apply filters to reject weight-like values and short/invalid candidates
-    if (!candidateName || candidateName.length < 3) {
-      continue; // Skip empty or too short
+    // REJECT candidateName if it doesn't meet minimum requirements
+    if (!candidateName || candidateName.length < 4) {
+      continue; // Too short
     }
     
-    // Reject single-word candidates that are too short
-    if (candidateWords.length === 1 && candidateWords[0].length <= 2) {
-      continue; // Skip single letters or very short words
+    if (candidateWords.length < 2) {
+      continue; // Must have at least 2 words
     }
     
-    // Reject weight-like patterns (e.g., "0g", "1.0g", "3.5 g", "100mg")
-    const weightPatterns = [
-      /^\d+(\.\d+)?g$/i,           // "0g", "1.0g"
-      /^\d+(\.\d+)?\s*(g|mg|oz)$/i  // "1.0 g", "100 mg", "3.5 oz"
-    ];
-    
-    if (weightPatterns.some(pattern => pattern.test(candidateName))) {
-      continue; // Skip weight-like values
+    // Check if any word is ≤2 characters (shouldn't happen after filter, but double-check)
+    if (candidateWords.some(w => w.length <= 2)) {
+      continue;
     }
     
-    // Score the candidate
-    // Base score: more words = better (strain names are usually 2+ words)
-    let score = candidateWords.length * 10;
+    // SCORING
+    let score = 0;
     
-    // Penalty for having digits (prefer "Glitter Bomb" over "Strain 420")
+    // Base score: number of words × 20
+    score = candidateWords.length * 20;
+    
+    // Bonus +30 if no digits
+    if (!/\d/.test(candidateName)) {
+      score += 30;
+    }
+    
+    // Bonus +50 if 2+ words
+    if (candidateWords.length >= 2) {
+      score += 50;
+    }
+    
+    // Penalty -100 for any digit presence
     if (/\d/.test(candidateName)) {
-      score -= 5;
+      score -= 100;
+    }
+    
+    // Penalty -200 if any word appears in lowercase in original label text
+    // (helps remove generic packaging words that might slip through)
+    const originalLower = raw.toLowerCase();
+    const hasGenericInOriginal = candidateWords.some(word => {
+      return genericWords.some(gw => originalLower.includes(gw));
+    });
+    if (hasGenericInOriginal) {
+      score -= 200;
     }
     
     // If this is the best candidate so far, save it
@@ -253,6 +301,9 @@ function extractLabelInsights(detectedText) {
   
   // Use the best candidate found (or null if none passed filters)
   const strainName = bestCandidate;
+  
+  // Log the extracted strain name
+  console.log('[extractLabelInsights] Final strainName:', strainName);
 
   return {
     // Potency
