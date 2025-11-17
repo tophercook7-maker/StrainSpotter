@@ -261,15 +261,7 @@ function extractLabelInsights(detectedText) {
       continue; // Skip if less than 30% letters
     }
     
-    // REJECT lines that contain mostly generic words
-    const genericWordCount = genericWords.filter(gw => normalized.includes(gw)).length;
-    const wordCount = normalized.split(/\s+/).filter(w => w.length > 0).length;
-    if (wordCount > 0 && genericWordCount / wordCount > 0.5) {
-      console.log('[extractLabelInsights] SKIP: mostly generic words');
-      continue; // Skip if more than 50% generic words
-    }
-    
-    // Extract candidate words
+    // Extract candidate words first to check if there are any meaningful words
     const words = normalized.split(/\s+/).filter(w => w.length > 0);
     
     // Filter out generic words, words with no letters, and short words
@@ -279,6 +271,24 @@ function extractLabelInsights(detectedText) {
       const wordLower = word.toLowerCase();
       return !genericWords.includes(wordLower); // Not a generic word
     });
+    
+    // REJECT lines that contain mostly generic words
+    // Only skip if: (1) there are NO meaningful non-generic words, AND (2) ≥80% generic
+    const wordCount = words.length;
+    if (wordCount > 0) {
+      const hasNonGeneric = candidateWords.length > 0;
+      const genericWordCount = words.filter(w => {
+        const wLower = w.toLowerCase();
+        return genericWords.includes(wLower);
+      }).length;
+      const ratio = genericWordCount / wordCount;
+      
+      // Only skip if no meaningful words AND ratio is high
+      if (!hasNonGeneric && ratio >= 0.8) {
+        console.log('[extractLabelInsights] SKIP: mostly generic words (no meaningful words)');
+        continue; // Skip if no meaningful words and ≥80% generic
+      }
+    }
     
     // Build candidate name
     const candidateName = candidateWords.join(' ').trim();
