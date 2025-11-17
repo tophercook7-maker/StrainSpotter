@@ -41,6 +41,10 @@ function extractLabelInsights(detectedText) {
 
   const raw = detectedText;
   const lower = raw.toLowerCase();
+  
+  // Debug: log start
+  console.log('[extractLabelInsights] START');
+  console.log('[extractLabelInsights] raw text:', raw);
 
   // Helper: first match or null
   const firstMatch = (re) => {
@@ -186,6 +190,10 @@ function extractLabelInsights(detectedText) {
   // Strict rules to guarantee multi-word plant/product names, never batch IDs or weights
   const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   
+  // Debug: log lines and brand
+  console.log('[extractLabelInsights] lines:', lines);
+  console.log('[extractLabelInsights] brand (before loop):', brand);
+  
   const genericWords = [
     'net', 'wt', 'activation', 'time', 'approx', 'tested', 'manufactured',
     'batch', 'permit', 'ext', 'made', 'test', 'thc', 'cbd', 'vape', 'cart',
@@ -200,11 +208,19 @@ function extractLabelInsights(detectedText) {
     // Pre-process: normalize to lowercase, strip weird characters except letters, numbers, spaces, apostrophes
     const normalized = line.toLowerCase().replace(/[^a-z0-9 ']/g, ' ').trim();
     
+    // Debug: log line and normalized version
+    console.log('[extractLabelInsights] line:', line);
+    console.log('[extractLabelInsights] normalizedLine:', normalized);
+    
     // Ignore empty lines
-    if (!normalized) continue;
+    if (!normalized) {
+      console.log('[extractLabelInsights] SKIP: empty line');
+      continue;
+    }
     
     // REJECT lines containing "scan to learn" (marketing text, not strain names)
     if (normalized.includes('scan to learn')) {
+      console.log('[extractLabelInsights] SKIP: scan to learn line');
       continue; // Skip marketing lines like "Scan to Learn M00329P11249111786"
     }
     
@@ -214,22 +230,26 @@ function extractLabelInsights(detectedText) {
         normalized.includes('distributed by') ||
         normalized.includes('producer:') ||
         normalized.includes('processor:')) {
+      console.log('[extractLabelInsights] SKIP: producer/test lab line');
       continue; // Skip producer/brand lines like "Manufactured by Dark Horse"
     }
     
     // REJECT lines immediately if they match batch/ID patterns
     // Long alphanumeric strings (≥8 consecutive alphanumerics)
     if (/[a-z0-9]{8,}/i.test(line)) {
+      console.log('[extractLabelInsights] SKIP: long alphanumeric string (batch ID)');
       continue; // Skip batch IDs like "M00329P11249111786"
     }
     
     // Batch/lot/permit/license patterns
     if (/batch|lot|permit|license/i.test(line)) {
+      console.log('[extractLabelInsights] SKIP: batch/lot/permit/license pattern');
       continue; // Skip lines with these keywords
     }
     
     // REJECT weight or quantity patterns
     if (/[0-9]+(\.[0-9]+)?\s*(g|mg|oz)$/i.test(line) || /net wt/i.test(line) || /^1g$|^1\.0g$/i.test(line)) {
+      console.log('[extractLabelInsights] SKIP: weight/quantity pattern');
       continue; // Skip weight lines
     }
     
@@ -237,6 +257,7 @@ function extractLabelInsights(detectedText) {
     const letterCount = (line.match(/[a-z]/gi) || []).length;
     const totalChars = line.replace(/\s/g, '').length;
     if (totalChars > 0 && letterCount / totalChars < 0.3) {
+      console.log('[extractLabelInsights] SKIP: mostly numbers/special chars');
       continue; // Skip if less than 30% letters
     }
     
@@ -244,6 +265,7 @@ function extractLabelInsights(detectedText) {
     const genericWordCount = genericWords.filter(gw => normalized.includes(gw)).length;
     const wordCount = normalized.split(/\s+/).filter(w => w.length > 0).length;
     if (wordCount > 0 && genericWordCount / wordCount > 0.5) {
+      console.log('[extractLabelInsights] SKIP: mostly generic words');
       continue; // Skip if more than 50% generic words
     }
     
@@ -261,23 +283,31 @@ function extractLabelInsights(detectedText) {
     // Build candidate name
     const candidateName = candidateWords.join(' ').trim();
     
+    // Debug: log candidate words and name
+    console.log('[extractLabelInsights] candidateWords:', candidateWords);
+    console.log('[extractLabelInsights] candidateName:', candidateName);
+    
     // REJECT candidateName if it doesn't meet minimum requirements
     if (!candidateName || candidateName.length < 4) {
+      console.log('[extractLabelInsights] SKIP: candidateName too short');
       continue; // Too short
     }
     
     if (candidateWords.length < 2) {
+      console.log('[extractLabelInsights] SKIP: candidateName has fewer than 2 words');
       continue; // Must have at least 2 words
     }
     
     // Check if any word is ≤2 characters (shouldn't happen after filter, but double-check)
     if (candidateWords.some(w => w.length <= 2)) {
+      console.log('[extractLabelInsights] SKIP: candidateName has word ≤2 chars');
       continue;
     }
     
     // REJECT candidate if it exactly matches the brand (case-insensitive)
     // Brands are not strain names (e.g., "Dark Horse" is the brand, not the strain)
     if (brand && candidateName.toLowerCase() === brand.toLowerCase()) {
+      console.log('[extractLabelInsights] SKIP: candidate equals brand:', candidateName);
       continue; // Skip candidates that match the brand exactly
     }
     
@@ -312,6 +342,9 @@ function extractLabelInsights(detectedText) {
       score -= 200;
     }
     
+    // Debug: log candidate score
+    console.log('[extractLabelInsights] candidate score:', { candidateName, score });
+    
     // If this is the best candidate so far, save it
     if (score > bestScore) {
       bestScore = score;
@@ -322,7 +355,8 @@ function extractLabelInsights(detectedText) {
   // Use the best candidate found (or null if none passed filters)
   const strainName = bestCandidate;
   
-  // Log the extracted strain name
+  // Debug: log brand and final strain name
+  console.log('[extractLabelInsights] brand:', brand);
   console.log('[extractLabelInsights] Final strainName:', strainName);
 
   return {
