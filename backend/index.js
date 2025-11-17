@@ -508,7 +508,9 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
       normalizedContentType = 'image/jpeg';
     }
 
-    // Guest scan limit: 20 scans per session (24 hour window)
+    // Guest scan limit: effectively infinite for dev (1000 = no practical limit)
+    const GUEST_SCAN_LIMIT = 1000;
+    
     if (!user_id) {
       const guestIdentifier = req.headers['x-session-id'] || req.ip || 'unknown';
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -526,13 +528,14 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
         return true; // For now, count all guest scans in last 24h
       }) || [];
       
-      if (!countError && matchingScans.length >= 20) {
-        return res.status(403).json({
-          error: 'Guest scan limit reached',
-          hint: 'You\'ve used all 20 free scans. Sign up for unlimited scans!',
-          limit: 20,
-          used: matchingScans.length
+      // Log warning if limit exceeded, but don't block in dev
+      if (!countError && matchingScans.length >= GUEST_SCAN_LIMIT) {
+        console.warn('[GuestScanLimit] Guest has exceeded nominal limit but continuing for dev', {
+          guestIdentifier,
+          guestScanCount: matchingScans.length,
+          limit: GUEST_SCAN_LIMIT
         });
+        // DO NOT return here, just continue to create the scan
       }
     }
 
