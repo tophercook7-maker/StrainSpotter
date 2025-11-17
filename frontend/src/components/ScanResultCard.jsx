@@ -25,18 +25,22 @@ export default function ScanResultCard({
   const [showLabelDialog, setShowLabelDialog] = useState(false);
 
   const top = result?.topMatch || result?.bestMatch || result?.strain || {};
-  const name = top.name || 'Unknown strain';
-  const type = top.type || 'Hybrid';
-  const description = top.description || '';
-  const confidence = top.confidence ?? null;
+  const labelInsights = result?.labelInsights || null;
+  const otherMatches = result?.otherMatches || [];
 
   // Extract database metadata from the strain object
   const dbMeta = top.dbMeta || {};
 
-  const labelInsights = result?.labelInsights || null;
-  const otherMatches = result?.otherMatches || [];
+  // Primary display name: prioritize label name over DB match
+  const displayName = labelInsights?.strainName || top.name || 'Unknown strain';
+  const dbStrainName = top.name || 'Unknown strain';
+  const type = top.type || dbMeta.type || 'Hybrid';
+  const description = top.description || '';
+  const confidence = top.confidence ?? null;
 
-  const seedsQuery = encodeURIComponent(`${name} cannabis seeds`);
+  // Use label name for seed search, fallback to DB name
+  const seedSearchName = labelInsights?.strainName || top.name || 'Unknown strain';
+  const seedsQuery = encodeURIComponent(`${seedSearchName} cannabis seeds`);
 
   const formatPercent = (v) =>
     v != null && !Number.isNaN(v) ? `${v}%` : '—';
@@ -79,39 +83,53 @@ export default function ScanResultCard({
       }}
     >
       <Stack spacing={2}>
-        {/* Main strain info */}
+        {/* Main title - prioritize label name */}
         <Box>
           <Typography
             variant="h6"
-            sx={{ color: '#E8F5E9', fontWeight: 700, mb: 0.5 }}
+            sx={{ color: '#E8F5E9', fontWeight: 700, mb: 1 }}
           >
-            {name}
+            {displayName}
           </Typography>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-            <Chip
-              label={type}
-              size="small"
-              sx={{
-                bgcolor: 'rgba(124, 179, 66, 0.25)',
-                color: '#C5E1A5',
-                borderColor: 'rgba(124, 179, 66, 0.8)',
-                borderWidth: 1,
-                borderStyle: 'solid',
-              }}
-            />
-            {confidence != null && (
-              <Typography
-                variant="caption"
-                sx={{ color: 'rgba(224, 242, 241, 0.85)' }}
-              >
-                Match confidence: {normalizeConfidence(confidence)}%
+
+          {/* Label name section */}
+          {labelInsights?.strainName && (
+            <Box sx={{ mb: 1.5, p: 1.5, borderRadius: 1.5, bgcolor: 'rgba(124, 179, 66, 0.1)', border: '1px solid rgba(124, 179, 66, 0.3)' }}>
+              <Typography variant="subtitle2" sx={{ color: '#C5E1A5', mb: 0.5, fontWeight: 600 }}>
+                Label name
               </Typography>
-            )}
-          </Stack>
+              <Typography variant="body2" sx={{ color: '#E8F5E9', mb: 0.5 }}>
+                {labelInsights.strainName}
+              </Typography>
+              {labelInsights.brand && (
+                <Typography variant="body2" sx={{ color: 'rgba(224, 242, 241, 0.9)' }}>
+                  Brand: {labelInsights.brand}
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          {/* Database profile section */}
+          {top.name && (
+            <Box sx={{ mb: 1.5, p: 1.5, borderRadius: 1.5, bgcolor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(124, 179, 66, 0.2)' }}>
+              <Typography variant="subtitle2" sx={{ color: '#C5E1A5', mb: 0.5, fontWeight: 600 }}>
+                Database strain
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#E8F5E9', mb: 0.5 }}>
+                {dbStrainName} {confidence != null && `(${normalizeConfidence(confidence)}% match)`}
+              </Typography>
+              {type && (
+                <Typography variant="body2" sx={{ color: 'rgba(224, 242, 241, 0.9)' }}>
+                  Type: {type}
+                </Typography>
+              )}
+            </Box>
+          )}
+
           {description && (
             <Typography
               variant="body2"
-              sx={{ color: 'rgba(224, 242, 241, 0.9)' }}
+              sx={{ color: 'rgba(224, 242, 241, 0.9)', mt: 1 }}
             >
               {description}
             </Typography>
@@ -137,11 +155,9 @@ export default function ScanResultCard({
             </Typography>
 
             <Stack spacing={0.5}>
-              {dbMeta.lineage && (
+              {dbMeta.type && (
                 <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                  Genetics: {Array.isArray(dbMeta.lineage)
-                    ? dbMeta.lineage.join(' × ')
-                    : dbMeta.lineage}
+                  Type: {dbMeta.type}
                 </Typography>
               )}
 
@@ -149,15 +165,23 @@ export default function ScanResultCard({
                 <>
                   {dbMeta.thc != null && (
                     <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                      THC: {typeof dbMeta.thc === 'number' ? `${dbMeta.thc}%` : dbMeta.thc}
+                      THC range: {typeof dbMeta.thc === 'number' ? `${dbMeta.thc}%` : Array.isArray(dbMeta.thc) ? `${dbMeta.thc[0]}% - ${dbMeta.thc[1]}%` : dbMeta.thc}
                     </Typography>
                   )}
                   {dbMeta.cbd != null && (
                     <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                      CBD: {typeof dbMeta.cbd === 'number' ? `${dbMeta.cbd}%` : dbMeta.cbd}
+                      CBD range: {typeof dbMeta.cbd === 'number' ? `${dbMeta.cbd}%` : Array.isArray(dbMeta.cbd) ? `${dbMeta.cbd[0]}% - ${dbMeta.cbd[1]}%` : dbMeta.cbd}
                     </Typography>
                   )}
                 </>
+              )}
+
+              {dbMeta.lineage && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  Genetics: {Array.isArray(dbMeta.lineage)
+                    ? dbMeta.lineage.join(' × ')
+                    : dbMeta.lineage}
+                </Typography>
               )}
 
               {dbMeta.effects && (
@@ -175,12 +199,40 @@ export default function ScanResultCard({
                     : dbMeta.flavors}
                 </Typography>
               )}
+
+              {(dbMeta.breeder || dbMeta.seedbank) && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  {dbMeta.breeder && `Breeder: ${dbMeta.breeder}`}
+                  {dbMeta.breeder && dbMeta.seedbank && ' | '}
+                  {dbMeta.seedbank && `Seedbank: ${dbMeta.seedbank}`}
+                </Typography>
+              )}
+
+              {(dbMeta.flowering_time || dbMeta.yield || dbMeta.difficulty) && (
+                <>
+                  {dbMeta.flowering_time && (
+                    <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                      Flowering time: {dbMeta.flowering_time}
+                    </Typography>
+                  )}
+                  {dbMeta.yield && (
+                    <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                      Yield: {dbMeta.yield}
+                    </Typography>
+                  )}
+                  {dbMeta.difficulty && (
+                    <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                      Difficulty: {dbMeta.difficulty}
+                    </Typography>
+                  )}
+                </>
+              )}
             </Stack>
           </Box>
         )}
 
         {/* Label details */}
-        {labelInsights && (
+        {labelInsights ? (
           <Box
             sx={{
               mt: 1,
@@ -199,18 +251,22 @@ export default function ScanResultCard({
 
             <Stack spacing={0.5}>
               {/* Potency */}
-              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                THC: {formatPercent(labelInsights.thcPercent)}
-                {labelInsights.thcMg != null
-                  ? ` (${labelInsights.thcMg} mg)`
-                  : ''}
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                CBD: {formatPercent(labelInsights.cbdPercent)}
-                {labelInsights.cbdMg != null
-                  ? ` (${labelInsights.cbdMg} mg)`
-                  : ''}
-              </Typography>
+              {(labelInsights.thcPercent != null || labelInsights.thcMg != null) && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  THC: {formatPercent(labelInsights.thcPercent)}
+                  {labelInsights.thcMg != null
+                    ? ` (${labelInsights.thcMg} mg)`
+                    : ''}
+                </Typography>
+              )}
+              {(labelInsights.cbdPercent != null || labelInsights.cbdMg != null) && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  CBD: {formatPercent(labelInsights.cbdPercent)}
+                  {labelInsights.cbdMg != null
+                    ? ` (${labelInsights.cbdMg} mg)`
+                    : ''}
+                </Typography>
+              )}
 
               {/* Other cannabinoids */}
               {Array.isArray(labelInsights.cannabinoids) &&
@@ -229,41 +285,6 @@ export default function ScanResultCard({
                   </Typography>
                 )}
 
-              {/* Product/meta */}
-              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                Product type: {labelInsights.productType || '—'}
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                Net weight:{' '}
-                {formatWeight(
-                  labelInsights.netWeightValue,
-                  labelInsights.netWeightUnit
-                )}
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                Brand: {labelInsights.brand || '—'}
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                Batch / lot: {labelInsights.batchId || '—'}
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                License / permit: {labelInsights.licenseNumber || '—'}
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                Test lab: {labelInsights.labName || '—'}
-              </Typography>
-
-              {/* Dates */}
-              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                Packaged on: {labelInsights.packageDate || '—'}
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                Test date: {labelInsights.testDate || '—'}
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
-                Expiration: {labelInsights.expirationDate || '—'}
-              </Typography>
-
               {/* Terpenes */}
               {Array.isArray(labelInsights.terpenes) &&
                 labelInsights.terpenes.length > 0 && (
@@ -279,19 +300,91 @@ export default function ScanResultCard({
                   </Typography>
                 )}
 
-              <Button
-                variant="text"
-                size="small"
-                sx={{
-                  mt: 0.5,
-                  alignSelf: 'flex-start',
-                  textTransform: 'none',
-                }}
-                onClick={() => setShowLabelDialog(true)}
-              >
-                View full label text
-              </Button>
+              {/* Product/meta */}
+              {labelInsights.productType && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  Product type: {labelInsights.productType}
+                </Typography>
+              )}
+              {(labelInsights.netWeightValue != null || labelInsights.netWeightUnit) && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  Net weight:{' '}
+                  {formatWeight(
+                    labelInsights.netWeightValue,
+                    labelInsights.netWeightUnit
+                  )}
+                </Typography>
+              )}
+
+              {/* Producer / tracking info */}
+              {labelInsights.brand && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  Brand: {labelInsights.brand}
+                </Typography>
+              )}
+              {labelInsights.batchId && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  Batch / lot: {labelInsights.batchId}
+                </Typography>
+              )}
+              {labelInsights.licenseNumber && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  License / permit: {labelInsights.licenseNumber}
+                </Typography>
+              )}
+              {labelInsights.labName && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  Test lab: {labelInsights.labName}
+                </Typography>
+              )}
+
+              {/* Dates */}
+              {labelInsights.packageDate && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  Packaged on: {labelInsights.packageDate}
+                </Typography>
+              )}
+              {labelInsights.testDate && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  Test date: {labelInsights.testDate}
+                </Typography>
+              )}
+              {labelInsights.expirationDate && (
+                <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
+                  Expiration: {labelInsights.expirationDate}
+                </Typography>
+              )}
+
+              {/* Raw text button */}
+              {labelInsights.rawText && (
+                <Button
+                  variant="text"
+                  size="small"
+                  sx={{
+                    mt: 0.5,
+                    alignSelf: 'flex-start',
+                    textTransform: 'none',
+                  }}
+                  onClick={() => setShowLabelDialog(true)}
+                >
+                  View full label text
+                </Button>
+              )}
             </Stack>
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              mt: 1,
+              p: 2,
+              borderRadius: 2,
+              bgcolor: 'rgba(0,0,0,0.2)',
+              border: '1px solid rgba(124,179,66,0.3)',
+            }}
+          >
+            <Typography variant="body2" sx={{ color: 'rgba(224, 242, 241, 0.7)', fontStyle: 'italic' }}>
+              No label data detected
+            </Typography>
           </Box>
         )}
 
@@ -404,7 +497,7 @@ export default function ScanResultCard({
               color: '#C5E1A5',
             }}
           >
-            Find seeds for {name}
+            Find seeds for {seedSearchName}
           </Button>
         </Stack>
       </Stack>

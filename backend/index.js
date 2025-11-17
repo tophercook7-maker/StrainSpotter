@@ -1083,6 +1083,11 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       labelInsights = matchResult?.labelInsights || null;
       const topMatch = matches[0] || null;
       
+      // Debug log labelInsights.strainName if present
+      if (labelInsights?.strainName) {
+        console.log(`[process] Label strain name detected: "${labelInsights.strainName}"`);
+      }
+      
       if (topMatch) {
         visualMatches = {
           match: serializeMatch(topMatch),
