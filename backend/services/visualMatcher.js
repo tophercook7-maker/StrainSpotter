@@ -183,7 +183,7 @@ function extractLabelInsights(detectedText) {
   }
 
   // Extract likely strain name from label text
-  // Instead of rejecting lines with generic words, filter them out and keep the rest
+  // Evaluate all lines and pick the best candidate (not just the first)
   const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   
   const genericWords = [
@@ -193,7 +193,9 @@ function extractLabelInsights(detectedText) {
     '1g', '1.0g', 'gram', 'g'
   ];
   
-  let strainName = null;
+  let bestCandidate = null;
+  let bestScore = -Infinity;
+  
   for (const line of lines) {
     // Clean the line: remove non-alphanumeric characters except spaces and apostrophes
     const cleaned = line.replace(/[^A-Za-z0-9 ']/g, ' ').trim();
@@ -210,12 +212,47 @@ function extractLabelInsights(detectedText) {
       return !genericWords.includes(wordLower); // Not a generic word
     });
     
-    // If we have candidate words, use them as the strain name
-    if (candidateWords.length > 0) {
-      strainName = candidateWords.join(' ').trim();
-      break; // Use the first line that yields candidate words
+    // Build candidate name
+    const candidateName = candidateWords.join(' ').trim();
+    
+    // Apply filters to reject weight-like values and short/invalid candidates
+    if (!candidateName || candidateName.length < 3) {
+      continue; // Skip empty or too short
+    }
+    
+    // Reject single-word candidates that are too short
+    if (candidateWords.length === 1 && candidateWords[0].length <= 2) {
+      continue; // Skip single letters or very short words
+    }
+    
+    // Reject weight-like patterns (e.g., "0g", "1.0g", "3.5 g", "100mg")
+    const weightPatterns = [
+      /^\d+(\.\d+)?g$/i,           // "0g", "1.0g"
+      /^\d+(\.\d+)?\s*(g|mg|oz)$/i  // "1.0 g", "100 mg", "3.5 oz"
+    ];
+    
+    if (weightPatterns.some(pattern => pattern.test(candidateName))) {
+      continue; // Skip weight-like values
+    }
+    
+    // Score the candidate
+    // Base score: more words = better (strain names are usually 2+ words)
+    let score = candidateWords.length * 10;
+    
+    // Penalty for having digits (prefer "Glitter Bomb" over "Strain 420")
+    if (/\d/.test(candidateName)) {
+      score -= 5;
+    }
+    
+    // If this is the best candidate so far, save it
+    if (score > bestScore) {
+      bestScore = score;
+      bestCandidate = candidateName;
     }
   }
+  
+  // Use the best candidate found (or null if none passed filters)
+  const strainName = bestCandidate;
 
   return {
     // Potency
