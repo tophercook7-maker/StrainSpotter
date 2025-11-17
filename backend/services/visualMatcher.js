@@ -275,6 +275,12 @@ function extractLabelInsights(detectedText) {
       continue;
     }
     
+    // REJECT candidate if it exactly matches the brand (case-insensitive)
+    // Brands are not strain names (e.g., "Dark Horse" is the brand, not the strain)
+    if (brand && candidateName.toLowerCase() === brand.toLowerCase()) {
+      continue; // Skip candidates that match the brand exactly
+    }
+    
     // SCORING
     let score = 0;
     
