@@ -203,6 +203,11 @@ function extractLabelInsights(detectedText) {
     // Ignore empty lines
     if (!normalized) continue;
     
+    // REJECT lines containing "scan to learn" (marketing text, not strain names)
+    if (normalized.includes('scan to learn')) {
+      continue; // Skip marketing lines like "Scan to Learn M00329P11249111786"
+    }
+    
     // REJECT lines immediately if they match batch/ID patterns
     // Long alphanumeric strings (≥8 consecutive alphanumerics)
     if (/[a-z0-9]{8,}/i.test(line)) {
