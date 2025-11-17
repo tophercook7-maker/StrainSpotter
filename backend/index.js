@@ -508,21 +508,21 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
       normalizedContentType = 'image/jpeg';
     }
 
-    // Guest scan limit: 20 scans per IP/session (24 hour window)
+    // Guest scan limit: 20 scans per session (24 hour window)
     if (!user_id) {
       const guestIdentifier = req.headers['x-session-id'] || req.ip || 'unknown';
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       
-      // Count guest scans by session_id or ip_address in last 24 hours
+      // Count guest scans by session_id in last 24 hours
       const { data: guestScans, error: countError } = await (supabaseAdmin ?? supabase)
         .from('scans')
         .select('id')
         .is('user_id', null)
         .gte('created_at', oneDayAgo);
       
-      // Filter by session_id or ip_address (client-side since Supabase OR with multiple fields is complex)
+      // Filter by session_id (client-side since Supabase OR with multiple fields is complex)
       const matchingScans = guestScans?.filter(scan => {
-        // This will work if we store session_id/ip_address, otherwise count all guest scans
+        // This will work if we store session_id, otherwise count all guest scans
         return true; // For now, count all guest scans in last 24h
       }) || [];
       
@@ -645,7 +645,7 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
     // Use service role for table insert to bypass RLS
     const dbClient = supabaseAdmin ?? supabase;
     try {
-      // For guest scans, track by IP or session ID for limit enforcement
+      // For guest scans, track by session ID for limit enforcement
       const guestIdentifier = !user_id ? (req.headers['x-session-id'] || req.ip || null) : null;
       const insertData = {
         image_url: publicUrl,
@@ -653,10 +653,9 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
         status: 'pending',
         user_id: user_id || null
       };
-      // Add guest tracking fields if available (will be ignored if columns don't exist)
+      // Add guest tracking field if available
       if (guestIdentifier) {
         insertData.session_id = guestIdentifier;
-        insertData.ip_address = req.ip || null;
       }
       
       const insert = await dbClient.from('scans').insert(insertData).select();
