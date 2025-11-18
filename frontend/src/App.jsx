@@ -46,7 +46,7 @@ const theme = createTheme(muiThemeOverrides);
 
 function App() {
   const [ageVerified, setAgeVerified] = useState(false);
-  const [currentView, setCurrentView] = useState('home');
+  const [currentView, setCurrentView] = useState('scanner');
   const [showIntro, setShowIntro] = useState(() => {
     if (typeof window === 'undefined') {
       return false;
@@ -160,7 +160,9 @@ function App() {
               onFinish={() => {
                 try {
                   localStorage.setItem('ss_intro_complete', 'true');
-                } catch {}
+                } catch {
+                  // Ignore localStorage errors
+                }
                 setShowIntro(false);
                 setCurrentView('scanner');
               }}

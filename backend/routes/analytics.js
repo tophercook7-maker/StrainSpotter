@@ -16,7 +16,13 @@ async function maybeGetUserId(req) {
   }
 }
 
+const ENABLE_ANALYTICS = false;
+
 router.post('/events', async (req, res) => {
+  if (!ENABLE_ANALYTICS) {
+    return res.json({ ok: true });
+  }
+  
   try {
     const { event_name, context: rawContext = {}, session_id = null, platform = null } = req.body || {};
     if (!event_name) {

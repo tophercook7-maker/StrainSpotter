@@ -125,6 +125,7 @@ export default function ScanPage({ onBack, onNavigate }) {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
+  const [isOpeningPicker, setIsOpeningPicker] = useState(false);
   const [scanResult, setScanResult] = useState(null);
   const [error, setError] = useState(null);
   const [guestScansUsed, setGuestScansUsedState] = useState(() => getGuestScansUsed());
@@ -153,6 +154,7 @@ export default function ScanPage({ onBack, onNavigate }) {
   };
 
   const handleFileChange = (event) => {
+    setIsOpeningPicker(false);
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -170,9 +172,10 @@ export default function ScanPage({ onBack, onNavigate }) {
 
   const handlePickImageClick = () => {
     const input = document.getElementById('scan-file-input');
-    if (input) {
-      input.click();
-    }
+    if (!input) return;
+    // Give instant feedback
+    setIsOpeningPicker(true);
+    input.click();
   };
 
   const handleStartScan = async () => {
@@ -181,66 +184,59 @@ export default function ScanPage({ onBack, onNavigate }) {
   };
 
   async function startScan(file) {
-    try {
-      setIsUploading(true);
-      setIsPolling(false);
-      setError(null);
+    setError(null);
 
-      const base64 = await fileToBase64(file);
+    const base64 = await fileToBase64(file);
 
-      const payload = {
-        filename: file.name || 'scan.jpg',
-        contentType: file.type || 'image/jpeg',
-        base64,
-      };
+    const payload = {
+      filename: file.name || 'scan.jpg',
+      contentType: file.type || 'image/jpeg',
+      base64,
+    };
 
-      const res = await fetch(apiUrl('/api/uploads'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+    const res = await fetch(apiUrl('/api/uploads'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
 
-      const data = await safeJson(res);
+    const data = await safeJson(res);
 
-      if (!res.ok) {
-        // Check if it's a guest limit error
-        if (res.status === 403 && data?.error === 'Guest scan limit reached') {
-          setShowPlans(true);
-          return;
-        }
-        throw new Error(data?.error || data?.hint || `Upload failed (${res.status})`);
+    if (!res.ok) {
+      // Check if it's a guest limit error
+      if (res.status === 403 && data?.error === 'Guest scan limit reached') {
+        setShowPlans(true);
+        setIsUploading(false);
+        setIsPolling(false);
+        return;
       }
-
-      const scanId = data.id || data.scan_id || data.scanId;
-      if (!scanId) {
-        throw new Error('Did not receive a scan id from the server.');
-      }
-
-      // Trigger Vision processing
-      try {
-        const processRes = await fetch(apiUrl(`/api/scans/${scanId}/process`), {
-          method: 'POST',
-        });
-        if (!processRes.ok) {
-          console.warn('[startScan] Process endpoint returned non-OK:', processRes.status);
-        }
-      } catch (e) {
-        console.error('[startScan] Error triggering scan processing', e);
-        // Do not throw here; we'll let pollScan handle timeouts/errors
-      }
-
-      setIsUploading(false);
-      setIsPolling(true);
-
-      await pollScan(scanId);
-    } catch (e) {
-      console.error('startScan error', e);
-      setIsUploading(false);
-      setIsPolling(false);
-      setError(String(e.message || e));
+      throw new Error(data?.error || data?.hint || `Upload failed (${res.status})`);
     }
+
+    const scanId = data.id || data.scan_id || data.scanId;
+    if (!scanId) {
+      throw new Error('Did not receive a scan id from the server.');
+    }
+
+    // Trigger Vision processing
+    try {
+      const processRes = await fetch(apiUrl(`/api/scans/${scanId}/process`), {
+        method: 'POST',
+      });
+      if (!processRes.ok) {
+        console.warn('[startScan] Process endpoint returned non-OK:', processRes.status);
+      }
+    } catch (e) {
+      console.error('[startScan] Error triggering scan processing', e);
+      // Do not throw here; we'll let pollScan handle timeouts/errors
+    }
+
+    setIsUploading(false);
+    setIsPolling(true);
+
+    await pollScan(scanId);
   }
 
   async function pollScan(scanId, attempt = 0) {
@@ -521,6 +517,7 @@ export default function ScanPage({ onBack, onNavigate }) {
                 size="large"
                 startIcon={<CloudUploadIcon />}
                 onClick={handlePickImageClick}
+                disabled={isUploading || isPolling}
                 sx={{
                   textTransform: 'none',
                   fontWeight: 700,
@@ -538,7 +535,7 @@ export default function ScanPage({ onBack, onNavigate }) {
                   },
                 }}
               >
-                Take or choose photo
+                {isOpeningPicker ? 'Opening camera…' : 'Take or choose photo'}
               </Button>
 
               <Button
@@ -546,7 +543,7 @@ export default function ScanPage({ onBack, onNavigate }) {
                 fullWidth
                 size="large"
                 onClick={handleStartScan}
-              disabled={!selectedFile || isUploading || isPolling}
+                disabled={!selectedFile || isUploading || isPolling}
               sx={{
                 textTransform: 'none',
                 fontWeight: 700,
@@ -562,7 +559,13 @@ export default function ScanPage({ onBack, onNavigate }) {
                 },
               }}
             >
-              {selectedFile ? 'Start scan' : 'Choose a photo to enable scan'}
+              {isUploading
+                ? 'Uploading photo…'
+                : isPolling
+                ? 'Analyzing…'
+                : selectedFile
+                ? 'Start scan'
+                : 'Choose a photo to enable scan'}
               </Button>
 
               <Typography

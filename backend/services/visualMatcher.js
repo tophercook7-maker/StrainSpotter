@@ -36,368 +36,612 @@ function normalizeStrainName(name) {
   return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+// Helper functions for parsing label insights
+function parsePercent(text, keywords) {
+  try {
+    const lower = text.toLowerCase();
+    for (const keyword of keywords) {
+      const re = new RegExp(keyword + "[^0-9]{0,10}([0-9]+(?:\\.[0-9]+)?)\\s*%", "i");
+      const m = text.match(re);
+      if (m) return parseFloat(m[1]);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function parseMg(text, keywords) {
+  try {
+    const lower = text.toLowerCase();
+    for (const keyword of keywords) {
+      const re = new RegExp(keyword + "[^0-9]{0,10}([0-9]+(?:\\.[0-9]+)?)\\s*mg", "i");
+      const m = text.match(re);
+      if (m) return parseFloat(m[1]);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function parseDate(text, patterns) {
+  try {
+    const lower = text.toLowerCase();
+    for (const pattern of patterns) {
+      const m = lower.match(pattern);
+      if (m) return m[1];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function detectCategory(text) {
+  try {
+    const lower = text.toLowerCase();
+    if (lower.includes('flower') || lower.includes('bud') || lower.includes('whole bud')) return 'flower';
+    if (lower.includes('vape') || lower.includes('cartridge') || lower.includes('cart') || lower.includes('carts')) return 'vape';
+    if (lower.includes('sauce') || lower.includes('wax') || lower.includes('shatter') || lower.includes('resin') || lower.includes('rosin') || lower.includes('hash') || lower.includes('dab')) return 'concentrate';
+    if (lower.includes('gummy') || lower.includes('edible') || lower.includes('chew') || lower.includes('chocolate') || lower.includes('cookie') || lower.includes('brownie') || lower.includes('drink')) return 'edible';
+    if (lower.includes('topical') || lower.includes('lotion') || lower.includes('salve') || lower.includes('balm')) return 'topical';
+    if (lower.includes('tincture') || lower.includes('drops') || lower.includes('sublingual')) return 'tincture';
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+function extractWarnings(text) {
+  try {
+    const warnings = [];
+    let ageRestricted = false;
+    let medicalUseOnly = false;
+    let drivingWarning = false;
+    let pregnancyWarning = false;
+    
+    const lower = text.toLowerCase();
+    
+    if (lower.includes('keep out of reach of children') || lower.includes('keep away from children')) {
+      warnings.push('Keep out of reach of children');
+      ageRestricted = true;
+    }
+    if (lower.includes('21+') || lower.includes('21 years') || lower.includes('twenty one')) {
+      ageRestricted = true;
+      if (!warnings.some(w => w.includes('21'))) warnings.push('For adult use only (21+)');
+    }
+    if (lower.includes('18+') || lower.includes('18 years')) {
+      ageRestricted = true;
+      if (!warnings.some(w => w.includes('18'))) warnings.push('For adult use only (18+)');
+    }
+    if (lower.includes('for use by qualified patients only') || lower.includes('medical use only') || lower.includes('registered patients')) {
+      medicalUseOnly = true;
+      warnings.push('For medical use only');
+    }
+    if (lower.includes('do not drive') || lower.includes('do not operate') || lower.includes('operating machinery')) {
+      drivingWarning = true;
+      warnings.push('Do not drive or operate machinery');
+    }
+    if (lower.includes('pregnant') || lower.includes('breastfeeding') || lower.includes('nursing')) {
+      pregnancyWarning = true;
+      warnings.push('Not for use during pregnancy or breastfeeding');
+    }
+    
+    return { warnings, ageRestricted, medicalUseOnly, drivingWarning, pregnancyWarning };
+  } catch {
+    return { warnings: [], ageRestricted: false, medicalUseOnly: false, drivingWarning: false, pregnancyWarning: false };
+  }
+}
+
+function extractMarketingTags(text) {
+  try {
+    const tags = [];
+    const lower = text.toLowerCase();
+    
+    const tagPatterns = [
+      { pattern: /full\s*spectrum/i, tag: 'full spectrum' },
+      { pattern: /live\s*resin/i, tag: 'live resin' },
+      { pattern: /sauce/i, tag: 'sauce' },
+      { pattern: /hash\s*rosin/i, tag: 'hash rosin' },
+      { pattern: /solventless/i, tag: 'solventless' },
+      { pattern: /cured\s*resin/i, tag: 'cured resin' },
+      { pattern: /diamonds/i, tag: 'diamonds' },
+      { pattern: /shatter/i, tag: 'shatter' },
+      { pattern: /wax/i, tag: 'wax' },
+      { pattern: /budder/i, tag: 'budder' },
+      { pattern: /crumble/i, tag: 'crumble' },
+    ];
+    
+    for (const { pattern, tag } of tagPatterns) {
+      if (pattern.test(lower) && !tags.includes(tag)) {
+        tags.push(tag);
+      }
+    }
+    
+    return tags;
+  } catch {
+    return [];
+  }
+}
+
+function extractDosage(text) {
+  try {
+    const dosage = {
+      totalServings: null,
+      mgPerServingTHC: null,
+      mgPerServingCBD: null
+    };
+    
+    const lower = text.toLowerCase();
+    
+    // Look for "X mg THC per serving" or "Xmg per piece"
+    const perServingTHCMatch = lower.match(/(\d+(?:\.\d+)?)\s*mg\s*thc\s*(?:per\s*(?:serving|piece|each)|each)/i);
+    if (perServingTHCMatch) {
+      dosage.mgPerServingTHC = parseFloat(perServingTHCMatch[1]);
+    }
+    
+    const perServingCBDMatch = lower.match(/(\d+(?:\.\d+)?)\s*mg\s*cbd\s*(?:per\s*(?:serving|piece|each)|each)/i);
+    if (perServingCBDMatch) {
+      dosage.mgPerServingCBD = parseFloat(perServingCBDMatch[1]);
+    }
+    
+    // Look for "X servings" or "X pieces"
+    const servingsMatch = lower.match(/(\d+)\s*(?:servings|pieces|count)/i);
+    if (servingsMatch) {
+      dosage.totalServings = parseInt(servingsMatch[1], 10);
+    }
+    
+    return dosage;
+  } catch {
+    return { totalServings: null, mgPerServingTHC: null, mgPerServingCBD: null };
+  }
+}
+
+function detectJurisdiction(text) {
+  try {
+    const lower = text.toLowerCase();
+    const stateCodes = ['ar', 'az', 'ca', 'co', 'ct', 'de', 'fl', 'ga', 'hi', 'il', 'in', 'ia', 'ks', 'ky', 'la', 'me', 'md', 'ma', 'mi', 'mn', 'ms', 'mo', 'mt', 'ne', 'nv', 'nh', 'nj', 'nm', 'ny', 'nc', 'nd', 'oh', 'ok', 'or', 'pa', 'ri', 'sc', 'sd', 'tn', 'tx', 'ut', 'vt', 'va', 'wa', 'wv', 'wi', 'wy', 'dc'];
+    
+    for (const code of stateCodes) {
+      if (lower.includes(` ${code} `) || lower.includes(` ${code},`) || lower.includes(` ${code}.`) || lower.endsWith(` ${code}`)) {
+        return code.toUpperCase();
+      }
+    }
+    
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function extractLabelInsights(detectedText) {
   if (!detectedText) return null;
 
-  const raw = detectedText;
-  const lower = raw.toLowerCase();
-  
-  // Debug: log start
-  console.log('[extractLabelInsights] START');
-  console.log('[extractLabelInsights] raw text:', raw);
+  try {
+    const raw = detectedText;
+    const lower = raw.toLowerCase();
+    
+    // Debug: log start
+    console.log('[extractLabelInsights] START');
+    console.log('[extractLabelInsights] raw text:', raw);
 
-  // Helper: first match or null
-  const firstMatch = (re) => {
-    const m = lower.match(re);
-    return m ? m[1].trim() : null;
-  };
+    // Helper: first match or null
+    const firstMatch = (re) => {
+      try {
+        const m = lower.match(re);
+        return m ? m[1].trim() : null;
+      } catch {
+        return null;
+      }
+    };
 
-  // THC / CBD % and mg (best effort)
-  const thcPercent = firstMatch(/thc[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*%/);
-  const cbdPercent = firstMatch(/cbd[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*%/);
+    // THC / CBD % and mg (best effort)
+    const thcPercent = parsePercent(raw, ['thc', 'delta-9', 'delta9']) || firstMatch(/thc[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*%/);
+    const cbdPercent = parsePercent(raw, ['cbd']) || firstMatch(/cbd[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*%/);
+    
+    const thcMg = parseMg(raw, ['thc', 'delta-9', 'delta9']) || firstMatch(/thc[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*mg/);
+    const cbdMg = parseMg(raw, ['cbd']) || firstMatch(/cbd[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*mg/);
+    
+    // Total cannabinoids
+    const totalCannabinoidsPercent = parsePercent(raw, ['total cannabinoids', 'total thc', 'total cbd']) || firstMatch(/total[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*%/);
+    const totalCannabinoidsMg = parseMg(raw, ['total cannabinoids', 'total thc', 'total cbd']) || firstMatch(/total[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*mg/);
 
-  const thcMg = firstMatch(/thc[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*mg/);
-  const cbdMg = firstMatch(/cbd[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)\s*mg/);
+    // Other cannabinoids (best effort map)
+    const cannabinoids = [];
+    for (const cann of CANNABINOIDS) {
+      const rePct = new RegExp(cann + "[^0-9]{0,10}([0-9]+(?:\\.[0-9]+)?)\\s*%", "i");
+      const reMg = new RegExp(cann + "[^0-9]{0,10}([0-9]+(?:\\.[0-9]+)?)\\s*mg", "i");
 
-  // Other cannabinoids (best effort map)
-  const cannabinoids = [];
-  for (const cann of CANNABINOIDS) {
-    const rePct = new RegExp(cann + "[^0-9]{0,10}([0-9]+(?:\\.[0-9]+)?)\\s*%", "i");
-    const reMg = new RegExp(cann + "[^0-9]{0,10}([0-9]+(?:\\.[0-9]+)?)\\s*mg", "i");
+      const pctMatch = raw.match(rePct);
+      const mgMatch = raw.match(reMg);
 
-    const pctMatch = raw.match(rePct);
-    const mgMatch = raw.match(reMg);
-
-    if (pctMatch || mgMatch) {
-      cannabinoids.push({
-        name: cann.toUpperCase(),
-        percent: pctMatch ? parseFloat(pctMatch[1]) : null,
-        mg: mgMatch ? parseFloat(mgMatch[1]) : null
-      });
-    }
-  }
-
-  // Product type: flower, preroll, vape, edible, concentrate
-  let productType = null;
-  if (lower.includes('pre-roll') || lower.includes('preroll') || lower.includes('pre roll')) {
-    productType = 'Pre-roll';
-  } else if (lower.includes('concentrate') || lower.includes('wax') || lower.includes('shatter') || lower.includes('rosin') || lower.includes('dab')) {
-    productType = 'Concentrate';
-  } else if (lower.includes('vape') || lower.includes('cart') || lower.includes('cartridge')) {
-    productType = 'Vape / Cartridge';
-  } else if (lower.includes('edible') || lower.includes('gummy') || lower.includes('chocolate') || lower.includes('cookie')) {
-    productType = 'Edible';
-  } else if (lower.includes('flower') || lower.includes('bud') || lower.includes('whole bud')) {
-    productType = 'Flower';
-  }
-
-  // Net weight (g, mg, oz)
-  // Examples: "Net Wt 1g", "3.5 g", "100 mg"
-  let netWeightValue = null;
-  let netWeightUnit = null;
-  const weightMatch = lower.match(/(?:net wt|net weight|net|weight)?[^0-9]{0,5}([0-9]+(?:\.[0-9]+)?)\s*(g|grams|mg|milligrams|oz|ounce|ounces)\b/);
-  if (weightMatch) {
-    netWeightValue = parseFloat(weightMatch[1]);
-    const unitRaw = weightMatch[2];
-    if (/^g|grams$/.test(unitRaw)) netWeightUnit = 'g';
-    else if (/^mg|milligrams$/.test(unitRaw)) netWeightUnit = 'mg';
-    else if (/^oz|ounce|ounces$/.test(unitRaw)) netWeightUnit = 'oz';
-  }
-
-  // Brand / producer: look for "manufactured by", "produced by", or "distributed by"
-  let brand = null;
-  const brandMarkers = ['manufactured by', 'produced by', 'distributed by', 'cultivated by', 'grown by'];
-  for (const marker of brandMarkers) {
-    const idx = lower.indexOf(marker);
-    if (idx !== -1) {
-      const tail = raw.slice(idx, idx + 160);
-      const m = tail.match(new RegExp(marker + "\\s+([A-Za-z0-9 &'\\-]+)"));
-      if (m) {
-        brand = m[1].trim();
-        break;
+      if (pctMatch || mgMatch) {
+        cannabinoids.push({
+          name: cann.toUpperCase(),
+          percent: pctMatch ? parseFloat(pctMatch[1]) : null,
+          mg: mgMatch ? parseFloat(mgMatch[1]) : null
+        });
       }
     }
-  }
 
-  // Batch / lot ID (Batch, Lot)
-  const batchId =
-    firstMatch(/batch[^a-z0-9]{0,5}([a-z0-9\-]+)/) ||
-    firstMatch(/lot[^a-z0-9]{0,5}([a-z0-9\-]+)/);
-
-  // License / permit (License, Lic #, Permit #, Lic. No., etc.)
-  const licenseNumber =
-    firstMatch(/license[^a-z0-9]{0,5}([a-z0-9\-]+)/) ||
-    firstMatch(/lic[^a-z0-9]{0,5}([a-z0-9\-]+)/) ||
-    firstMatch(/permit[^a-z0-9]{0,5}([a-z0-9\-]+)/);
-
-  // Test lab name: look for "tested by" or "lab"
-  let labName = null;
-  const testedIdx = lower.indexOf('tested by');
-  if (testedIdx !== -1) {
-    const tail = raw.slice(testedIdx, testedIdx + 160);
-    const m = tail.match(/tested by\s+([A-Za-z0-9 &'\\-]+)/i);
-    if (m) {
-      labName = m[1].trim();
+    // Product type and category
+    const category = detectCategory(raw);
+    let productType = null;
+    if (lower.includes('pre-roll') || lower.includes('preroll') || lower.includes('pre roll')) {
+      productType = 'Pre-roll';
+    } else if (category === 'concentrate') {
+      productType = 'Concentrate';
+    } else if (category === 'vape') {
+      productType = 'Vape / Cartridge';
+    } else if (category === 'edible') {
+      productType = 'Edible';
+    } else if (category === 'flower') {
+      productType = 'Flower';
+    } else if (category === 'topical') {
+      productType = 'Topical';
+    } else if (category === 'tincture') {
+      productType = 'Tincture';
     }
-  } else {
-    const labIdx = lower.indexOf('laboratories');
-    if (labIdx !== -1) {
-      const tail = raw.slice(labIdx - 40, labIdx + 40);
-      const m = tail.match(/([A-Za-z0-9 &'\\-]+laborator(?:y|ies))/i);
+
+    // Net weight (g, mg, oz)
+    // Examples: "Net Wt 1g", "3.5 g", "100 mg"
+    let netWeightValue = null;
+    let netWeightUnit = null;
+    const weightMatch = lower.match(/(?:net wt|net weight|net|weight)?[^0-9]{0,5}([0-9]+(?:\.[0-9]+)?)\s*(g|grams|mg|milligrams|oz|ounce|ounces)\b/);
+    if (weightMatch) {
+      netWeightValue = parseFloat(weightMatch[1]);
+      const unitRaw = weightMatch[2];
+      if (/^g|grams$/.test(unitRaw)) netWeightUnit = 'g';
+      else if (/^mg|milligrams$/.test(unitRaw)) netWeightUnit = 'mg';
+      else if (/^oz|ounce|ounces$/.test(unitRaw)) netWeightUnit = 'oz';
+    }
+
+    // Brand / producer: look for "manufactured by", "produced by", or "distributed by"
+    let brand = null;
+    const brandMarkers = ['manufactured by', 'produced by', 'distributed by', 'cultivated by', 'grown by'];
+    for (const marker of brandMarkers) {
+      const idx = lower.indexOf(marker);
+      if (idx !== -1) {
+        const tail = raw.slice(idx, idx + 160);
+        const m = tail.match(new RegExp(marker + "\\s+([A-Za-z0-9 &'\\-]+)"));
+        if (m) {
+          brand = m[1].trim();
+          break;
+        }
+      }
+    }
+
+    // Batch / lot ID (Batch, Lot)
+    const batchId =
+      firstMatch(/batch[^a-z0-9]{0,5}([a-z0-9\-]+)/) ||
+      firstMatch(/lot[^a-z0-9]{0,5}([a-z0-9\-]+)/);
+
+    // License / permit (License, Lic #, Permit #, Lic. No., etc.)
+    const licenseNumber =
+      firstMatch(/license[^a-z0-9]{0,5}([a-z0-9\-]+)/) ||
+      firstMatch(/lic[^a-z0-9]{0,5}([a-z0-9\-]+)/) ||
+      firstMatch(/permit[^a-z0-9]{0,5}([a-z0-9\-]+)/);
+
+    // Test lab name: look for "tested by" or "lab"
+    let labName = null;
+    const testedIdx = lower.indexOf('tested by');
+    if (testedIdx !== -1) {
+      const tail = raw.slice(testedIdx, testedIdx + 160);
+      const m = tail.match(/tested by\s+([A-Za-z0-9 &'\\-]+)/i);
       if (m) {
         labName = m[1].trim();
       }
+    } else {
+      const labIdx = lower.indexOf('laboratories');
+      if (labIdx !== -1) {
+        const tail = raw.slice(labIdx - 40, labIdx + 40);
+        const m = tail.match(/([A-Za-z0-9 &'\\-]+laborator(?:y|ies))/i);
+        if (m) {
+          labName = m[1].trim();
+        }
+      }
     }
-  }
 
-  // Dates: package / test / expiration
-  // We just best-effort parse ISO-ish or MM/DD/YYYY patterns
-  const datePatterns = [
-    /packaged on[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
-    /packaged[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
-    /tested on[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
-    /test date[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
-    /expires[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
-    /exp[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
-  ];
+    // Dates: package / test / expiration
+    const packageDatePatterns = [
+      /packaged on[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
+      /packaged[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
+      /made[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
+    ];
+    const testDatePatterns = [
+      /tested on[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
+      /test date[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
+    ];
+    const expirationDatePatterns = [
+      /expires[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
+      /exp[^0-9]{0,5}([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/,
+    ];
+    
+    const packageDate = parseDate(raw, packageDatePatterns);
+    const testDate = parseDate(raw, testDatePatterns);
+    const expirationDate = parseDate(raw, expirationDatePatterns);
 
-  let packageDate = null;
-  let testDate = null;
-  let expirationDate = null;
-
-  for (const re of datePatterns) {
-    const m = lower.match(re);
-    if (!m) continue;
-    if (re.source.startsWith('packaged')) packageDate = m[1];
-    else if (re.source.startsWith('tested on') || re.source.startsWith('test date')) testDate = m[1];
-    else if (re.source.startsWith('expires') || re.source.startsWith('exp')) expirationDate = m[1];
-  }
-
-  // Terpenes: { name, percent }
-  const terpenes = [];
-  for (const terp of LABEL_TERPENES) {
-    const re = new RegExp(terp + "[^0-9]{0,10}([0-9]+(?:\\.[0-9]+)?)\\s*%", "i");
-    const m = raw.match(re);
-    if (m) {
-      terpenes.push({
-        name: terp,
-        percent: parseFloat(m[1]),
-      });
-    }
-  }
-
-  // Extract likely strain name from label text
-  // Strict rules to guarantee multi-word plant/product names, never batch IDs or weights
-  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  
-  // Debug: log lines and brand
-  console.log('[extractLabelInsights] lines:', lines);
-  console.log('[extractLabelInsights] brand (before loop):', brand);
-  
-  const genericWords = [
-    'net', 'wt', 'activation', 'time', 'approx', 'tested', 'manufactured',
-    'batch', 'permit', 'ext', 'made', 'test', 'thc', 'cbd', 'vape', 'cart',
-    'edible', 'gummies', 'flower', 'hybrid', 'indica', 'sativa',
-    '1g', '1.0g', 'gram', 'g', 'cartridge'
-  ];
-  
-  let bestCandidate = null;
-  let bestScore = -Infinity;
-  
-  for (const line of lines) {
-    // Pre-process: normalize to lowercase, strip weird characters except letters, numbers, spaces, apostrophes
-    const normalized = line.toLowerCase().replace(/[^a-z0-9 ']/g, ' ').trim();
-    
-    // Debug: log line and normalized version
-    console.log('[extractLabelInsights] line:', line);
-    console.log('[extractLabelInsights] normalizedLine:', normalized);
-    
-    // Ignore empty lines
-    if (!normalized) {
-      console.log('[extractLabelInsights] SKIP: empty line');
-      continue;
-    }
-    
-    // REJECT lines containing "scan to learn" (marketing text, not strain names)
-    if (normalized.includes('scan to learn')) {
-      console.log('[extractLabelInsights] SKIP: scan to learn line');
-      continue; // Skip marketing lines like "Scan to Learn M00329P11249111786"
-    }
-    
-    // REJECT producer/test lab lines (these are brands, not strain names)
-    if (normalized.includes('manufactured by') ||
-        normalized.includes('tested by') ||
-        normalized.includes('distributed by') ||
-        normalized.includes('producer:') ||
-        normalized.includes('processor:')) {
-      console.log('[extractLabelInsights] SKIP: producer/test lab line');
-      continue; // Skip producer/brand lines like "Manufactured by Dark Horse"
-    }
-    
-    // REJECT lines immediately if they match batch/ID patterns
-    // Long alphanumeric strings (≥8 consecutive alphanumerics)
-    if (/[a-z0-9]{8,}/i.test(line)) {
-      console.log('[extractLabelInsights] SKIP: long alphanumeric string (batch ID)');
-      continue; // Skip batch IDs like "M00329P11249111786"
-    }
-    
-    // Batch/lot/permit/license patterns
-    if (/batch|lot|permit|license/i.test(line)) {
-      console.log('[extractLabelInsights] SKIP: batch/lot/permit/license pattern');
-      continue; // Skip lines with these keywords
-    }
-    
-    // REJECT weight or quantity patterns
-    if (/[0-9]+(\.[0-9]+)?\s*(g|mg|oz)$/i.test(line) || /net wt/i.test(line) || /^1g$|^1\.0g$/i.test(line)) {
-      console.log('[extractLabelInsights] SKIP: weight/quantity pattern');
-      continue; // Skip weight lines
-    }
-    
-    // REJECT lines that are mostly numbers or special chars
-    const letterCount = (line.match(/[a-z]/gi) || []).length;
-    const totalChars = line.replace(/\s/g, '').length;
-    if (totalChars > 0 && letterCount / totalChars < 0.3) {
-      console.log('[extractLabelInsights] SKIP: mostly numbers/special chars');
-      continue; // Skip if less than 30% letters
-    }
-    
-    // Extract candidate words first to check if there are any meaningful words
-    const words = normalized.split(/\s+/).filter(w => w.length > 0);
-    
-    // Filter out generic words, words with no letters, and short words
-    const candidateWords = words.filter(word => {
-      if (!/[a-z]/i.test(word)) return false; // Must have at least one letter
-      if (word.length <= 2) return false; // Filter out single- or two-letter words
-      const wordLower = word.toLowerCase();
-      return !genericWords.includes(wordLower); // Not a generic word
-    });
-    
-    // REJECT lines that contain mostly generic words
-    // Only skip if: (1) there are NO meaningful non-generic words, AND (2) ≥80% generic
-    const wordCount = words.length;
-    if (wordCount > 0) {
-      const hasNonGeneric = candidateWords.length > 0;
-      const genericWordCount = words.filter(w => {
-        const wLower = w.toLowerCase();
-        return genericWords.includes(wLower);
-      }).length;
-      const ratio = genericWordCount / wordCount;
-      
-      // Only skip if no meaningful words AND ratio is high
-      if (!hasNonGeneric && ratio >= 0.8) {
-        console.log('[extractLabelInsights] SKIP: mostly generic words (no meaningful words)');
-        continue; // Skip if no meaningful words and ≥80% generic
+    // Terpenes: { name, percent }
+    const terpenes = [];
+    for (const terp of LABEL_TERPENES) {
+      const re = new RegExp(terp + "[^0-9]{0,10}([0-9]+(?:\\.[0-9]+)?)\\s*%", "i");
+      const m = raw.match(re);
+      if (m) {
+        terpenes.push({
+          name: terp,
+          percent: parseFloat(m[1]),
+        });
       }
     }
     
-    // Build candidate name
-    const candidateName = candidateWords.join(' ').trim();
+    // Calculate terpene percent total
+    const terpenePercentTotal = terpenes.length > 0 
+      ? terpenes.reduce((sum, t) => sum + (t.percent || 0), 0)
+      : null;
+
+    // Extract likely strain name from label text
+    // Simple, universal logic to identify meaningful strain names
     
-    // Debug: log candidate words and name
-    console.log('[extractLabelInsights] candidateWords:', candidateWords);
-    console.log('[extractLabelInsights] candidateName:', candidateName);
-    
-    // REJECT candidateName if it doesn't meet minimum requirements
-    if (!candidateName || candidateName.length < 4) {
-      console.log('[extractLabelInsights] SKIP: candidateName too short');
-      continue; // Too short
+    // 1. Identify meaningful strain words
+    const isMeaningfulWord = (w) => {
+      if (!w) return false;
+      const lower = w.toLowerCase();
+      if (lower.length < 2) return false;
+      if (!/[a-z]/i.test(lower)) return false;
+
+      const genericSingleWords = [
+        "natural", "state", "full", "spectrum", "vape", "cartridge",
+        "gram", "one", "use", "for", "keep", "out", "reach", "children",
+        "warning", "tested", "made", "date", "approx", "activation",
+        "state", "medical", "marijuana", "dispensary", "product", "batch",
+        "permit", "license", "lab", "testing", "ingredients", "net", "wt",
+        "thc", "cbd", "terpenes", "total", "cannabinoids", "time", "sec",
+        "loq", "high", "grade", "concentrate", "sauce"
+      ];
+
+      if (genericSingleWords.includes(lower)) return false;
+      return true;
+    };
+
+    // 2. Extract strain name with improved generic logic for any cannabis package
+    function extractStrainName(rawText, brand) {
+      const lines = rawText.split(/\r?\n/);
+
+      let best = null;
+      let bestScore = 0;
+
+      // Generic packaging terms that should be rejected
+      const packagingTerms = [
+        'batch', 'permit', 'license', 'lot', 'test', 'tested', 'made', 'date',
+        'manufactured', 'distributed', 'processor', 'producer', 'cultivated', 'grown',
+        'scan to learn', 'uin', 'net wt', 'net weight', 'weight', 'activation',
+        'approx', 'time', 'sec', 'seconds', 'minutes', 'min'
+      ];
+      
+      // Generic product terms that shouldn't be strain names
+      const productTerms = [
+        'vape', 'cart', 'cartridge', 'carts', 'pre-roll', 'preroll', 'pre roll',
+        'edible', 'gummy', 'gummies', 'chocolate', 'cookie', 'brownie', 'drink',
+        'concentrate', 'wax', 'shatter', 'rosin', 'hash', 'dab', 'sauce',
+        'flower', 'bud', 'whole bud', 'topical', 'tincture', 'drops', 'sublingual',
+        'hybrid', 'indica', 'sativa', 'full spectrum', 'broad spectrum'
+      ];
+
+      for (let line of lines) {
+        if (!line.trim()) continue;
+
+        const normalized = line
+          .replace(/[^a-zA-Z0-9\s']/g, " ")
+          .trim()
+          .toLowerCase();
+
+        if (!normalized) continue;
+
+        // Skip lines with packaging/compliance terms
+        const hasPackagingTerm = packagingTerms.some(term => normalized.includes(term));
+        if (hasPackagingTerm) continue;
+
+        // Skip weight/dose lines (dominated by numbers + units)
+        if (/\b\d+(\.\d+)?\s*(g|mg|oz|ml|%)\b/.test(normalized)) {
+          // Allow if it's not dominated by numbers (e.g., "1G Vape Glitter Bomb" should pass)
+          const words = normalized.split(/\s+/);
+          const numberWords = words.filter(w => /^\d+(\.\d+)?/.test(w));
+          if (numberWords.length >= words.length / 2) continue; // Skip if >= 50% numbers
+        }
+
+        // Skip lines with long mixed alphanumeric IDs (batch-like patterns)
+        if (/\b[a-z0-9]{10,}\b/i.test(normalized)) {
+          // Check if it's mostly alphanumeric ID vs actual words
+          const words = normalized.split(/\s+/);
+          const longIds = words.filter(w => w.length >= 10 && /^[a-z0-9]+$/i.test(w));
+          if (longIds.length > 0 && longIds.length >= words.length / 2) continue;
+        }
+
+        // Build candidate words
+        const words = normalized.split(/\s+/);
+        const meaningful = words.filter(isMeaningfulWord);
+
+        if (meaningful.length < 2) continue; // Must have at least 2 words
+
+        // Reject if all words are generic product/packaging terms
+        const allGeneric = meaningful.every(w => 
+          productTerms.includes(w) || 
+          packagingTerms.includes(w) ||
+          w.length < 2
+        );
+        if (allGeneric) continue;
+
+        // Reject if equals brand
+        if (brand && meaningful.join(" ") === brand.toLowerCase()) continue;
+
+        // Score based on:
+        // - Number of meaningful words (more words = higher score)
+        // - Penalty for generic product terms
+        let score = meaningful.length * 25;
+        const genericCount = meaningful.filter(w => productTerms.includes(w)).length;
+        score -= genericCount * 10; // Penalty for generic terms
+
+        if (score > bestScore) {
+          bestScore = score;
+          best = meaningful.join(" ");
+        }
+      }
+
+      // Title-case the result for better display
+      if (best) {
+        return best
+          .split(/\s+/)
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(" ");
+      }
+
+      return null;
     }
     
-    if (candidateWords.length < 2) {
-      console.log('[extractLabelInsights] SKIP: candidateName has fewer than 2 words');
-      continue; // Must have at least 2 words
-    }
+    // Detect if this is a packaged product
+    // Check for packaging indicators: batch, permit, license, lot, UIN, test date, packaged on, manufactured by, tested by
+    // OR if we successfully parsed any compliance/tracking fields
+    const hasPackagingIndicators = 
+      lower.includes('batch') ||
+      lower.includes('permit') ||
+      lower.includes('license') ||
+      lower.includes('lot') ||
+      lower.includes('uin') ||
+      lower.includes('test date') ||
+      lower.includes('tested on') ||
+      lower.includes('packaged on') ||
+      lower.includes('packaged') ||
+      lower.includes('manufactured by') ||
+      lower.includes('tested by') ||
+      lower.includes('distributed by') ||
+      lower.includes('processor:') ||
+      lower.includes('producer:');
     
-    // Check if any word is ≤2 characters (shouldn't happen after filter, but double-check)
-    if (candidateWords.some(w => w.length <= 2)) {
-      console.log('[extractLabelInsights] SKIP: candidateName has word ≤2 chars');
-      continue;
-    }
+    const hasComplianceFields = !!(
+      batchId ||
+      licenseNumber ||
+      labName ||
+      netWeightValue ||
+      thcPercent != null ||
+      cbdPercent != null
+    );
     
-    // REJECT candidate if it exactly matches the brand (case-insensitive)
-    // Brands are not strain names (e.g., "Dark Horse" is the brand, not the strain)
-    if (brand && candidateName.toLowerCase() === brand.toLowerCase()) {
-      console.log('[extractLabelInsights] SKIP: candidate equals brand:', candidateName);
-      continue; // Skip candidates that match the brand exactly
-    }
+    const isPackagedProduct = hasPackagingIndicators || hasComplianceFields;
     
-    // SCORING
-    let score = 0;
+    // Extract strain name using improved generic logic
+    const strainName = extractStrainName(raw, brand);
     
-    // Base score: number of words × 20
-    score = candidateWords.length * 20;
+    // Extract warnings and flags
+    const { warnings, ageRestricted, medicalUseOnly, drivingWarning, pregnancyWarning } = extractWarnings(raw);
     
-    // Bonus +30 if no digits
-    if (!/\d/.test(candidateName)) {
-      score += 30;
-    }
+    // Extract marketing tags
+    const marketingTags = extractMarketingTags(raw);
     
-    // Bonus +50 if 2+ words
-    if (candidateWords.length >= 2) {
-      score += 50;
-    }
+    // Extract dosage info
+    const dosage = extractDosage(raw);
     
-    // Penalty -100 for any digit presence
-    if (/\d/.test(candidateName)) {
-      score -= 100;
-    }
+    // Detect jurisdiction
+    const jurisdiction = detectJurisdiction(raw);
     
-    // Penalty -200 if any word appears in lowercase in original label text
-    // (helps remove generic packaging words that might slip through)
-    const originalLower = raw.toLowerCase();
-    const hasGenericInOriginal = candidateWords.some(word => {
-      return genericWords.some(gw => originalLower.includes(gw));
-    });
-    if (hasGenericInOriginal) {
-      score -= 200;
-    }
-    
-    // Debug: log candidate score
-    console.log('[extractLabelInsights] candidate score:', { candidateName, score });
-    
-    // If this is the best candidate so far, save it
-    if (score > bestScore) {
-      bestScore = score;
-      bestCandidate = candidateName;
-    }
+    // Debug: log brand, packaged status, and final strain name
+    console.log('[extractLabelInsights] brand:', brand);
+    console.log('[extractLabelInsights] isPackagedProduct:', isPackagedProduct);
+    console.log('[extractLabelInsights] Final strainName:', strainName);
+
+    return {
+      // Strain identification
+      strainName,
+      brand,
+      
+      // Package detection
+      isPackagedProduct,
+      
+      // Product classification
+      productType,
+      category,
+      
+      // Potency
+      thcPercent: thcPercent != null ? parseFloat(thcPercent) : null,
+      cbdPercent: cbdPercent != null ? parseFloat(cbdPercent) : null,
+      totalCannabinoidsPercent: totalCannabinoidsPercent != null ? parseFloat(totalCannabinoidsPercent) : null,
+      thcMg: thcMg != null ? parseFloat(thcMg) : null,
+      cbdMg: cbdMg != null ? parseFloat(cbdMg) : null,
+      totalCannabinoidsMg: totalCannabinoidsMg != null ? parseFloat(totalCannabinoidsMg) : null,
+      cannabinoids,
+
+      // Product details
+      netWeightValue,
+      netWeightUnit,
+      
+      // Terpenes
+      terpenePercentTotal: terpenePercentTotal != null ? parseFloat(terpenePercentTotal.toFixed(2)) : null,
+      terpenes,
+
+      // Tracking / compliance
+      batchId,
+      licenseNumber,
+      labName,
+      jurisdiction,
+
+      // Dates
+      packageDate,
+      testDate,
+      expirationDate,
+
+      // Warnings & legal
+      warnings,
+      ageRestricted,
+      medicalUseOnly,
+      drivingWarning,
+      pregnancyWarning,
+      
+      // Dosage (mainly for edibles)
+      dosage,
+      
+      // Marketing
+      marketingTags,
+
+      // Raw text
+      rawText: raw,
+    };
+  } catch (error) {
+    console.error('[extractLabelInsights] Error:', error);
+    // Return minimal object on error
+    return {
+      strainName: null,
+      brand: null,
+      isPackagedProduct: false,
+      productType: null,
+      category: 'unknown',
+      thcPercent: null,
+      cbdPercent: null,
+      totalCannabinoidsPercent: null,
+      thcMg: null,
+      cbdMg: null,
+      totalCannabinoidsMg: null,
+      cannabinoids: [],
+      netWeightValue: null,
+      netWeightUnit: null,
+      terpenePercentTotal: null,
+      terpenes: [],
+      batchId: null,
+      licenseNumber: null,
+      labName: null,
+      jurisdiction: null,
+      packageDate: null,
+      testDate: null,
+      expirationDate: null,
+      warnings: [],
+      ageRestricted: false,
+      medicalUseOnly: false,
+      drivingWarning: false,
+      pregnancyWarning: false,
+      dosage: { totalServings: null, mgPerServingTHC: null, mgPerServingCBD: null },
+      marketingTags: [],
+      rawText: detectedText || '',
+    };
   }
-  
-  // Use the best candidate found (or null if none passed filters)
-  const strainName = bestCandidate;
-  
-  // Debug: log brand and final strain name
-  console.log('[extractLabelInsights] brand:', brand);
-  console.log('[extractLabelInsights] Final strainName:', strainName);
-
-  return {
-    // Potency
-    thcPercent: thcPercent != null ? parseFloat(thcPercent) : null,
-    cbdPercent: cbdPercent != null ? parseFloat(cbdPercent) : null,
-    thcMg: thcMg != null ? parseFloat(thcMg) : null,
-    cbdMg: cbdMg != null ? parseFloat(cbdMg) : null,
-    cannabinoids,
-
-    // Product meta
-    productType,
-    netWeightValue,
-    netWeightUnit,
-
-    // Producer / tracking
-    brand,
-    batchId,
-    licenseNumber,
-    labName,
-
-    // Dates
-    packageDate,
-    testDate,
-    expirationDate,
-
-    // Terpenes & raw
-    terpenes,
-    rawText: raw,
-    strainName, // Detected strain name from label
-  };
 }
 
 /**
@@ -500,7 +744,8 @@ export function matchStrainByVisuals(visionResult, strains) {
     ? matches 
     : (allScored.length > 0 ? [allScored[0]] : []);
 
-  // Force detected strain name from label to become top match
+  // Boost detected strain name from label if it exists in database
+  // BUT: Do NOT create fake matches if label strain doesn't exist in DB
   if (labelInsights && labelInsights.strainName) {
     const labelNorm = normalizeStrainName(labelInsights.strainName);
     if (labelNorm) {
@@ -511,7 +756,7 @@ export function matchStrainByVisuals(visionResult, strains) {
       });
       
       if (found) {
-        // Check if this strain is already in matches
+        // Only boost if strain exists in DB - check if it's already in matches
         const existingIndex = finalMatches.findIndex(m => {
           const mName = normalizeStrainName(
             m.strain && (m.strain.name || m.strain.strain_name || m.strain.slug)
@@ -526,11 +771,11 @@ export function matchStrainByVisuals(visionResult, strains) {
           finalMatches.unshift({
             ...boostingTarget,
             score: boostingTarget.score + 500,
+            reasoning: boostingTarget.reasoning + ' (exact label match)',
             reason: 'labelNameExact'
           });
         } else {
-          // Add new match at top with high score
-          // Need to create a proper match object with all required fields
+          // Strain exists in DB but wasn't in top matches - add it with boosted score
           const scoreBreakdown = calculateVisualScore(found, features, isMacro);
           finalMatches.unshift({
             strain: found,
@@ -538,11 +783,12 @@ export function matchStrainByVisuals(visionResult, strains) {
             confidence: calculateConfidence(500),
             reasoning: 'Exact match from label text',
             scoreBreakdown,
-            labelInsights, // Include label insights for consistency
+            labelInsights,
             reason: 'labelNameExact'
           });
         }
       }
+      // If label strain NOT found in DB, don't create fake match - let visual similarity results stand
     }
   }
 
