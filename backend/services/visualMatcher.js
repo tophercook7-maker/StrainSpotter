@@ -801,9 +801,15 @@ export function matchStrainByVisuals(visionResult, strains) {
   })));
 
   // Attach label insights to the result set
+  const topMatch = finalMatches.length > 0 ? finalMatches[0] : null;
+  const otherMatches = finalMatches.slice(1);
+  
   return {
     matches: finalMatches,
-    labelInsights
+    topMatch,
+    otherMatches,
+    labelInsights,
+    isPackagedProduct: labelInsights?.isPackagedProduct || false
   };
 }
 

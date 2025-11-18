@@ -49,6 +49,7 @@ import usersRoutes from './routes/users.js';
 import creditsRoutes from './routes/credits.js';
 import directMessagesRoutes from './routes/direct-messages.js';
 import { matchStrainByVisuals } from './services/visualMatcher.js';
+import { generateLabelAISummary } from './services/aiLabelExplainer.js';
 import { analyzePlantHealth } from './services/plantHealthAnalyzer.js';
 import {
   consumeScanCredits,
@@ -1075,13 +1076,16 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     let visualMatches = null;
     let labelInsights = null;
     let matchedStrainSlug = null;
+    let topMatch = null;
+    let otherMatches = [];
     
     try {
       const strains = await loadStrainLibrary();
       const matchResult = matchStrainByVisuals(result, strains);
       const matches = matchResult?.matches || [];
       labelInsights = matchResult?.labelInsights || null;
-      const topMatch = matches[0] || null;
+      topMatch = matchResult?.topMatch || matches[0] || null;
+      otherMatches = matchResult?.otherMatches || matches.slice(1, 5) || [];
       
       // Debug log labelInsights.strainName if present
       if (labelInsights?.strainName) {
@@ -1091,7 +1095,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       if (topMatch) {
         visualMatches = {
           match: serializeMatch(topMatch),
-          candidates: matches.slice(1, 5).map(serializeMatch).filter(Boolean),
+          candidates: otherMatches.map(serializeMatch).filter(Boolean),
           labelInsights
         };
         matchedStrainSlug = visualMatches.match?.strain_slug || null;
@@ -1112,6 +1116,37 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
         candidates: [],
         error: 'Matching failed'
       };
+    }
+
+    // Generate AI summary if we have label insights (for packaged products)
+    let aiSummary = null;
+    if (labelInsights && labelInsights.isPackagedProduct) {
+      try {
+        const detectedText = result.textAnnotations?.[0]?.description || '';
+        aiSummary = await generateLabelAISummary({
+          labelInsights,
+          rawText: labelInsights.rawText || detectedText,
+          topMatch: topMatch ? serializeMatch(topMatch) : null,
+          otherMatches: otherMatches.map(serializeMatch).filter(Boolean),
+        });
+        
+        if (aiSummary) {
+          console.log('[process] AI summary generated successfully');
+        }
+      } catch (aiErr) {
+        console.error('[AI] Failed to generate label summary:', aiErr);
+        // Don't fail the scan - just continue without AI summary
+      }
+    }
+
+    // Attach AI summary to labelInsights
+    if (labelInsights) {
+      labelInsights.aiSummary = aiSummary || null;
+    }
+
+    // Update visualMatches with updated labelInsights
+    if (visualMatches) {
+      visualMatches.labelInsights = labelInsights;
     }
 
     // Merge Vision result with visual matches

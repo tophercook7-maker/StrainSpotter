@@ -1,6 +1,6 @@
 // frontend/src/components/ScanPage.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Box,
   Button,
@@ -115,6 +115,8 @@ function normalizeScanResult(scan) {
     topMatch: toItem(first),
     otherMatches: rest.map(toItem),
     labelInsights,
+    aiSummary: labelInsights?.aiSummary || null,
+    isPackagedProduct: labelInsights?.isPackagedProduct || false,
   };
 }
 
@@ -130,6 +132,9 @@ export default function ScanPage({ onBack, onNavigate }) {
   const [error, setError] = useState(null);
   const [guestScansUsed, setGuestScansUsedState] = useState(() => getGuestScansUsed());
   const [showPlans, setShowPlans] = useState(false);
+  
+  // Track processed scan IDs to avoid duplicate /process calls
+  const processedScanIdsRef = useRef(new Set());
 
   const handleBack = () => {
     if (onBack) onBack();
@@ -186,11 +191,13 @@ export default function ScanPage({ onBack, onNavigate }) {
   async function startScan(file) {
     setError(null);
 
-    const base64 = await fileToBase64(file);
+    // Compress image if needed
+    const processedFile = await maybeCompressImage(file);
+    const base64 = await fileToBase64(processedFile);
 
     const payload = {
-      filename: file.name || 'scan.jpg',
-      contentType: file.type || 'image/jpeg',
+      filename: processedFile.name || 'scan.jpg',
+      contentType: processedFile.type || 'image/jpeg',
       base64,
     };
 
@@ -220,17 +227,20 @@ export default function ScanPage({ onBack, onNavigate }) {
       throw new Error('Did not receive a scan id from the server.');
     }
 
-    // Trigger Vision processing
-    try {
-      const processRes = await fetch(apiUrl(`/api/scans/${scanId}/process`), {
-        method: 'POST',
-      });
-      if (!processRes.ok) {
-        console.warn('[startScan] Process endpoint returned non-OK:', processRes.status);
+    // Trigger Vision processing (only once per scanId)
+    if (!processedScanIdsRef.current.has(scanId)) {
+      processedScanIdsRef.current.add(scanId);
+      try {
+        const processRes = await fetch(apiUrl(`/api/scans/${scanId}/process`), {
+          method: 'POST',
+        });
+        if (!processRes.ok) {
+          console.warn('[startScan] Process endpoint returned non-OK:', processRes.status);
+        }
+      } catch (e) {
+        console.error('[startScan] Error triggering scan processing', e);
+        // Do not throw here; we'll let pollScan handle timeouts/errors
       }
-    } catch (e) {
-      console.error('[startScan] Error triggering scan processing', e);
-      // Do not throw here; we'll let pollScan handle timeouts/errors
     }
 
     setIsUploading(false);
@@ -240,8 +250,8 @@ export default function ScanPage({ onBack, onNavigate }) {
   }
 
   async function pollScan(scanId, attempt = 0) {
-    const maxAttempts = 30; // ~45s at 1.5s delay
-    const delayMs = 1500;
+    const maxAttempts = 25; // ~25s at 1s delay
+    const delayMs = 1000; // 1 second polling interval
 
     try {
       const res = await fetch(apiUrl(`/api/scans/${scanId}`));
@@ -264,12 +274,13 @@ export default function ScanPage({ onBack, onNavigate }) {
       const status = scan?.status || scan?.state || 'unknown';
       const result = scan?.result;
 
-      // Check if scan has a result (matches or visualMatches)
+      // Check if scan has a result (matches or visualMatches or labelInsights)
       const hasResult = !!(
         result && (
           (result.visualMatches && (result.visualMatches.match || result.visualMatches.candidates?.length > 0)) ||
           (Array.isArray(result.matches) && result.matches.length > 0) ||
-          result.match
+          result.match ||
+          result.labelInsights
         )
       );
 
@@ -334,6 +345,71 @@ export default function ScanPage({ onBack, onNavigate }) {
       console.error('pollScan error', e);
       setIsPolling(false);
       setError(String(e.message || e));
+    }
+  }
+
+  // Lightweight image compression for large files
+  async function maybeCompressImage(file) {
+    const MAX_SIZE = 2 * 1024 * 1024; // 2MB
+    const MAX_DIMENSION = 1600;
+    const QUALITY = 0.7;
+
+    if (file.size <= MAX_SIZE) {
+      return file; // No compression needed
+    }
+
+    try {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            // Calculate new dimensions maintaining aspect ratio
+            let width = img.width;
+            let height = img.height;
+            
+            if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+              if (width > height) {
+                height = (height / width) * MAX_DIMENSION;
+                width = MAX_DIMENSION;
+              } else {
+                width = (width / height) * MAX_DIMENSION;
+                height = MAX_DIMENSION;
+              }
+            }
+
+            // Create canvas and compress
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob(
+              (blob) => {
+                if (blob) {
+                  const compressedFile = new File([blob], file.name, {
+                    type: 'image/jpeg',
+                    lastModified: Date.now(),
+                  });
+                  resolve(compressedFile);
+                } else {
+                  resolve(file); // Fallback to original
+                }
+              },
+              'image/jpeg',
+              QUALITY
+            );
+          };
+          img.onerror = () => resolve(file); // Fallback to original
+          img.src = e.target.result;
+        };
+        reader.onerror = () => resolve(file); // Fallback to original
+        reader.readAsDataURL(file);
+      });
+    } catch (e) {
+      console.warn('[ScanPage] Image compression failed, using original:', e);
+      return file; // Fallback to original
     }
   }
 
@@ -592,7 +668,7 @@ export default function ScanPage({ onBack, onNavigate }) {
                 >
                   {isUploading
                     ? 'Uploading photo securely...'
-                    : 'Analyzing image and matching strains...'}
+                    : 'Analyzing your package...'}
                 </Typography>
               </Stack>
             )}
