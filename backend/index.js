@@ -1123,11 +1123,18 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     if (labelInsights && labelInsights.isPackagedProduct) {
       try {
         const detectedText = result.textAnnotations?.[0]?.description || '';
+        const labelCandidates = labelInsights.labelCandidates || [];
+        const dbCandidates = matchResult?.dbCandidates || [];
+        
         aiSummary = await generateLabelAISummary({
           labelInsights,
           rawText: labelInsights.rawText || detectedText,
           topMatch: topMatch ? serializeMatch(topMatch) : null,
           otherMatches: otherMatches.map(serializeMatch).filter(Boolean),
+          labelCandidates,
+          dbCandidates,
+          labelStrainName: labelInsights.strainName || null, // Pass the potentially overridden strainName
+          isPackagedProduct: labelInsights.isPackagedProduct || false,
         });
         
         if (aiSummary) {

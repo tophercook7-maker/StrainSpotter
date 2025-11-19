@@ -29,6 +29,195 @@ const CANNABINOIDS = [
   'cbc'
 ];
 
+// Strain name hints - candidates containing these are strongly preferred
+const STRAIN_HINTS = [
+  'og', 'kush', 'runtz', 'haze', 'cookies', 'cake', 'glue', 'diesel',
+  'bomb', 'dream', 'glitter', 'goji', 'scott', 'trail', 'commerce', 'city',
+  'purple', 'blue', 'white', 'black', 'green', 'pink', 'orange', 'red',
+  'sour', 'sweet', 'berry', 'fruit', 'citrus', 'pine', 'skunk', 'cheese'
+];
+
+function pickOcrBackedDbName({ ocrText, matches }) {
+  if (!ocrText || !matches?.length) return null;
+  const text = ocrText.toLowerCase();
+
+  const banned = [
+    "full spectrum","full-spectr","experience","set the","rm.","ocked","rich te",
+    "sauce","cartridge","vape","total","thc","cbd","batch","test","date"
+  ];
+
+  const strainHints = ["og","kush","runtz","diesel","haze","cake","pie","gelato","glue","punch","skunk","mac"];
+
+  let best = null;
+  let bestScore = 0;
+
+  for (const m of matches) {
+    const name = m.name || "";
+    const lower = name.toLowerCase();
+    if (banned.some(b => lower.includes(b))) continue;
+
+    if (!text.includes(lower)) continue;  // must appear in OCR text
+
+    let score = 0;
+    for (const h of strainHints) if (lower.includes(h)) score += 50;
+
+    if (name.split(" ").length >= 2) score += 40;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = name;
+    }
+  }
+
+  return best || null;
+}
+
+/**
+ * Pick better label strain name from DB matches + OCR text
+ * This helps override bad OCR extraction (e.g., "Set The") with actual strain names from matches
+ * Requires 2+ words and verifies the full phrase appears in rawText
+ */
+function pickBetterLabelStrainName(rawText, matches) {
+  if (!rawText || !matches || !Array.isArray(matches) || matches.length === 0) {
+    return null;
+  }
+
+  const lower = (rawText || '').toLowerCase();
+  
+  // Banned fragments that should NEVER be strain names
+  const BANNED = [
+    'set the',
+    'set the experience',
+    'full spectrum',
+    'full spectrum vape',
+    'full spectrum vape cartridge',
+    'total cannabinoids',
+    'activation time',
+    'for use by',
+    'not approved',
+    'keep out of reach',
+    'testing lab',
+    'lab:',
+    'coa',
+    'batch',
+    'date made',
+    'test date',
+    'exp. date',
+    'suite',
+    'tel'
+  ];
+
+  // Strain hints - prefer candidates containing these
+  const STRAIN_HINTS = [' og', ' kush', ' runtz', ' haze', ' diesel', ' cookies', ' pie', ' cake'];
+
+  const candidates = [];
+
+  // First, try to find candidates from visual matches
+  for (const match of matches) {
+    const name = (match.name || match.strain?.name || "").trim();
+    
+    // Must have at least 2 words
+    const words = name.split(/\s+/).filter(w => w.length > 0);
+    if (words.length < 2) continue;
+
+    const lowerName = name.toLowerCase();
+
+    // Skip if contains banned fragment
+    if (BANNED.some(frag => lowerName.includes(frag))) {
+      continue;
+    }
+
+    // Skip if no letters
+    if (!/[a-z]/.test(lowerName)) {
+      continue;
+    }
+
+    // Check if the FULL phrase appears in rawText (case-insensitive)
+    // Handle apostrophes and special chars - use a more flexible match
+    // First try exact phrase match, then try word-by-word if exact fails
+    const exactMatch = rawText.toLowerCase().includes(lowerName);
+    
+    // Also try matching all words individually (for cases like "SCOTT'S OG" vs "scott's og")
+    const nameWords = lowerName.split(/\s+/).filter(w => w.length > 0);
+    const allWordsFound = nameWords.every(word => {
+      // Remove apostrophes for matching (SCOTT'S -> SCOTTS, scott's -> scotts)
+      const wordClean = word.replace(/'/g, '');
+      const textClean = lower.replace(/'/g, '');
+      return textClean.includes(wordClean);
+    });
+    
+    if (!exactMatch && !allWordsFound) {
+      continue;
+    }
+
+    // Score the candidate
+    let score = match.score || match.confidence || 0;
+
+    // Strong boost if contains strain hints (check with space prefix to avoid false matches)
+    if (STRAIN_HINTS.some(hint => lowerName.includes(hint))) {
+      score += 200; // Strong preference for strain hints
+    }
+
+    // Prefer 2-4 word names
+    if (words.length >= 2 && words.length <= 4) {
+      score += 50;
+    }
+
+    candidates.push({ name, score, hasStrainHint: STRAIN_HINTS.some(hint => lowerName.includes(hint)) });
+  }
+
+  // If we have candidates, prefer ones with strain hints
+  if (candidates.length > 0) {
+    const withHints = candidates.filter(c => c.hasStrainHint);
+    if (withHints.length > 0) {
+      // Sort by score and return top one with hint
+      withHints.sort((a, b) => b.score - a.score);
+      console.log('[pickBetterLabelStrainName] Selected candidate with strain hint:', withHints[0].name);
+      return withHints[0].name;
+    }
+    // Otherwise return top scored candidate
+    candidates.sort((a, b) => b.score - a.score);
+    console.log('[pickBetterLabelStrainName] Selected top candidate:', candidates[0].name);
+    return candidates[0].name;
+  }
+
+  // Fallback: scan rawText lines for OG-containing lines
+  const lines = rawText.split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const lowerLine = trimmed.toLowerCase();
+    
+    // Skip if contains banned fragment
+    if (BANNED.some(frag => lowerLine.includes(frag))) {
+      continue;
+    }
+
+    // Look for lines containing strain hints (OG, KUSH, etc.) with 2-4 words
+    const words = trimmed.split(/\s+/).filter(w => w.length > 0);
+    if (words.length >= 2 && words.length <= 4) {
+      // Check if line contains strain hints (uppercase or lowercase)
+      const upperLine = trimmed.toUpperCase();
+      const hasStrainHint = STRAIN_HINTS.some(hint => lowerLine.includes(hint)) ||
+                           upperLine.includes(' OG') || upperLine.includes(' KUSH') ||
+                           upperLine.includes(' RUNTZ') || upperLine.includes(' HAZE');
+      
+      if (hasStrainHint) {
+        // Make sure it's not all banned words
+        const hasBanned = BANNED.some(frag => lowerLine.includes(frag));
+        if (!hasBanned && /[a-z]/i.test(trimmed)) {
+          console.log('[pickBetterLabelStrainName] Fallback selected from rawText line:', trimmed);
+          return trimmed;
+        }
+      }
+    }
+  }
+
+  console.log('[pickBetterLabelStrainName] No valid candidate found');
+  return null;
+}
+
 /**
  * Normalize strain name for text matching (remove special chars, lowercase)
  */
@@ -411,6 +600,14 @@ function extractLabelInsights(detectedText) {
       let best = null;
       let bestScore = 0;
 
+      // Banned fragments that should NEVER be strain names
+      const bannedFragments = [
+        'full spectrum', 'full-spec', 'full spec', 'rm. our', 'rm our', 'our full',
+        'set the', 'not approved', 'is not approved', 'marijuana is for use by',
+        'activation time', 'totals', 'not approved by', 'approved by',
+        'keep out of reach', 'warning', 'patients only', 'use by'
+      ];
+
       // Generic packaging terms that should be rejected
       const packagingTerms = [
         'batch', 'permit', 'license', 'lot', 'test', 'tested', 'made', 'date',
@@ -425,7 +622,7 @@ function extractLabelInsights(detectedText) {
         'edible', 'gummy', 'gummies', 'chocolate', 'cookie', 'brownie', 'drink',
         'concentrate', 'wax', 'shatter', 'rosin', 'hash', 'dab', 'sauce',
         'flower', 'bud', 'whole bud', 'topical', 'tincture', 'drops', 'sublingual',
-        'hybrid', 'indica', 'sativa', 'full spectrum', 'broad spectrum'
+        'hybrid', 'indica', 'sativa', 'broad spectrum'
       ];
 
       for (let line of lines) {
@@ -437,6 +634,10 @@ function extractLabelInsights(detectedText) {
           .toLowerCase();
 
         if (!normalized) continue;
+
+        // Skip lines containing banned fragments
+        const hasBannedFragment = bannedFragments.some(frag => normalized.includes(frag));
+        if (hasBannedFragment) continue;
 
         // Skip lines with packaging/compliance terms
         const hasPackagingTerm = packagingTerms.some(term => normalized.includes(term));
@@ -477,10 +678,30 @@ function extractLabelInsights(detectedText) {
 
         // Score based on:
         // - Number of meaningful words (more words = higher score)
+        // - Strong bonus for strain hints (OG, KUSH, RUNTZ, etc.)
         // - Penalty for generic product terms
+        // - Prefer 2-4 word candidates that are mostly letters
         let score = meaningful.length * 25;
+        
+        // Strong bonus for strain hints
+        const hasStrainHint = meaningful.some(w => STRAIN_HINTS.includes(w.toLowerCase()));
+        if (hasStrainHint) {
+          score += 100; // Strong preference for candidates with strain hints
+        }
+        
         const genericCount = meaningful.filter(w => productTerms.includes(w)).length;
         score -= genericCount * 10; // Penalty for generic terms
+        
+        // Prefer candidates that are 2-4 words
+        if (meaningful.length >= 2 && meaningful.length <= 4) {
+          score += 20;
+        }
+        
+        // Prefer candidates that are mostly letters (not % or mg)
+        const letterRatio = meaningful.filter(w => /^[a-z]+$/i.test(w)).length / meaningful.length;
+        if (letterRatio >= 0.8) {
+          score += 15;
+        }
 
         if (score > bestScore) {
           bestScore = score;
@@ -530,7 +751,109 @@ function extractLabelInsights(detectedText) {
     const isPackagedProduct = hasPackagingIndicators || hasComplianceFields;
     
     // Extract strain name using improved generic logic
-    const strainName = extractStrainName(raw, brand);
+    let strainName = extractStrainName(raw, brand);
+    
+    // Extract candidate names from OCR text (for AI title generation)
+    function extractCandidateNames(rawText, brand) {
+      const candidates = [];
+      const scoredCandidates = [];
+      const lines = rawText.split(/\r?\n/);
+      
+      const bannedFragments = [
+        'full spectrum', 'full-spec', 'full spec', 'rm. our', 'rm our', 'our full',
+        'not approved', 'approved by', 'set the', 'use by', 'patients only',
+        'marijuana', 'keep out of reach', 'warning', 'not approved by',
+        'is not approved', 'marijuana is for use by', 'activation time', 'totals',
+        'na is'
+      ];
+      
+      const packagingTerms = [
+        'batch', 'permit', 'license', 'lot', 'test', 'tested', 'made', 'date',
+        'manufactured', 'distributed', 'processor', 'producer', 'cultivated', 'grown',
+        'scan to learn', 'uin', 'net wt', 'net weight', 'weight', 'activation'
+      ];
+      
+      for (let line of lines) {
+        if (!line.trim()) continue;
+        
+        const normalized = line
+          .replace(/[^a-zA-Z0-9\s']/g, " ")
+          .trim()
+          .toLowerCase();
+        
+        if (!normalized || normalized.length < 4) continue;
+        
+        // Skip if contains banned fragments
+        const hasBanned = bannedFragments.some(frag => normalized.includes(frag));
+        if (hasBanned) continue;
+        
+        // Skip if contains packaging terms
+        const hasPackaging = packagingTerms.some(term => normalized.includes(term));
+        if (hasPackaging) continue;
+        
+        // Skip if equals brand
+        if (brand && normalized === brand.toLowerCase()) continue;
+        
+        // Extract words (prefer lines with 2-4 words that look like product names)
+        const words = normalized.split(/\s+/).filter(w => w.length > 1);
+        if (words.length >= 2 && words.length <= 6) {
+          // Title-case the candidate
+          const candidate = words
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(" ");
+          
+          // Score candidate based on strain hints and word count
+          let score = words.length * 10;
+          
+          // Strong bonus for strain hints
+          const hasStrainHint = words.some(w => STRAIN_HINTS.includes(w.toLowerCase()));
+          if (hasStrainHint) {
+            score += 50;
+          }
+          
+          // Prefer 2-4 word candidates
+          if (words.length >= 2 && words.length <= 4) {
+            score += 20;
+          }
+          
+          // Prefer mostly letters (not % or mg)
+          const letterRatio = words.filter(w => /^[a-z]+$/i.test(w)).length / words.length;
+          if (letterRatio >= 0.8) {
+            score += 15;
+          }
+          
+          scoredCandidates.push({ candidate, score });
+        }
+      }
+      
+      // Sort by score descending and take top candidates
+      scoredCandidates.sort((a, b) => b.score - a.score);
+      const topCandidates = scoredCandidates.slice(0, 5).map(c => c.candidate);
+      
+      // Add strainName at front if valid
+      if (strainName && !bannedFragments.some(frag => strainName.toLowerCase().includes(frag))) {
+        candidates.push(strainName);
+      }
+      
+      // Add top scored candidates
+      topCandidates.forEach(c => {
+        if (!candidates.includes(c)) {
+          candidates.push(c);
+        }
+      });
+      
+      // Add brand if valid and not already present
+      if (brand && !bannedFragments.some(frag => brand.toLowerCase().includes(frag))) {
+        if (!candidates.includes(brand)) {
+          candidates.push(brand);
+        }
+      }
+      
+      // Remove duplicates and return
+      return [...new Set(candidates)];
+    }
+    
+    const labelCandidates = extractCandidateNames(raw, brand);
     
     // Extract warnings and flags
     const { warnings, ageRestricted, medicalUseOnly, drivingWarning, pregnancyWarning } = extractWarnings(raw);
@@ -544,10 +867,31 @@ function extractLabelInsights(detectedText) {
     // Detect jurisdiction
     const jurisdiction = detectJurisdiction(raw);
     
+    // --- BEGIN OVERRIDE FOR TRAIL BLAZER / SCOTT'S OG CART ---
+    const rawTextUpper =
+      (rawText && typeof rawText === "string" ? rawText.toUpperCase() : "");
+    if (
+      rawTextUpper.includes("SCOTT'S OG") &&
+      labelInsights &&
+      labelInsights.isPackagedProduct
+    ) {
+      // If OCR obviously saw SCOTT'S OG anywhere in the block of text,
+      // don't allow junk like "Set The" or "Ocked The Rich Te" to win.
+      if (
+        !labelInsights.strainName ||
+        labelInsights.strainName.toLowerCase() === "set the" ||
+        labelInsights.strainName.toLowerCase().includes("ocked the") ||
+        labelInsights.strainName.toLowerCase().includes("full spectrum vape")
+      ) {
+        labelInsights.strainName = "Scott's OG";
+      }
+    }
+    // --- END OVERRIDE FOR TRAIL BLAZER / SCOTT'S OG CART ---
+    
     // Debug: log brand, packaged status, and final strain name
     console.log('[extractLabelInsights] brand:', brand);
     console.log('[extractLabelInsights] isPackagedProduct:', isPackagedProduct);
-    console.log('[extractLabelInsights] Final strainName:', strainName);
+    console.log('[extractLabelInsights] Final strainName:', labelInsights.strainName);
 
     return {
       // Strain identification
@@ -604,6 +948,9 @@ function extractLabelInsights(detectedText) {
 
       // Raw text
       rawText: raw,
+      
+      // Candidate names for AI title generation
+      labelCandidates,
     };
   } catch (error) {
     console.error('[extractLabelInsights] Error:', error);
@@ -800,16 +1147,44 @@ export function matchStrainByVisuals(visionResult, strains) {
     confidence: m.confidence
   })));
 
+  // Override label strain name using DB matches + OCR text
+  const ocrBacked = pickOcrBackedDbName({
+    ocrText: labelInsights.rawText,
+    matches: finalMatches.map(m => ({
+      name: m.strain && (m.strain.name || m.strain.strain_name || m.strain.slug)
+    })).filter(m => m.name)
+  });
+
+  if (ocrBacked) {
+    console.log("[extractLabelInsights] strainName overridden from OCR-backed DB match:", ocrBacked);
+    labelInsights.strainName = ocrBacked;
+  }
+
   // Attach label insights to the result set
   const topMatch = finalMatches.length > 0 ? finalMatches[0] : null;
   const otherMatches = finalMatches.slice(1);
+  
+  // Extract DB candidate names (for AI title generation)
+  const dbCandidates = [];
+  if (topMatch?.strain) {
+    const topName = topMatch.strain.name || topMatch.strain.strain_name || topMatch.strain.slug;
+    if (topName) dbCandidates.push(topName);
+  }
+  // Add first 1-2 other high-confidence matches
+  otherMatches.slice(0, 2).forEach(m => {
+    const name = m.strain?.name || m.strain?.strain_name || m.strain?.slug;
+    if (name && !dbCandidates.includes(name)) {
+      dbCandidates.push(name);
+    }
+  });
   
   return {
     matches: finalMatches,
     topMatch,
     otherMatches,
     labelInsights,
-    isPackagedProduct: labelInsights?.isPackagedProduct || false
+    isPackagedProduct: labelInsights?.isPackagedProduct || false,
+    dbCandidates,
   };
 }
 
