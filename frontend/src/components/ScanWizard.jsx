@@ -4,12 +4,14 @@ import ErrorBoundary from "./ErrorBoundary";
 import SeedVendorFinder from "./SeedVendorFinder";
 import DispensaryFinder from "./DispensaryFinder";
 import FeedbackModal from "./FeedbackModal";
+import ScanResultCard from "./ScanResultCard";
 import Snackbar from '@mui/material/Snackbar';
 import { Container, Box, Button, Typography, Paper, CircularProgress, Tabs, Tab, Dialog, DialogTitle, DialogContent, Chip, Stack, TextField, IconButton, Alert, DialogActions, DialogContentText, Divider, Fab, Tooltip } from "@mui/material";
 import CloseIcon from '@mui/icons-material/Close';
 import FeedbackIcon from '@mui/icons-material/Feedback';
 import { supabase, SUPABASE_ANON_KEY } from '../supabaseClient';
 import { API_BASE, FUNCTIONS_BASE } from '../config';
+import { normalizeScanResult, getScanKindLabel, cleanCandidateName } from '../utils/scanResultUtils';
 
 const ConfidenceCallout = ({ confidence }) => {
   if (confidence == null) return null;
@@ -41,6 +43,8 @@ export default function ScanWizard({ onBack }) {
   const [alertMsg, setAlertMsg] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsTab, setDetailsTab] = useState(0);
+  const [scanResult, setScanResult] = useState(null); // Normalized scan result for ScanResultCard
+  const [isPolling, setIsPolling] = useState(false);
 
   // Review state
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -251,6 +255,123 @@ export default function ScanWizard({ onBack }) {
     }
   };
 
+  // Poll for scan result (similar to ScanPage)
+  const pollScanResult = async (scanId, attempt = 0) => {
+    const maxAttempts = 25; // ~25s at 1s delay
+    const delayMs = 1000; // 1 second polling interval
+
+    try {
+      const res = await fetch(`${API_BASE}/api/scans/${scanId}`);
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.error || `Scan lookup failed (${res.status})`);
+      }
+
+      // Backend may return wrapped { scan: {...} } or direct scan object
+      const scan = data?.scan || data;
+      
+      if (!scan) {
+        throw new Error('Invalid scan response from server');
+      }
+
+      const status = scan?.status || scan?.state || 'unknown';
+      const result = scan?.result;
+
+      // Check if scan has a result (matches or visualMatches or labelInsights)
+      const hasResult = !!(
+        result && (
+          (result.visualMatches && (result.visualMatches.match || result.visualMatches.candidates?.length > 0)) ||
+          (Array.isArray(result.matches) && result.matches.length > 0) ||
+          result.match ||
+          result.labelInsights
+        )
+      );
+
+      // Check if scan is complete
+      const isComplete = 
+        status === 'done' || 
+        status === 'complete' || 
+        status === 'completed' || 
+        status === 'success';
+
+      // Check if scan has an error
+      const isError = 
+        status === 'error' || 
+        status === 'failed' || 
+        !!scan?.error || 
+        !!scan?.errorMessage;
+
+      // Check if AI is still running (result present but aiSummary missing for packaged products)
+      const isPackaged = result?.labelInsights?.isPackagedProduct || false;
+      const hasAiSummary = !!(result?.labelInsights?.aiSummary || result?.visualMatches?.labelInsights?.aiSummary);
+      const aiPending = isPackaged && hasResult && !hasAiSummary;
+      
+      // If scan is complete OR has a result, stop polling and show results
+      if (isComplete || hasResult) {
+        // If AI is still pending, set status and continue polling
+        if (aiPending) {
+          setScanStatus("Generating AI decoded label…");
+          // Continue polling for AI summary
+          setTimeout(() => {
+            pollScanResult(scanId, attempt + 1);
+          }, delayMs);
+          return;
+        }
+        
+        // AI is done or not needed - show results
+        setIsPolling(false);
+        
+        const normalized = normalizeScanResult(scan);
+        if (!normalized) {
+          setScanStatus('No strain match found yet. Try a clearer photo or different angle.');
+          setScanResult(null);
+        } else {
+          setScanResult(normalized);
+          setScanStatus("Scan complete!");
+          
+          // Also set match for backward compatibility with existing code that uses match.strain
+          if (normalized.topMatch) {
+            setMatch({
+              strain: {
+                ...normalized.topMatch.dbMeta,
+                name: normalized.topMatch.name,
+                type: normalized.topMatch.type,
+                slug: normalized.topMatch.id,
+              },
+              confidence: normalized.topMatch.confidence,
+            });
+          }
+        }
+        return;
+      }
+
+      // If scan has an error status or error field, stop polling and show error
+      if (isError) {
+        setIsPolling(false);
+        const errorMessage = scan?.error || scan?.errorMessage || 'Scan failed on the server.';
+        setScanStatus(errorMessage);
+        return;
+      }
+
+      // If we've hit max attempts, stop polling
+      if (attempt >= maxAttempts) {
+        setIsPolling(false);
+        setScanStatus('Scan is taking too long. Please try again with a clearer photo.');
+        return;
+      }
+
+      // Otherwise, schedule another poll attempt
+      setTimeout(() => {
+        pollScanResult(scanId, attempt + 1);
+      }, delayMs);
+    } catch (e) {
+      console.error('pollScanResult error', e);
+      setIsPolling(false);
+      setScanStatus(String(e.message || e));
+    }
+  };
+
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -377,40 +498,11 @@ export default function ScanWizard({ onBack }) {
           const processData = await processResp.json();
           setResult(processData.result);
           setPlantHealth(processData.plantHealth || null);
-          setScanStatus("Matching strain...");
+          setScanStatus("Analyzing label and finding strain matches...");
 
-          const matchResp = await fetch(`${API_BASE}/api/visual-match`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ visionResult: processData.result })
-          });
-
-          if (matchResp.ok) {
-            const matchData = await matchResp.json();
-            if (matchData.matches && matchData.matches.length > 0) {
-              const topMatch = matchData.matches[0];
-              setMatch(topMatch);
-
-              try {
-                await fetch(`${API_BASE}/api/scans/${scanId}/save-match`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    matched_strain_slug: topMatch.strain.slug,
-                    user_id: currentUser.id
-                  })
-                });
-              } catch (saveErr) {
-                console.error('Failed to save match:', saveErr);
-              }
-
-              setScanStatus("Scan complete!");
-            } else {
-              setScanStatus("No matches found");
-            }
-          } else {
-            setScanStatus("No matches found");
-          }
+          // Poll for the complete scan result (like ScanPage does)
+          setIsPolling(true);
+          pollScanResult(scanId); // Don't await - let it poll in background
 
           await loadCredits();
         } catch (err) {
@@ -880,10 +972,15 @@ export default function ScanWizard({ onBack }) {
                 Add credits or join the Garden to unlock new scans.
               </Typography>
             )}
-            {loading && (
+            {(loading || isPolling) && (
               <CircularProgress color="success" sx={{ mt: { xs: 1, sm: 2 } }} />
             )}
-            {scanStatus && !loading && (
+            {scanStatus && !loading && !isPolling && (
+              <Typography align="center" sx={{ mt: { xs: 1, sm: 2 }, color: '#388e3c', fontWeight: 700, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                {scanStatus}
+              </Typography>
+            )}
+            {isPolling && scanStatus && (
               <Typography align="center" sx={{ mt: { xs: 1, sm: 2 }, color: '#388e3c', fontWeight: 700, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
                 {scanStatus}
               </Typography>
@@ -891,90 +988,78 @@ export default function ScanWizard({ onBack }) {
           </Box>
 
           {/* Scan Results Section */}
-          {match && (
+          {scanResult && (
           <Box sx={{
             mt: { xs: 2, sm: 4 },
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: { xs: 3, sm: 6 },
-            p: { xs: 2, sm: 3 },
-            maxWidth: 600,
-            minHeight: { xs: 'auto', sm: 200 },
             width: '100%',
-            opacity: 1,
-            boxShadow: 'none',
-            border: 'none'
+            maxWidth: 600,
           }}>
-            <Typography sx={{
-              fontSize: { xs: '1.5rem', sm: '2rem' },
-              fontWeight: 900,
-              color: '#00e676',
-              letterSpacing: { xs: 1, sm: 2 },
-              mb: { xs: 0.5, sm: 1 },
-              textShadow: '0 2px 12px #388e3c, 0 0px 2px #000',
-              filter: 'drop-shadow(0 0 8px #00e676)',
-              fontFamily: 'Montserrat, Arial, sans-serif'
-            }}>
-              Strain Identified!
-            </Typography>
-            <Typography sx={{
-              fontSize: { xs: '1.25rem', sm: '1.625rem' },
-              fontWeight: 900,
-              color: '#ffd600',
-              mb: { xs: 1, sm: 2 },
-              textShadow: '0 2px 8px #388e3c',
-              fontFamily: 'Montserrat, Arial, sans-serif'
-            }}>
-              {match.strain?.name}
-            </Typography>
-
-            {/* Type Badge */}
-            {match.strain?.type && (
-              <Chip
-                label={match.strain.type}
-                color={match.strain.type === 'Indica' ? 'primary' : match.strain.type === 'Sativa' ? 'success' : 'secondary'}
-                sx={{ mb: { xs: 1, sm: 2 }, fontSize: { xs: '0.875rem', sm: '1rem' }, fontWeight: 700 }}
-              />
-            )}
-
-            {/* THC/CBD */}
-            {(match.strain?.thc || match.strain?.cbd) && (
-              <Stack direction="row" spacing={{ xs: 1, sm: 2 }} sx={{ mb: { xs: 2, sm: 3 } }}>
-                {match.strain.thc && (
-                  <Chip
-                    label={`THC: ${match.strain.thc}%`}
-                    sx={{
-                      bgcolor: 'rgba(255, 152, 0, 0.3)',
-                      color: '#fff',
-                      fontWeight: 700,
-                      border: '2px solid rgba(255, 152, 0, 0.6)',
-                      fontSize: { xs: '0.75rem', sm: '0.875rem' }
-                    }}
-                  />
-                )}
-                {match.strain.cbd && (
-                  <Chip
-                    label={`CBD: ${match.strain.cbd}%`}
-                    sx={{
-                      bgcolor: 'rgba(33, 150, 243, 0.3)',
-                      color: '#fff',
-                      fontWeight: 700,
-                      border: '2px solid rgba(33, 150, 243, 0.6)',
-                      fontSize: { xs: '0.75rem', sm: '0.875rem' }
-                    }}
-                  />
-                )}
-              </Stack>
-            )}
-
-            {/* Description */}
-            {match.strain?.description && (
-              <Typography variant="body1" sx={{ color: '#fff', mb: { xs: 2, sm: 3 }, fontSize: { xs: '0.875rem', sm: '1rem' }, lineHeight: 1.6, px: { xs: 1, sm: 0 } }}>
-                {match.strain.description}
-              </Typography>
-            )}
+            {/* Product type label with primary name */}
+            {(() => {
+              // Compute primaryName the same way as ScanResultCard
+              const isPackage = Boolean(scanResult.isPackagedProduct);
+              
+              // Extract and clean candidate names (same logic as ScanResultCard)
+              const dbName = cleanCandidateName(
+                (scanResult?.topMatch && scanResult.topMatch.name) ||
+                scanResult?.matchedName ||
+                scanResult?.name
+              );
+              
+              const labelStrain = cleanCandidateName(scanResult.labelInsights?.strainName);
+              const aiTitle = cleanCandidateName(
+                scanResult.aiSummary?.title || scanResult.labelInsights?.aiSummary?.title
+              );
+              
+              let primaryName = null;
+              
+              if (isPackage) {
+                primaryName = aiTitle || labelStrain || dbName || "Unknown product";
+              } else {
+                primaryName = dbName || labelStrain || "Unknown strain";
+              }
+              
+              return (
+                <Typography sx={{
+                  fontSize: { xs: '1.25rem', sm: '1.5rem' },
+                  fontWeight: 900,
+                  color: '#00e676',
+                  letterSpacing: { xs: 0.5, sm: 1 },
+                  mb: { xs: 1, sm: 1.5 },
+                  textAlign: 'center',
+                  textShadow: '0 2px 8px #388e3c',
+                  fontFamily: 'Montserrat, Arial, sans-serif'
+                }}>
+                  {getScanKindLabel({
+                    isPackagedProduct: scanResult.isPackagedProduct || false,
+                    category: scanResult.labelInsights?.category,
+                    productType: scanResult.labelInsights?.productType,
+                  })} identified: {primaryName}
+                </Typography>
+              );
+            })()}
+            
+            {/* Use ScanResultCard for consistent display */}
+            <ScanResultCard
+              result={scanResult}
+              isGuest={!currentUser}
+              onSaveMatch={() => {
+                // Save match functionality if needed
+                console.log('Save match');
+              }}
+              onLogExperience={() => {
+                // Log experience functionality
+                handleLeaveReviewClick();
+              }}
+              onReportMismatch={() => {
+                setAlertMsg('Thank you for reporting. We\'ll review this match.');
+                setAlertOpen(true);
+              }}
+              onViewStrain={() => {
+                // View strain details
+                setDetailsOpen(true);
+              }}
+            />
 
             {/* Plant Health Analysis */}
             {plantHealth && (
@@ -1059,114 +1144,6 @@ export default function ScanWizard({ onBack }) {
               </Box>
             )}
 
-            {/* Effects */}
-            {match.strain?.effects && match.strain.effects.length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" sx={{ color: '#00e676', fontWeight: 700, mb: 1 }}>
-                  Effects:
-                </Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  {match.strain.effects.map((effect, i) => (
-                    <Chip
-                      key={i}
-                      label={effect}
-                      size="small"
-                      sx={{
-                        bgcolor: 'rgba(0, 230, 118, 0.2)',
-                        color: '#fff',
-                        border: '1px solid rgba(0, 230, 118, 0.4)'
-                      }}
-                    />
-                  ))}
-                </Stack>
-              </Box>
-            )}
-
-            {/* Flavors */}
-            {match.strain?.flavors && match.strain.flavors.length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" sx={{ color: '#ffd600', fontWeight: 700, mb: 1 }}>
-                  Flavors:
-                </Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  {match.strain.flavors.map((flavor, i) => (
-                    <Chip
-                      key={i}
-                      label={flavor}
-                      size="small"
-                      sx={{
-                        bgcolor: 'rgba(255, 214, 0, 0.2)',
-                        color: '#fff',
-                        border: '1px solid rgba(255, 214, 0, 0.4)'
-                      }}
-                    />
-                  ))}
-                </Stack>
-              </Box>
-            )}
-
-            {/* Lineage */}
-            {match.strain?.lineage && (
-              <Typography variant="body2" color="#fff" sx={{ mb: 2 }}>
-                <strong style={{ color: '#00e676' }}>Lineage:</strong> {typeof match.strain.lineage === 'string' ? match.strain.lineage : match.strain.lineage.join(' × ')}
-              </Typography>
-            )}
-
-            {/* Indica/Sativa Ratio */}
-            {(typeof match.strain?.indicaPercent === 'number' && typeof match.strain?.sativaPercent === 'number') ? (
-              <Typography variant="body2" color="#fff" sx={{ mb: 2 }}>
-                <strong style={{ color: '#00e676' }}>Ratio:</strong> {match.strain.indicaPercent}% Indica / {match.strain.sativaPercent}% Sativa
-              </Typography>
-            ) : match.strain?.ratio ? (
-              <Typography variant="body2" color="#fff" sx={{ mb: 2 }}>
-                <strong style={{ color: '#00e676' }}>Ratio:</strong> {match.strain.ratio}
-              </Typography>
-            ) : null}
-
-            {/* Grow Info */}
-            {(match.strain?.growDifficulty || match.strain?.floweringTime || match.strain?.yield) && (
-              <Box sx={{ mb: 2, p: 2, bgcolor: 'rgba(0, 0, 0, 0.3)', borderRadius: 2, border: '1px solid rgba(124, 179, 66, 0.3)' }}>
-                <Typography variant="body2" sx={{ color: '#00e676', fontWeight: 700, mb: 1 }}>
-                  Growing Information:
-                </Typography>
-                {match.strain.growDifficulty && (
-                  <Typography variant="body2" color="#fff" sx={{ mb: 0.5 }}>
-                    • Difficulty: {match.strain.growDifficulty}
-                  </Typography>
-                )}
-                {match.strain.floweringTime && (
-                  <Typography variant="body2" color="#fff" sx={{ mb: 0.5 }}>
-                    • Flowering Time: {match.strain.floweringTime}
-                  </Typography>
-                )}
-                {match.strain.yield && (
-                  <Typography variant="body2" color="#fff">
-                    • Yield: {match.strain.yield}
-                  </Typography>
-                )}
-              </Box>
-            )}
-
-            {/* Medical Uses */}
-            {match.strain?.medicalUses && match.strain.medicalUses.length > 0 && (
-              <Typography variant="body2" color="#fff" sx={{ mb: 2 }}>
-                <strong style={{ color: '#00e676' }}>Medical Uses:</strong> {match.strain.medicalUses.join(', ')}
-              </Typography>
-            )}
-
-            {/* Terpenes */}
-            {match.strain?.terpeneProfile && match.strain.terpeneProfile.length > 0 && (
-              <Typography variant="body2" color="#fff" sx={{ mb: 2 }}>
-                <strong style={{ color: '#00e676' }}>Terpenes:</strong> {match.strain.terpeneProfile.join(', ')}
-              </Typography>
-            )}
-
-            {/* Awards */}
-            {match.strain?.awards && match.strain.awards.length > 0 && (
-              <Typography variant="body2" sx={{ color: '#ffd600', mb: 2 }}>
-                <strong>🏆 Awards:</strong> {match.strain.awards.join(', ')}
-              </Typography>
-            )}
 
             {/* Review Section */}
             <Box sx={{

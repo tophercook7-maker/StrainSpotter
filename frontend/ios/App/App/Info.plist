@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>StrainSpotter</string>
+	<string>StrainSpotter</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,6 +22,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>StrainSpotter uses your camera to capture cannabis product photos for AI strain identification.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>StrainSpotter needs your location to show nearby dispensaries.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>StrainSpotter uses your photo library so you can select existing strain and garden photos.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -45,11 +51,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>StrainSpotter needs your location to show nearby dispensaries.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>StrainSpotter uses your camera to capture cannabis product photos for AI strain identification.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>StrainSpotter uses your photo library so you can select existing strain and garden photos.</string>
 </dict>
 </plist>

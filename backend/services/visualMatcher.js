@@ -37,6 +37,114 @@ const STRAIN_HINTS = [
   'sour', 'sweet', 'berry', 'fruit', 'citrus', 'pine', 'skunk', 'cheese'
 ];
 
+// Strain name keywords for label parsing
+const STRAIN_NAME_KEYWORDS = [
+  'kush', 'og', 'haze', 'bomb', 'runtz', 'gelato', 'cake', 'cookies',
+  'diesel', 'sherb', 'sherbet', 'zkittlez', 'mints', 'glue', 'punch',
+  'pie', 'sour', 'chem', 'gas', 'fuel', 'berry', 'cherry', 'banana',
+  'papaya', 'tangie', 'slurricane'
+];
+
+// Banned fragments that should NEVER be considered strain names
+const LABEL_LINE_BANNED_FRAGMENTS = [
+  'net wt', 'net weight', 'oz)', 'mg', '%', 'thc', 'cbd', 'limonene',
+  'myrcene', 'caryophyllene', 'terpenes', 'activation time', 'tested by',
+  'batch', 'manufactured by', 'permit', 'uin', 'scan to learn', 'co2',
+  'acrelabs', 'biotrack', 'suite', 'dark horse', 'lucid', '2025', '2026'
+];
+
+/**
+ * Guess strain name from raw label text
+ * Treats "Dark Horse" as brand, not strain
+ * Prefers lines with strain keywords and avoids banned fragments
+ */
+function guessStrainNameFromLabel(rawText, matches = []) {
+  if (!rawText || typeof rawText !== 'string') return null;
+
+  const lines = rawText
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) return null;
+
+  let best = null;
+  let bestScore = 0;
+
+  // Extract DB match names for scoring
+  const dbMatchNames = (matches || [])
+    .map(m => {
+      const name = m.strain?.name || m.strain?.strain_name || m.strain?.slug || m.name || '';
+      return name.toLowerCase();
+    })
+    .filter(Boolean);
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+
+    // Skip if contains banned fragments
+    if (LABEL_LINE_BANNED_FRAGMENTS.some(frag => lower.includes(frag))) {
+      continue;
+    }
+
+    // Break into tokens, discard anything with digits
+    const tokens = line.split(/\s+/);
+    const cleanedTokens = tokens.filter(t => !/\d/.test(t));
+
+    if (cleanedTokens.length === 0) continue;
+
+    const candidate = cleanedTokens.join(' ').trim();
+    if (candidate.length < 3 || candidate.length > 40) continue;
+
+    const wordCount = cleanedTokens.length;
+    if (wordCount > 5) continue; // too long to be a clean name
+
+    // Score: +2 if it has a strain-ish keyword
+    let score = 0;
+    const hasKeyword = STRAIN_NAME_KEYWORDS.some(kw =>
+      candidate.toLowerCase().includes(kw)
+    );
+    if (hasKeyword) {
+      score += 2;
+    }
+
+    // Slight preference for 2-4 words (typical strain names)
+    if (wordCount >= 2 && wordCount <= 4) {
+      score += 1;
+    }
+
+    // Slight preference for lines that are not all uppercase (brands are often all-caps)
+    const isAllCaps = candidate === candidate.toUpperCase();
+    if (!isAllCaps) {
+      score += 1;
+    }
+
+    // Bonus if DB match name appears in the line
+    if (dbMatchNames.length > 0) {
+      const candidateLower = candidate.toLowerCase();
+      const hasDbMatch = dbMatchNames.some(dbName => {
+        // Check if DB match name appears as whole words
+        const dbWords = dbName.split(/\s+/);
+        return dbWords.every(word => candidateLower.includes(word));
+      });
+      if (hasDbMatch) {
+        score += 2;
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      // Title case the result
+      best = candidate
+        .split(/\s+/)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+    }
+  }
+
+  return best;
+}
+
 function pickOcrBackedDbName({ ocrText, matches }) {
   if (!ocrText || !matches?.length) return null;
   const text = ocrText.toLowerCase();
@@ -225,6 +333,17 @@ function normalizeStrainName(name) {
   return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function normalizeForMatch(str) {
+  if (!str) return '';
+  return String(str)
+    .toLowerCase()
+    // turn anything non-alphanumeric into a space
+    .replace(/[^a-z0-9]+/g, ' ')
+    // collapse multiple spaces
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Helper functions for parsing label insights
 function parsePercent(text, keywords) {
   try {
@@ -405,10 +524,96 @@ function detectJurisdiction(text) {
 }
 
 function extractLabelInsights(detectedText) {
-  if (!detectedText) return null;
+  // Early return with minimal structure if no input
+  if (!detectedText) {
+    return {
+      rawText: '',
+      category: 'unknown',
+      strainName: null,
+      brand: null,
+      isPackagedProduct: false,
+      productType: null,
+      thcPercent: null,
+      cbdPercent: null,
+      totalCannabinoidsPercent: null,
+      thcMg: null,
+      cbdMg: null,
+      totalCannabinoidsMg: null,
+      cannabinoids: [],
+      netWeightValue: null,
+      netWeightUnit: null,
+      terpenePercentTotal: null,
+      terpenes: [],
+      batchId: null,
+      licenseNumber: null,
+      labName: null,
+      jurisdiction: null,
+      packageDate: null,
+      testDate: null,
+      expirationDate: null,
+      warnings: [],
+      ageRestricted: false,
+      medicalUseOnly: false,
+      drivingWarning: false,
+      pregnancyWarning: false,
+      dosage: { totalServings: null, mgPerServingTHC: null, mgPerServingCBD: null },
+      marketingTags: [],
+      labelCandidates: [],
+    };
+  }
 
   try {
-    const raw = detectedText;
+    // Ensure we always have a local rawText string to work with
+    const ocrFullText =
+      (typeof detectedText === 'object' && detectedText?.fullTextAnnotation?.text) ||
+      (typeof detectedText === 'object' && detectedText?.text) ||
+      (typeof detectedText === 'string' ? detectedText : '');
+
+    const rawText =
+      (typeof detectedText === 'object' && typeof detectedText?.rawText === 'string' && detectedText.rawText) ||
+      ocrFullText ||
+      '';
+
+    // If there is truly no text, return minimal structure
+    if (!rawText || rawText.trim().length === 0) {
+      return {
+        rawText: '',
+        category: 'unknown',
+        strainName: null,
+        brand: null,
+        isPackagedProduct: false,
+        productType: null,
+        thcPercent: null,
+        cbdPercent: null,
+        totalCannabinoidsPercent: null,
+        thcMg: null,
+        cbdMg: null,
+        totalCannabinoidsMg: null,
+        cannabinoids: [],
+        netWeightValue: null,
+        netWeightUnit: null,
+        terpenePercentTotal: null,
+        terpenes: [],
+        batchId: null,
+        licenseNumber: null,
+        labName: null,
+        jurisdiction: null,
+        packageDate: null,
+        testDate: null,
+        expirationDate: null,
+        warnings: [],
+        ageRestricted: false,
+        medicalUseOnly: false,
+        drivingWarning: false,
+        pregnancyWarning: false,
+        dosage: { totalServings: null, mgPerServingTHC: null, mgPerServingCBD: null },
+        marketingTags: [],
+        labelCandidates: [],
+      };
+    }
+
+    // Use rawText consistently - also create 'raw' alias for backward compatibility
+    const raw = rawText;
     const lower = raw.toLowerCase();
     
     // Debug: log start
@@ -868,8 +1073,9 @@ function extractLabelInsights(detectedText) {
     const jurisdiction = detectJurisdiction(raw);
     
     // --- BEGIN OVERRIDE FOR TRAIL BLAZER / SCOTT'S OG CART ---
+    // Use 'raw' (which is aliased from rawText) to ensure we're using the correct variable
     const rawTextUpper =
-      (rawText && typeof rawText === "string" ? rawText.toUpperCase() : "");
+      (raw && typeof raw === "string" ? raw.toUpperCase() : "");
     if (
       rawTextUpper.includes("SCOTT'S OG") &&
       labelInsights &&
@@ -954,8 +1160,25 @@ function extractLabelInsights(detectedText) {
     };
   } catch (error) {
     console.error('[extractLabelInsights] Error:', error);
-    // Return minimal object on error
+    console.error('[extractLabelInsights] Error stack:', error.stack);
+    // Return minimal object on error - ensure rawText is always included
+    // Try to extract rawText from detectedText if available, otherwise use empty string
+    let errorRawText = '';
+    try {
+      if (typeof detectedText === 'string') {
+        errorRawText = detectedText;
+      } else if (detectedText && typeof detectedText === 'object') {
+        errorRawText = detectedText.fullTextAnnotation?.text ||
+          detectedText.text ||
+          detectedText.rawText ||
+          '';
+      }
+    } catch (e) {
+      // Ignore errors extracting rawText in error handler
+    }
+    
     return {
+      rawText: errorRawText,
       strainName: null,
       brand: null,
       isPackagedProduct: false,
@@ -986,7 +1209,7 @@ function extractLabelInsights(detectedText) {
       pregnancyWarning: false,
       dosage: { totalServings: null, mgPerServingTHC: null, mgPerServingCBD: null },
       marketingTags: [],
-      rawText: detectedText || '',
+      labelCandidates: [],
     };
   }
 }
@@ -1009,6 +1232,7 @@ export function matchStrainByVisuals(visionResult, strains) {
   const features = extractVisualFeatures(visionResult);
 
   // Extract label insights (THC, CBD, terpenes, brand)
+  // Note: We'll refine strainName later after we have matches
   const labelInsights = extractLabelInsights(features.detectedText);
 
   // Detect macro/sugar leaf image: lots of 'leaf', 'macro', 'trichome', 'close-up', 'herb', 'green', 'weed' labels, no text
@@ -1091,11 +1315,21 @@ export function matchStrainByVisuals(visionResult, strains) {
     ? matches 
     : (allScored.length > 0 ? [allScored[0]] : []);
 
+  // Refine label strain name using guessStrainNameFromLabel helper (now that we have matches)
+  if (labelInsights && labelInsights.rawText) {
+    const labelStrainGuess = guessStrainNameFromLabel(labelInsights.rawText, finalMatches);
+    if (labelStrainGuess && labelStrainGuess.toLowerCase() !== 'dark horse') {
+      // Update labelInsights.strainName with the better guess (unless it's "Dark Horse")
+      labelInsights.strainName = labelStrainGuess;
+      console.log('[matchStrainByVisuals] Refined strain name from label:', labelStrainGuess);
+    }
+  }
+
   // Boost detected strain name from label if it exists in database
   // BUT: Do NOT create fake matches if label strain doesn't exist in DB
   if (labelInsights && labelInsights.strainName) {
     const labelNorm = normalizeStrainName(labelInsights.strainName);
-    if (labelNorm) {
+    if (labelNorm && labelNorm.toLowerCase() !== 'dark horse') { // Never boost "Dark Horse" as strain
       // Find matching strain in database
       const found = strains.find(s => {
         const sName = normalizeStrainName(s.name || s.strain_name || s.slug);
@@ -1139,23 +1373,86 @@ export function matchStrainByVisuals(visionResult, strains) {
     }
   }
 
+  // Prefer matches whose name appears in OCR text (for packaged products)
+  const rawText = (labelInsights && labelInsights.rawText) || '';
+  const normalizedText = normalizeForMatch(rawText);
+
+  // Only apply this for packaged products where label text is meaningful
+  const isPackagedProduct =
+    labelInsights &&
+    (labelInsights.isPackagedProduct ||
+      labelInsights.category === 'vape' ||
+      labelInsights.category === 'packaged');
+
+  // Use the real matches array name used in this file
+  let matchesArray = finalMatches || [];
+
+  let textBackedMatches = [];
+  if (isPackagedProduct && normalizedText && matchesArray.length > 0) {
+    textBackedMatches = matchesArray.filter((m) => {
+      // Extract name from match structure (matches have strain.name, not m.name)
+      const matchName = m.strain && (m.strain.name || m.strain.strain_name || m.strain.slug);
+      if (!matchName) return false;
+      
+      const n = normalizeForMatch(matchName);
+      if (!n) return false;
+      
+      // If the normalized match name appears inside the normalized label text,
+      // treat as text-backed. Handles things like:
+      // "COMMERCE\nCITY\nKUSH" vs "Commerce City Kush"
+      return normalizedText.includes(n);
+    });
+
+    if (textBackedMatches.length > 0) {
+      // Because matchesArray is already sorted by score, the first text-backed
+      // match in textBackedMatches is already a high-scoring candidate.
+      const bestTextBacked = textBackedMatches[0];
+
+      // Rebuild matchesArray so OCR-backed match is first
+      matchesArray = [
+        bestTextBacked,
+        ...matchesArray.filter((m) => m !== bestTextBacked),
+      ];
+
+      // Write back to finalMatches
+      finalMatches = matchesArray;
+
+      // Also override labelInsights.strainName so downstream logic
+      // (AI explainer + frontend naming) sees the correct strain name
+      if (labelInsights) {
+        const bestName = bestTextBacked.strain && (
+          bestTextBacked.strain.name || 
+          bestTextBacked.strain.strain_name || 
+          bestTextBacked.strain.slug
+        );
+        if (bestName) {
+          labelInsights.strainName = bestName;
+        }
+      }
+
+      console.log(
+        '[VisualMatcher] OCR-backed strain override:',
+        bestTextBacked.strain && (bestTextBacked.strain.name || bestTextBacked.strain.strain_name || bestTextBacked.strain.slug)
+      );
+    }
+  }
+
   // Debug logging for top results before returning
-  const matchesArray = Array.isArray(finalMatches) ? finalMatches : [];
   console.log('[VisualMatcher] top matches', matchesArray.slice(0, 5).map(m => ({
     name: m.strain && (m.strain.name || m.strain.strain_name || m.strain.slug || 'unknown'),
     score: m.score,
     confidence: m.confidence
   })));
 
-  // Override label strain name using DB matches + OCR text
+  // Override label strain name using DB matches + OCR text (fallback to existing logic)
   const ocrBacked = pickOcrBackedDbName({
-    ocrText: labelInsights.rawText,
+    ocrText: labelInsights?.rawText,
     matches: finalMatches.map(m => ({
       name: m.strain && (m.strain.name || m.strain.strain_name || m.strain.slug)
     })).filter(m => m.name)
   });
 
-  if (ocrBacked) {
+  if (ocrBacked && labelInsights && !labelInsights.strainName) {
     console.log("[extractLabelInsights] strainName overridden from OCR-backed DB match:", ocrBacked);
     labelInsights.strainName = ocrBacked;
   }

@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Skeleton,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -22,6 +23,7 @@ import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import ScanResultCard from './ScanResultCard';
 import { useAuth } from '../hooks/useAuth';
 import { API_BASE } from '../config';
+import { normalizeScanResult } from '../utils/scanResultUtils';
 
 const GUEST_LIMIT = 20;
 
@@ -42,84 +44,6 @@ function apiUrl(path) {
   return `${API_BASE}${path}`;
 }
 
-// Normalize backend scan row into the shape ScanResultCard expects,
-// including labelInsights from the backend.
-function normalizeScanResult(scan) {
-  if (!scan || !scan.result) return null;
-
-  const result = scan?.result || {};
-  
-  // Build matches from visualMatches structure
-  let matchesFromVisual = [];
-  if (result.visualMatches) {
-    // visualMatches.match is the top match (single object)
-    // visualMatches.candidates is an array of additional candidates
-    const topMatch = result.visualMatches.match;
-    const candidates = Array.isArray(result.visualMatches.candidates) 
-      ? result.visualMatches.candidates 
-      : [];
-    
-    if (topMatch) {
-      matchesFromVisual = [topMatch, ...candidates];
-    } else if (candidates.length > 0) {
-      matchesFromVisual = candidates;
-    }
-  }
-  
-  // Build matches from flat structure (fallback)
-  let matchesFromFlat = [];
-  if (Array.isArray(result.matches)) {
-    matchesFromFlat = result.matches;
-  } else if (result.match) {
-    matchesFromFlat = [result.match];
-  }
-  
-  // Decide which list to use (prefer visualMatches if available)
-  const allMatches = matchesFromVisual.length > 0 ? matchesFromVisual : matchesFromFlat;
-  
-  // If no matches found, return null so UI shows "No strain match found yet"
-  if (allMatches.length === 0) {
-    return null;
-  }
-
-  // Map each match to normalized format
-  const toItem = (candidate) => {
-    // Candidates may be serialized (strain fields directly) or have nested strain
-    const strainObj = candidate.strain || candidate;
-    const confidence = 
-      candidate.confidence ?? 
-      candidate.score ?? 
-      candidate.probability ?? 
-      0;
-    
-    return {
-      id: strainObj.strain_slug || strainObj.slug || strainObj.id || strainObj.name || 'unknown',
-      name: strainObj.name || 'Unknown strain',
-      type: strainObj.type || strainObj.category || 'Hybrid',
-      description: strainObj.description || strainObj.summary || '',
-      confidence,
-      // IMPORTANT: pass through any DB metadata on the strain, if present
-      dbMeta: strainObj, // we'll use this in ScanResultCard
-    };
-  };
-
-  const [first, ...rest] = allMatches;
-
-  // Extract labelInsights from various possible locations
-  const labelInsights = 
-    result.labelInsights || 
-    result.visualMatches?.labelInsights || 
-    null;
-
-  return {
-    topMatch: toItem(first),
-    otherMatches: rest.map(toItem),
-    labelInsights,
-    aiSummary: labelInsights?.aiSummary || null,
-    isPackagedProduct: labelInsights?.isPackagedProduct || false,
-  };
-}
-
 export default function ScanPage({ onBack, onNavigate }) {
   const { user } = useAuth();
   const isGuest = !user;
@@ -132,6 +56,7 @@ export default function ScanPage({ onBack, onNavigate }) {
   const [error, setError] = useState(null);
   const [guestScansUsed, setGuestScansUsedState] = useState(() => getGuestScansUsed());
   const [showPlans, setShowPlans] = useState(false);
+  const [scanPhase, setScanPhase] = useState('idle'); // 'idle' | 'uploading' | 'analyzing' | 'ai' | 'done'
   
   // Track processed scan IDs to avoid duplicate /process calls
   const processedScanIdsRef = useRef(new Set());
@@ -170,6 +95,7 @@ export default function ScanPage({ onBack, onNavigate }) {
     setPreviewUrl(URL.createObjectURL(file));
     setIsUploading(false);
     setIsPolling(false);
+    setScanPhase('idle');
 
     // Auto-start scan when file is selected
     startScanForFile(file);
@@ -189,7 +115,9 @@ export default function ScanPage({ onBack, onNavigate }) {
   };
 
   async function startScan(file) {
-    setError(null);
+    try {
+      setError(null);
+      setScanPhase('uploading');
 
     // Compress image if needed
     const processedFile = await maybeCompressImage(file);
@@ -217,13 +145,16 @@ export default function ScanPage({ onBack, onNavigate }) {
         setShowPlans(true);
         setIsUploading(false);
         setIsPolling(false);
+        setScanPhase('idle');
         return;
       }
+      setScanPhase('idle');
       throw new Error(data?.error || data?.hint || `Upload failed (${res.status})`);
     }
 
     const scanId = data.id || data.scan_id || data.scanId;
     if (!scanId) {
+      setScanPhase('idle');
       throw new Error('Did not receive a scan id from the server.');
     }
 
@@ -245,8 +176,16 @@ export default function ScanPage({ onBack, onNavigate }) {
 
     setIsUploading(false);
     setIsPolling(true);
+    setScanPhase('analyzing');
 
     await pollScan(scanId);
+    } catch (e) {
+      console.error('startScan error', e);
+      setIsUploading(false);
+      setIsPolling(false);
+      setScanPhase('idle');
+      setError(String(e.message || e));
+    }
   }
 
   async function pollScan(scanId, attempt = 0) {
@@ -298,9 +237,26 @@ export default function ScanPage({ onBack, onNavigate }) {
         !!scan?.error || 
         !!scan?.errorMessage;
 
+      // Check if AI is still running (result present but aiSummary missing for packaged products)
+      const isPackaged = result?.labelInsights?.isPackagedProduct || false;
+      const hasAiSummary = !!(result?.labelInsights?.aiSummary || result?.visualMatches?.labelInsights?.aiSummary);
+      const aiPending = isPackaged && hasResult && !hasAiSummary;
+      
       // If scan is complete OR has a result, stop polling and show results
       if (isComplete || hasResult) {
+        // If AI is still pending, set phase to 'ai' and continue polling
+        if (aiPending) {
+          setScanPhase('ai');
+          // Continue polling for AI summary
+          setTimeout(() => {
+            pollScan(scanId, attempt + 1);
+          }, delayMs);
+          return;
+        }
+        
+        // AI is done or not needed - show results
         setIsPolling(false);
+        setScanPhase('done');
         
         // Temporary debug log
         console.log('[pollScan] done', { status, hasResult, result: scan.result });
@@ -309,6 +265,7 @@ export default function ScanPage({ onBack, onNavigate }) {
         if (!normalized) {
           setError('No strain match found yet. Try a clearer photo or different angle.');
           setScanResult(null);
+          setScanPhase('idle');
         } else {
           setScanResult(normalized);
 
@@ -325,6 +282,7 @@ export default function ScanPage({ onBack, onNavigate }) {
       // If scan has an error status or error field, stop polling and show error
       if (isError) {
         setIsPolling(false);
+        setScanPhase('idle');
         const errorMessage = scan?.error || scan?.errorMessage || 'Scan failed on the server.';
         setError(errorMessage);
         return;
@@ -333,6 +291,7 @@ export default function ScanPage({ onBack, onNavigate }) {
       // If we've hit max attempts, stop polling
       if (attempt >= maxAttempts) {
         setIsPolling(false);
+        setScanPhase('idle');
         setError('Scan is taking too long. Please try again with a clearer photo.');
         return;
       }
@@ -344,6 +303,7 @@ export default function ScanPage({ onBack, onNavigate }) {
     } catch (e) {
       console.error('pollScan error', e);
       setIsPolling(false);
+      setScanPhase('idle');
       setError(String(e.message || e));
     }
   }
@@ -593,7 +553,7 @@ export default function ScanPage({ onBack, onNavigate }) {
                 size="large"
                 startIcon={<CloudUploadIcon />}
                 onClick={handlePickImageClick}
-                disabled={isUploading || isPolling}
+                disabled={scanPhase === 'uploading' || scanPhase === 'analyzing' || scanPhase === 'ai'}
                 sx={{
                   textTransform: 'none',
                   fontWeight: 700,
@@ -653,8 +613,8 @@ export default function ScanPage({ onBack, onNavigate }) {
               </Typography>
             </Stack>
 
-            {/* Status */}
-            {(isUploading || isPolling) && (
+            {/* Status indicator */}
+            {scanPhase !== 'idle' && scanPhase !== 'done' && (
               <Stack
                 direction="row"
                 spacing={2}
@@ -666,9 +626,9 @@ export default function ScanPage({ onBack, onNavigate }) {
                   variant="body2"
                   sx={{ color: 'rgba(224, 242, 241, 0.9)' }}
                 >
-                  {isUploading
-                    ? 'Uploading photo securely...'
-                    : 'Analyzing your package...'}
+                  {scanPhase === 'uploading' && 'Uploading photo…'}
+                  {scanPhase === 'analyzing' && 'Analyzing label and finding strain matches…'}
+                  {scanPhase === 'ai' && 'Generating AI decoded label…'}
                 </Typography>
               </Stack>
             )}
@@ -688,6 +648,42 @@ export default function ScanPage({ onBack, onNavigate }) {
             )}
           </Stack>
         </Paper>
+
+        {/* Skeleton loading state while scanning */}
+        {scanPhase !== 'idle' && scanPhase !== 'done' && !scanResult && !error && (
+          <Paper
+            elevation={6}
+            sx={{
+              p: 2.5,
+              borderRadius: 3,
+              background: 'rgba(12, 20, 12, 0.95)',
+              border: '1px solid rgba(124, 179, 66, 0.6)',
+              boxShadow: '0 18px 40px rgba(0, 0, 0, 0.7)',
+              mb: 3,
+            }}
+          >
+            <Stack spacing={2}>
+              <Skeleton
+                variant="text"
+                width="60%"
+                height={40}
+                sx={{ bgcolor: 'rgba(255, 255, 255, 0.1)' }}
+              />
+              <Skeleton
+                variant="text"
+                width="100%"
+                height={24}
+                sx={{ bgcolor: 'rgba(255, 255, 255, 0.08)' }}
+              />
+              <Skeleton
+                variant="text"
+                width="80%"
+                height={24}
+                sx={{ bgcolor: 'rgba(255, 255, 255, 0.08)' }}
+              />
+            </Stack>
+          </Paper>
+        )}
 
         {/* Results */}
         {scanResult && (

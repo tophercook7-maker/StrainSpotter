@@ -443,19 +443,6 @@ export default function StrainBrowser({ onBack }) {
     }
   };
 
-  // Get gradient background based on strain type - NO EXTERNAL IMAGES
-  const getStrainGradient = (type) => {
-    switch (type?.toLowerCase()) {
-      case 'indica':
-        return 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'; // Purple gradient
-      case 'sativa':
-        return 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'; // Pink-red gradient
-      case 'hybrid':
-        return 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'; // Blue gradient
-      default:
-        return 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)'; // Green gradient
-    }
-  };
 
   // Load favorites from localStorage on mount
   useEffect(() => {
@@ -937,8 +924,6 @@ export default function StrainBrowser({ onBack }) {
             title="No favorites yet"
             description="Tap the heart icon on any strain to pin it here for quick access."
             icon={<FavoriteBorderIcon sx={{ fontSize: 48, color: '#ff4081' }} />}
-            actionLabel="Browse strains"
-            onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           />
         </Box>
       )}
@@ -948,7 +933,7 @@ export default function StrainBrowser({ onBack }) {
       ) : (
         <>
           <Stack spacing={1}>
-            {displayedStrains.map((strain, index) => {
+            {displayedStrains.map((strain) => {
               const indicaPercent = strain.type === 'indica' ? 100 : strain.type === 'sativa' ? 0 : 50;
               const sativaPercent = 100 - indicaPercent;
               const typeColor = strain.type === 'indica' ? '#7b1fa2' : strain.type === 'sativa' ? '#f57c00' : '#00897b';

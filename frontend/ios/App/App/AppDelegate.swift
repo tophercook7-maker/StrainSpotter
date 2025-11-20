@@ -5,9 +5,23 @@ import Capacitor
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
+    
+    // Deep green background to match the app theme instead of pure black
+    private let launchBackground = UIColor(red: 0.05, green: 0.18, blue: 0.06, alpha: 1.0)
+    
+    private func setLaunchBackground() {
+        window?.backgroundColor = launchBackground
+        if let rootView = window?.rootViewController?.view {
+            rootView.backgroundColor = launchBackground
+        }
+    }
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
+        
+        // Make launch background match the app instead of pure black
+        setLaunchBackground()
+        
         return true
     }
 
@@ -27,6 +41,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        
+        // Ensure background color is set when app becomes active
+        setLaunchBackground()
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

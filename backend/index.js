@@ -1123,18 +1123,25 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     if (labelInsights && labelInsights.isPackagedProduct) {
       try {
         const detectedText = result.textAnnotations?.[0]?.description || '';
-        const labelCandidates = labelInsights.labelCandidates || [];
-        const dbCandidates = matchResult?.dbCandidates || [];
+        const rawText = labelInsights.rawText || detectedText;
+        
+        // Extract DB match info for AI
+        const dbTopMatchName = topMatch?.strain?.name || topMatch?.name || null;
+        let dbTopMatchConfidence = null;
+        if (typeof topMatch?.confidence === 'number') {
+          // Convert 0-1 scale to 0-100 if needed, otherwise use as-is
+          dbTopMatchConfidence = topMatch.confidence <= 1 
+            ? Math.round(topMatch.confidence * 100)
+            : Math.round(topMatch.confidence);
+        }
+        const detectedCategory = labelInsights.category || labelInsights.productType || null;
         
         aiSummary = await generateLabelAISummary({
-          labelInsights,
-          rawText: labelInsights.rawText || detectedText,
-          topMatch: topMatch ? serializeMatch(topMatch) : null,
-          otherMatches: otherMatches.map(serializeMatch).filter(Boolean),
-          labelCandidates,
-          dbCandidates,
-          labelStrainName: labelInsights.strainName || null, // Pass the potentially overridden strainName
-          isPackagedProduct: labelInsights.isPackagedProduct || false,
+          rawText,
+          dbTopMatchName,
+          dbTopMatchConfidence,
+          detectedCategory,
+          extraHints: null
         });
         
         if (aiSummary) {
