@@ -87,6 +87,11 @@ function guessStrainNameFromLabel(rawText, matches = []) {
       continue;
     }
 
+    // Explicitly reject "Dark Horse" - it's a brand, not a strain
+    if (lower.trim() === 'dark horse' || lower.includes('dark horse')) {
+      continue;
+    }
+
     // Break into tokens, discard anything with digits
     const tokens = line.split(/\s+/);
     const cleanedTokens = tokens.filter(t => !/\d/.test(t));
@@ -523,11 +528,26 @@ function detectJurisdiction(text) {
   }
 }
 
-function extractLabelInsights(detectedText) {
+function extractLabelInsights(visionResult, options = {}) {
+  // Always normalize OCR text and rawText at the very top
+  const fullText = (
+    visionResult?.textAnnotations?.[0]?.description ||
+    visionResult?.text ||
+    ""
+  )
+    .toString()
+    .replace(/\r\n/g, "\n");
+
+  // rawText must ALWAYS be defined inside this function
+  const rawText = (options.rawTextOverride || fullText || "").toString();
+
+  console.log("[extractLabelInsights] START");
+  console.log("[extractLabelInsights] raw text:", rawText);
+
   // Early return with minimal structure if no input
-  if (!detectedText) {
+  if (!visionResult) {
     return {
-      rawText: '',
+      rawText: rawText || '',
       category: 'unknown',
       strainName: null,
       brand: null,
@@ -563,17 +583,6 @@ function extractLabelInsights(detectedText) {
   }
 
   try {
-    // Ensure we always have a local rawText string to work with
-    const ocrFullText =
-      (typeof detectedText === 'object' && detectedText?.fullTextAnnotation?.text) ||
-      (typeof detectedText === 'object' && detectedText?.text) ||
-      (typeof detectedText === 'string' ? detectedText : '');
-
-    const rawText =
-      (typeof detectedText === 'object' && typeof detectedText?.rawText === 'string' && detectedText.rawText) ||
-      ocrFullText ||
-      '';
-
     // If there is truly no text, return minimal structure
     if (!rawText || rawText.trim().length === 0) {
       return {
@@ -615,10 +624,6 @@ function extractLabelInsights(detectedText) {
     // Use rawText consistently - also create 'raw' alias for backward compatibility
     const raw = rawText;
     const lower = raw.toLowerCase();
-    
-    // Debug: log start
-    console.log('[extractLabelInsights] START');
-    console.log('[extractLabelInsights] raw text:', raw);
 
     // Helper: first match or null
     const firstMatch = (re) => {
@@ -1074,32 +1079,40 @@ function extractLabelInsights(detectedText) {
     
     // --- BEGIN OVERRIDE FOR TRAIL BLAZER / SCOTT'S OG CART ---
     // Use 'raw' (which is aliased from rawText) to ensure we're using the correct variable
-    const rawTextUpper =
-      (raw && typeof raw === "string" ? raw.toUpperCase() : "");
+    const rawTextUpper = (raw && typeof raw === "string" ? raw.toUpperCase() : "");
     if (
       rawTextUpper.includes("SCOTT'S OG") &&
-      labelInsights &&
-      labelInsights.isPackagedProduct
+      isPackagedProduct
     ) {
       // If OCR obviously saw SCOTT'S OG anywhere in the block of text,
       // don't allow junk like "Set The" or "Ocked The Rich Te" to win.
       if (
-        !labelInsights.strainName ||
-        labelInsights.strainName.toLowerCase() === "set the" ||
-        labelInsights.strainName.toLowerCase().includes("ocked the") ||
-        labelInsights.strainName.toLowerCase().includes("full spectrum vape")
+        !strainName ||
+        strainName.toLowerCase() === "set the" ||
+        strainName.toLowerCase().includes("ocked the") ||
+        strainName.toLowerCase().includes("full spectrum vape")
       ) {
-        labelInsights.strainName = "Scott's OG";
+        strainName = "Scott's OG";
       }
     }
     // --- END OVERRIDE FOR TRAIL BLAZER / SCOTT'S OG CART ---
     
+    // Ensure "Dark Horse" is treated as brand, NOT strain name
+    if (strainName && strainName.toLowerCase().trim() === 'dark horse') {
+      // If "Dark Horse" was extracted as strain name, move it to brand instead
+      if (!brand) {
+        brand = 'Dark Horse';
+      }
+      strainName = null; // Clear strain name - Dark Horse is a brand, not a strain
+      console.log('[extractLabelInsights] Rejected "Dark Horse" as strain name, treating as brand only');
+    }
+    
     // Debug: log brand, packaged status, and final strain name
     console.log('[extractLabelInsights] brand:', brand);
     console.log('[extractLabelInsights] isPackagedProduct:', isPackagedProduct);
-    console.log('[extractLabelInsights] Final strainName:', labelInsights.strainName);
+    console.log('[extractLabelInsights] Final strainName:', strainName);
 
-    return {
+    const labelInsights = {
       // Strain identification
       strainName,
       brand,
@@ -1153,24 +1166,46 @@ function extractLabelInsights(detectedText) {
       marketingTags,
 
       // Raw text
-      rawText: raw,
+      rawText,
       
       // Candidate names for AI title generation
       labelCandidates,
     };
+
+    // Improve packaged product detection by checking text patterns
+    const textUpper = rawText.toUpperCase();
+    if (labelInsights.isPackagedProduct !== true) {
+      if (
+        textUpper.includes("NET WT") ||
+        textUpper.includes("NET WT:") ||
+        textUpper.includes("VAPE") ||
+        textUpper.includes("CARTRIDGE") ||
+        textUpper.includes("CART ") ||
+        textUpper.includes("CART\n") ||
+        textUpper.includes("GUMMY") ||
+        textUpper.includes("EDIBLE") ||
+        textUpper.includes("PREROLL") ||
+        textUpper.includes("PRE-ROLL")
+      ) {
+        labelInsights.isPackagedProduct = true;
+      }
+    }
+
+    return labelInsights;
   } catch (error) {
     console.error('[extractLabelInsights] Error:', error);
     console.error('[extractLabelInsights] Error stack:', error.stack);
     // Return minimal object on error - ensure rawText is always included
-    // Try to extract rawText from detectedText if available, otherwise use empty string
+    // Try to extract rawText from visionResult if available, otherwise use empty string
     let errorRawText = '';
     try {
-      if (typeof detectedText === 'string') {
-        errorRawText = detectedText;
-      } else if (detectedText && typeof detectedText === 'object') {
-        errorRawText = detectedText.fullTextAnnotation?.text ||
-          detectedText.text ||
-          detectedText.rawText ||
+      if (typeof visionResult === 'string') {
+        errorRawText = visionResult;
+      } else if (visionResult && typeof visionResult === 'object') {
+        errorRawText = visionResult.fullTextAnnotation?.text ||
+          visionResult.text ||
+          visionResult.rawText ||
+          visionResult?.textAnnotations?.[0]?.description ||
           '';
       }
     } catch (e) {
