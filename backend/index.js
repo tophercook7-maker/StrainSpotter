@@ -1154,10 +1154,16 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
             title: aiSummary.product_name || null,
             summary: aiSummary.label_explanation || null,
             overview: aiSummary.label_explanation || null, // Alias for compatibility
+            potencyAnalysis: null, // Not provided by current AI, can be added later
+            terpeneAnalysis: null, // Not provided by current AI, can be added later
+            usageNotes: null, // Not provided by current AI, can be added later
+            warnings: Array.isArray(aiSummary.warnings) ? aiSummary.warnings : (typeof aiSummary.warnings === 'string' ? [aiSummary.warnings] : []),
+            brandStory: null, // Not provided by current AI, can be added later
+            jurisdictionNotes: aiSummary.jurisdiction_or_license || null,
+            dbConsistency: null, // Not provided by current AI, can be added later
+            // Include original fields for backward compatibility
             brand: aiSummary.brand || null,
             productType: aiSummary.product_type || null,
-            warnings: Array.isArray(aiSummary.warnings) ? aiSummary.warnings : [],
-            // Include other fields for future use
             ...aiSummary
           };
           

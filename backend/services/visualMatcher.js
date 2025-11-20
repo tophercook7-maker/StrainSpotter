@@ -529,28 +529,48 @@ function detectJurisdiction(text) {
 }
 
 function extractLabelInsights(fullText, options = {}) {
-  // Always have a string for rawText
-  // Handle both string and object inputs for backward compatibility
-  let extractedText = "";
-  if (typeof fullText === 'string') {
-    extractedText = fullText;
-  } else if (fullText && typeof fullText === 'object') {
-    // If object passed, extract text from various possible properties
-    extractedText = (
-      fullText?.textAnnotations?.[0]?.description ||
-      fullText?.text ||
-      fullText?.fullTextAnnotation?.text ||
-      ""
-    );
-  }
-
-  const rawText = (options.rawTextOverride || extractedText || "").toString();
+  // Always have a defined string for rawText
+  const rawText = (options.rawTextOverride || fullText || "").toString();
 
   console.log("[extractLabelInsights] START");
   console.log("[extractLabelInsights] raw text:", rawText);
 
+  // From here on, ALWAYS use `rawText` (not `fullText`) in this function.
+
+  const lower = rawText.toLowerCase();
+
+  const packagedSignals = [
+    "net wt",
+    "1g vape",
+    "vape cartridge",
+    "vape cart",
+    "cartridge",
+    "cart",
+    "edible",
+    "gummy",
+    "preroll",
+    "pre-roll",
+    "concentrate",
+    "hash",
+    "rosin",
+    "live resin",
+    "disposable",
+    "manufactured by",
+    "tested by",
+    "batch:",
+    "permit",
+    "uin:"
+  ];
+
+  let isPackagedProduct;
+  if (typeof options.isPackagedProduct === "boolean") {
+    isPackagedProduct = options.isPackagedProduct;
+  } else {
+    isPackagedProduct = packagedSignals.some(sig => lower.includes(sig));
+  }
+
   // Early return with minimal structure if no input
-  if (!fullText || (!extractedText && !options.rawTextOverride)) {
+  if (!fullText || (!rawText || rawText.trim().length === 0)) {
     return {
       rawText: rawText || '',
       category: 'unknown',
@@ -588,47 +608,8 @@ function extractLabelInsights(fullText, options = {}) {
   }
 
   try {
-    // If there is truly no text, return minimal structure
-    if (!rawText || rawText.trim().length === 0) {
-      return {
-        rawText: '',
-        category: 'unknown',
-        strainName: null,
-        brand: null,
-        isPackagedProduct: false,
-        productType: null,
-        thcPercent: null,
-        cbdPercent: null,
-        totalCannabinoidsPercent: null,
-        thcMg: null,
-        cbdMg: null,
-        totalCannabinoidsMg: null,
-        cannabinoids: [],
-        netWeightValue: null,
-        netWeightUnit: null,
-        terpenePercentTotal: null,
-        terpenes: [],
-        batchId: null,
-        licenseNumber: null,
-        labName: null,
-        jurisdiction: null,
-        packageDate: null,
-        testDate: null,
-        expirationDate: null,
-        warnings: [],
-        ageRestricted: false,
-        medicalUseOnly: false,
-        drivingWarning: false,
-        pregnancyWarning: false,
-        dosage: { totalServings: null, mgPerServingTHC: null, mgPerServingCBD: null },
-        marketingTags: [],
-        labelCandidates: [],
-      };
-    }
-
     // Use rawText consistently - also create 'raw' alias for backward compatibility
     const raw = rawText;
-    const lower = raw.toLowerCase();
 
     // Helper: first match or null
     const firstMatch = (re) => {
@@ -935,35 +916,20 @@ function extractLabelInsights(fullText, options = {}) {
       return null;
     }
     
-    // Detect if this is a packaged product
-    // Check for packaging indicators: batch, permit, license, lot, UIN, test date, packaged on, manufactured by, tested by
-    // OR if we successfully parsed any compliance/tracking fields
-    const hasPackagingIndicators = 
-      lower.includes('batch') ||
-      lower.includes('permit') ||
-      lower.includes('license') ||
-      lower.includes('lot') ||
-      lower.includes('uin') ||
-      lower.includes('test date') ||
-      lower.includes('tested on') ||
-      lower.includes('packaged on') ||
-      lower.includes('packaged') ||
-      lower.includes('manufactured by') ||
-      lower.includes('tested by') ||
-      lower.includes('distributed by') ||
-      lower.includes('processor:') ||
-      lower.includes('producer:');
-    
-    const hasComplianceFields = !!(
-      batchId ||
-      licenseNumber ||
-      labName ||
-      netWeightValue ||
-      thcPercent != null ||
-      cbdPercent != null
-    );
-    
-    const isPackagedProduct = hasPackagingIndicators || hasComplianceFields;
+    // Update isPackagedProduct based on parsed fields if not already set
+    if (!isPackagedProduct) {
+      const hasComplianceFields = !!(
+        batchId ||
+        licenseNumber ||
+        labName ||
+        netWeightValue ||
+        thcPercent != null ||
+        cbdPercent != null
+      );
+      if (hasComplianceFields) {
+        isPackagedProduct = true;
+      }
+    }
     
     // Extract strain name using improved generic logic
     let strainName = extractStrainName(raw, brand);
@@ -1118,8 +1084,11 @@ function extractLabelInsights(fullText, options = {}) {
     console.log('[extractLabelInsights] Final strainName:', strainName);
 
     const labelInsights = {
+      // Raw text (always present)
+      rawText,
+      
       // Strain identification
-      strainName,
+      strainName: strainName || null,
       brand,
       
       // Package detection
@@ -1170,31 +1139,13 @@ function extractLabelInsights(fullText, options = {}) {
       // Marketing
       marketingTags,
 
-      // Raw text
-      rawText,
-      
       // Candidate names for AI title generation
       labelCandidates,
     };
 
-    // Improve packaged product detection by checking text patterns
-    const textUpper = rawText.toUpperCase();
-    if (labelInsights.isPackagedProduct !== true) {
-      if (
-        textUpper.includes("NET WT") ||
-        textUpper.includes("NET WT:") ||
-        textUpper.includes("VAPE") ||
-        textUpper.includes("CARTRIDGE") ||
-        textUpper.includes("CART ") ||
-        textUpper.includes("CART\n") ||
-        textUpper.includes("GUMMY") ||
-        textUpper.includes("EDIBLE") ||
-        textUpper.includes("PREROLL") ||
-        textUpper.includes("PRE-ROLL")
-      ) {
-        labelInsights.isPackagedProduct = true;
-      }
-    }
+    // Ensure strainName and isPackagedProduct are set correctly
+    labelInsights.strainName = strainName || null;
+    labelInsights.isPackagedProduct = isPackagedProduct;
 
     return labelInsights;
   } catch (error) {

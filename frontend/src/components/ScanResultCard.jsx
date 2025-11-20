@@ -440,40 +440,21 @@ export default function ScanResultCard({ result }) {
   const labelStrainName = labelInsights.strainName || null;
 
   // ----- visual matches (DB) -----
-  const visual = result?.visualMatches || {};
-  const matchesFromVisual = Array.isArray(visual.matches)
-    ? visual.matches
-    : visual.match
-    ? [visual.match]
-    : [];
-  const matchesFromLegacy = Array.isArray(result?.matches)
-    ? result.matches
-    : [];
   const matches =
-    matchesFromVisual.length > 0
-      ? matchesFromVisual
-      : matchesFromLegacy;
+    result?.visualMatches?.matches ??
+    (result?.visualMatches?.match
+      ? [result.visualMatches.match]
+      : result?.matches ?? []);
 
-  const primaryMatch = matches[0] || result?.topMatch || null;
+  const primaryMatch = matches?.[0] ?? null;
 
-  const dbName =
-    primaryMatch?.name ||
-    visual?.match?.name ||
-    result?.topMatch?.name ||
-    null;
-
-  const dbType =
-    primaryMatch?.type ||
-    visual?.match?.type ||
-    result?.topMatch?.type ||
-    null;
-
+  const dbName = primaryMatch?.name ?? null;
   const dbConfidence =
     typeof primaryMatch?.confidence === "number"
       ? primaryMatch.confidence
-      : typeof visual?.match?.confidence === "number"
-      ? visual.match.confidence
-      : null;
+      : result?.visualMatches?.match?.confidence ?? null;
+
+  const dbType = primaryMatch?.type || null;
 
   // ----- packaged-product detection -----
   const categoryRaw =
@@ -522,32 +503,25 @@ export default function ScanResultCard({ result }) {
   let secondaryDbName = null;
 
   if (isPackagedProduct) {
-    // LABEL-FIRST for packaged products - NEVER show "Unknown strain"
-    // Try multiple sources before falling back to "Unknown product"
     primaryName =
       productNameFromRaw ||
       labelStrainName ||
       aiTitleFromBackend ||
-      (categoryDisplay && categoryDisplay !== 'unknown' ? categoryDisplay : null) ||
       dbName ||
       "Unknown product";
 
-    // Show DB name as secondary only if it's different from primary
     if (
       dbName &&
       primaryName &&
-      dbName.toLowerCase().trim() !== primaryName.toLowerCase().trim() &&
-      primaryName !== "Unknown product"
+      dbName.toLowerCase().trim() !== primaryName.toLowerCase().trim()
     ) {
       secondaryDbName = dbName;
     }
   } else {
-    // PLANT-FIRST for bud/plant scans
     primaryName =
       dbName ||
       labelStrainName ||
       aiTitleFromBackend ||
-      productNameFromRaw ||
       "Unknown strain";
   }
 
@@ -604,7 +578,7 @@ export default function ScanResultCard({ result }) {
               sx={{ mb: 1, color: "success.main" }}
             >
               {`Database strain (best guess): ${secondaryDbName}${
-                dbConfidenceNormalized ? ` • ${dbConfidenceNormalized}` : ""
+                dbConfidence != null ? ` • ${dbConfidence}% match` : ""
               }`}
             </Typography>
           )}
@@ -671,19 +645,32 @@ export default function ScanResultCard({ result }) {
         </TagRow>
       </SectionCard>
 
-      {/* AI decoded label (simple inline version) */}
+      {/* AI decoded label */}
       {hasAiSummary && (
-        <SectionCard title="AI decoded label">
+        <Box sx={{ mt: 2 }}>
+          <Typography
+            variant="subtitle2"
+            sx={{ fontWeight: 600, mb: 0.5 }}
+          >
+            AI decoded label
+          </Typography>
           {aiTitleFromBackend && (
             <Typography
               variant="body2"
-              sx={{ fontWeight: 500, mb: 0.75 }}
+              sx={{ fontWeight: 500, mb: 0.25 }}
             >
               {aiTitleFromBackend}
             </Typography>
           )}
-          {aiOverview && renderTextWithBullets(aiOverview)}
-        </SectionCard>
+          {aiOverview && (
+            <Typography
+              variant="body2"
+              sx={{ color: "text.secondary" }}
+            >
+              {aiOverview}
+            </Typography>
+          )}
+        </Box>
       )}
 
       {/* Package lab details */}
