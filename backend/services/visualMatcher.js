@@ -528,24 +528,29 @@ function detectJurisdiction(text) {
   }
 }
 
-function extractLabelInsights(visionResult, options = {}) {
-  // Always normalize OCR text and rawText at the very top
-  const fullText = (
-    visionResult?.textAnnotations?.[0]?.description ||
-    visionResult?.text ||
-    ""
-  )
-    .toString()
-    .replace(/\r\n/g, "\n");
+function extractLabelInsights(fullText, options = {}) {
+  // Always have a string for rawText
+  // Handle both string and object inputs for backward compatibility
+  let extractedText = "";
+  if (typeof fullText === 'string') {
+    extractedText = fullText;
+  } else if (fullText && typeof fullText === 'object') {
+    // If object passed, extract text from various possible properties
+    extractedText = (
+      fullText?.textAnnotations?.[0]?.description ||
+      fullText?.text ||
+      fullText?.fullTextAnnotation?.text ||
+      ""
+    );
+  }
 
-  // rawText must ALWAYS be defined inside this function
-  const rawText = (options.rawTextOverride || fullText || "").toString();
+  const rawText = (options.rawTextOverride || extractedText || "").toString();
 
   console.log("[extractLabelInsights] START");
   console.log("[extractLabelInsights] raw text:", rawText);
 
   // Early return with minimal structure if no input
-  if (!visionResult) {
+  if (!fullText || (!extractedText && !options.rawTextOverride)) {
     return {
       rawText: rawText || '',
       category: 'unknown',
@@ -1196,17 +1201,21 @@ function extractLabelInsights(visionResult, options = {}) {
     console.error('[extractLabelInsights] Error:', error);
     console.error('[extractLabelInsights] Error stack:', error.stack);
     // Return minimal object on error - ensure rawText is always included
-    // Try to extract rawText from visionResult if available, otherwise use empty string
+    // Try to extract rawText from fullText if available, otherwise use empty string
     let errorRawText = '';
     try {
-      if (typeof visionResult === 'string') {
-        errorRawText = visionResult;
-      } else if (visionResult && typeof visionResult === 'object') {
-        errorRawText = visionResult.fullTextAnnotation?.text ||
-          visionResult.text ||
-          visionResult.rawText ||
-          visionResult?.textAnnotations?.[0]?.description ||
+      if (typeof fullText === 'string') {
+        errorRawText = fullText;
+      } else if (fullText && typeof fullText === 'object') {
+        errorRawText = fullText.fullTextAnnotation?.text ||
+          fullText.text ||
+          fullText.rawText ||
+          fullText?.textAnnotations?.[0]?.description ||
           '';
+      }
+      // Also check options.rawTextOverride
+      if (!errorRawText && options.rawTextOverride) {
+        errorRawText = String(options.rawTextOverride);
       }
     } catch (e) {
       // Ignore errors extracting rawText in error handler

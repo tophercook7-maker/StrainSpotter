@@ -553,7 +553,7 @@ export default function ScanPage({ onBack, onNavigate }) {
                 size="large"
                 startIcon={<CloudUploadIcon />}
                 onClick={handlePickImageClick}
-                disabled={scanPhase === 'uploading' || scanPhase === 'analyzing' || scanPhase === 'ai'}
+                disabled={isOpeningPicker || scanPhase === 'uploading' || scanPhase === 'analyzing' || scanPhase === 'ai'}
                 sx={{
                   textTransform: 'none',
                   fontWeight: 700,

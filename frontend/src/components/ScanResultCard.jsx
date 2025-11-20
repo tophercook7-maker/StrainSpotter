@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Chip,
-  Divider,
   Stack,
   Typography,
   Button,
@@ -12,72 +11,129 @@ import {
 import {
   cleanCandidateName,
   getStrainIdentityFromResult,
-  extractLabelNameFromRawText,
 } from "../utils/scanResultUtils";
-
-// Label name extraction is now handled by extractLabelNameFromRawText from utils
 
 // ---------- helpers ----------
 
-// Banned fragments list (shared between helpers)
-const BANNED_FRAGMENTS = [
-  'FULL SPECTRUM',
-  'FULL-SPEC',
-  'FULL SPEC',
-  'RM. OUR',
-  'RM OUR',
-  'OUR FULL',
-  'SET THE',
-  'NOT APPROVED',
-  'IS NOT APPROVED',
-  'MARIJUANA IS FOR USE BY',
-  'ACTIVATION TIME',
-  'TOTALS',
-  'NOT APPROVED BY',
-  'APPROVED BY',
-  'USE BY',
-  'PATIENTS ONLY',
-  'MARIJUANA',
-  'KEEP OUT OF REACH',
-  'WARNING',
-  'NA IS',
-  'DO NOT',
-  'POTENTIAL HARMS',
-  'VEHICLE OR MACHINERY',
-  'PERMIT',
-  'BATCH',
-  'COA',
-  'EXP. DATE'
-];
+// Small title-case helper used for terpene labels, etc.
+function titleCase(str = "") {
+  return str
+    .toString()
+    .split(" ")
+    .map((w) =>
+      w.length > 1 ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w.toUpperCase()
+    )
+    .join(" ");
+}
 
-// Note: cleanCandidateName is now imported from utils/scanResultUtils
+// Extract product name from raw OCR text for packaged products
+function extractProductNameFromRawText(rawText = "") {
+  if (!rawText) return null;
 
-function isProbablyGoodLabelName(name) {
-  if (!name) return false;
-  const trimmed = name.trim();
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 
-  // Too short - require at least 4 chars and 2 meaningful words
-  if (trimmed.length < 4) return false;
+  const bannedFragments = [
+    "net wt",
+    "oz)",
+    "mg",
+    "%",
+    "activation time",
+    "approx",
+    "test:",
+    "tested by",
+    "batch:",
+    "manufactured by",
+    "permit",
+    "uin",
+    "scan to learn",
+    "suite",
+    "tel:",
+    "warning",
+    "keep out of reach",
+    "ingredients",
+  ];
 
-  // Reject if it includes obvious warning/compliance phrases (matching backend banned fragments)
-  const upper = trimmed.toUpperCase();
-  if (BANNED_FRAGMENTS.some(p => upper.includes(p))) {
-    return false;
+  const strainKeywords = [
+    "og",
+    "kush",
+    "haze",
+    "diesel",
+    "cake",
+    "cookies",
+    "glue",
+    "bomb",
+    "runtz",
+    "mints",
+    "sherb",
+    "skunk",
+    "gelato",
+    "berry",
+    "punch",
+    "lemon",
+    "orange",
+    "sour",
+    "mac",
+    "crème",
+    "cream",
+    "tangie",
+  ];
+
+  function isBanned(line) {
+    const lower = line.toLowerCase();
+    if (/\d/.test(lower)) {
+      // allow things like "1G Vape Glitter Bomb"
+      const onlyNumsOrUnits = /^[-\d\s()./%gmg]+$/i.test(lower);
+      if (onlyNumsOrUnits) return true;
+    }
+    return bannedFragments.some((frag) => lower.includes(frag));
   }
 
-  // Split into words and require at least 2 meaningful words
-  const words = trimmed.split(/\s+/).filter(w => w.length > 0);
-  if (words.length < 2) return false; // Must have at least 2 words
-  
-  const generic = new Set([
-    'THE', 'OUR', 'YOUR', 'OF', 'AND', 'FOR', 'SET', 'THIS',
-    'FULL', 'SPECTRUM', 'CANNABIS', 'VAPE', 'CARTRIDGE',
-    'SAUCE', 'CART', 'GRAM', 'ONE', 'PREMIUM'
-  ]);
-  const meaningful = words.filter(w => !generic.has(w.toUpperCase()));
-  if (meaningful.length < 2) return false; // Must have at least 2 meaningful words
+  function scoreLine(line) {
+    const lower = line.toLowerCase();
+    let score = 0;
+    const words = lower.split(/\s+/).filter(Boolean);
 
-  return true;
+    if (words.length >= 2 && words.length <= 6) score += 1;
+    if (!/^[A-Z0-9\s]+$/.test(line)) score += 1; // not all caps => more likely nice title
+
+    for (const kw of strainKeywords) {
+      if (lower.includes(kw)) score += 2;
+    }
+
+    if (lower.includes("vape") || lower.includes("cartridge") || lower.includes("cart")) {
+      score += 2;
+    }
+
+    return score;
+  }
+
+  let best = null;
+  let bestScore = 0;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (isBanned(line)) continue;
+    if (line.length < 3 || line.length > 60) continue;
+
+    const score = scoreLine(line);
+    if (score > bestScore) {
+      best = line;
+      bestScore = score;
+    }
+  }
+
+  if (!best) return null;
+
+  return best
+    .split(" ")
+    .map((w) =>
+      w.length > 1 ? w[0].toUpperCase() + w.slice(1) : w.toUpperCase()
+    )
+    .join(" ");
 }
 
 function normalizeConfidence(conf) {
@@ -103,14 +159,6 @@ function formatPotency(label) {
   return parts.join(" • ");
 }
 
-function asArray(value) {
-  if (!value) return [];
-  if (Array.isArray(value)) return value;
-  // If it's a string, wrap once
-  if (typeof value === "string") return [value];
-  return [];
-}
-
 // ---------- reusable components ----------
 
 const SectionCard = ({ title, children }) => (
@@ -118,8 +166,7 @@ const SectionCard = ({ title, children }) => (
     elevation={6}
     sx={{
       mb: 2.5,
-      background:
-        "linear-gradient(135deg, rgba(0,0,0,0.52), rgba(0,0,0,0.72))",
+      background: "linear-gradient(135deg, rgba(0,0,0,0.52), rgba(0,0,0,0.72))",
       borderRadius: 3,
       border: "1px solid rgba(255,255,255,0.08)",
       backdropFilter: "blur(14px)",
@@ -139,43 +186,42 @@ const SectionCard = ({ title, children }) => (
   </Card>
 );
 
-// ---------- AI decoded label component ----------
-
 // Helper to render text that may contain bullets as a list
 function renderTextWithBullets(text) {
-  if (!text || typeof text !== 'string') return null;
-  
-  // Check if text contains bullet markers
-  const hasBullets = /^[\s]*[•\-\*]\s+/m.test(text) || text.includes('\n•') || text.includes('\n-') || text.includes('\n*');
-  
+  if (!text || typeof text !== "string") return null;
+
+  const hasBullets =
+    /^[\s]*[•\-\*]\s+/m.test(text) || text.includes("\n•") || text.includes("\n-") || text.includes("\n*");
+
   if (hasBullets) {
-    // Split by bullet markers and render as list
     const items = text
       .split(/[\n\r]+/)
-      .map(line => line.trim())
-      .filter(line => {
-        // Extract bullet items (lines starting with •, -, or *)
-        return /^[•\-\*]\s+/.test(line) || (line.length > 0 && !/^[A-Z][^:]*:/.test(line));
+      .map((line) => line.trim())
+      .filter((line) => {
+        return (
+          /^[•\-\*]\s+/.test(line) ||
+          (line.length > 0 && !/^[A-Z][^:]*:/.test(line))
+        );
       })
-      .map(line => line.replace(/^[•\-\*]\s+/, '').trim())
-      .filter(line => line.length > 0);
-    
+      .map((line) => line.replace(/^[•\-\*]\s+/, "").trim())
+      .filter((line) => line.length > 0);
+
     if (items.length > 0) {
       return (
-        <Box component="ul" sx={{ m: 0, pl: 2.5, listStyle: 'none' }}>
+        <Box component="ul" sx={{ m: 0, pl: 2.5, listStyle: "none" }}>
           {items.map((item, idx) => (
             <Box
               key={idx}
               component="li"
               sx={{
-                position: 'relative',
+                position: "relative",
                 pl: 1.5,
                 mb: 0.5,
-                '&::before': {
+                "&::before": {
                   content: '"•"',
-                  position: 'absolute',
+                  position: "absolute",
                   left: 0,
-                  color: 'rgba(255,255,255,0.7)',
+                  color: "rgba(255,255,255,0.7)",
                 },
               }}
             >
@@ -188,8 +234,7 @@ function renderTextWithBullets(text) {
       );
     }
   }
-  
-  // No bullets - render as paragraph
+
   return <Typography variant="body2">{text}</Typography>;
 }
 
@@ -210,7 +255,6 @@ const AIDecodedLabelSection = ({ isPackagedProduct, aiSummary }) => {
     dbConsistency,
   } = aiSummary || {};
 
-  // Normalize warnings into an array so we never crash if it's null or a string
   let aiWarnings = [];
   if (Array.isArray(warnings)) {
     aiWarnings = warnings;
@@ -218,7 +262,6 @@ const AIDecodedLabelSection = ({ isPackagedProduct, aiSummary }) => {
     aiWarnings = [warnings.trim()];
   }
 
-  // Retailer / dispensary oriented blocks
   const retailerBlocks = [
     brandStory && {
       label: "Brand / maker notes",
@@ -237,7 +280,6 @@ const AIDecodedLabelSection = ({ isPackagedProduct, aiSummary }) => {
   return (
     <SectionCard title="AI decoded label">
       <Box>
-        {/* Optional AI-picked title */}
         {aiTitle && (
           <>
             <Typography
@@ -257,7 +299,6 @@ const AIDecodedLabelSection = ({ isPackagedProduct, aiSummary }) => {
           </>
         )}
 
-        {/* Consumer-facing sections */}
         {summary && (
           <Box sx={{ mb: 2 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
@@ -314,7 +355,6 @@ const AIDecodedLabelSection = ({ isPackagedProduct, aiSummary }) => {
           </Box>
         )}
 
-        {/* Retailer info – only when user taps */}
         {retailerBlocks.length > 0 && (
           <Box sx={{ mt: 2 }}>
             <Button
@@ -354,90 +394,13 @@ const AIDecodedLabelSection = ({ isPackagedProduct, aiSummary }) => {
   );
 };
 
-// ---------- main component ----------
-
-// Pick the best label name using raw label text (OCR) and DB matches
-function pickBestLabelNameFromTextAndMatches(rawText, matches) {
-  if (!rawText) return null;
-
-  const textLower = rawText.toLowerCase();
-  const dbMatches = Array.isArray(matches) ? matches : [];
-  const dbNames = dbMatches
-    .map((m) => m && m.name)
-    .filter(Boolean);
-
-  // 1) If a DB match name appears in the raw label text, prefer that.
-  for (const name of dbNames) {
-    const cleaned = cleanCandidateName(name);
-    if (!cleaned) continue;
-    if (textLower.includes(cleaned.toLowerCase())) {
-      return cleaned;
-    }
-  }
-
-  // 2) Otherwise, scan individual lines for good strain-like names.
-  const lines = rawText
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length >= 3 && l.length <= 40);
-
-  const STRAIN_HINTS = [
-    ' og',
-    ' kush',
-    ' runtz',
-    ' glue',
-    ' cookies',
-    ' haze',
-    ' diesel',
-    ' gelato',
-    ' punch',
-    ' pie',
-  ];
-
-  let best = null;
-  let bestScore = 0;
-
-  for (const line of lines) {
-    const cleanedLine = cleanCandidateName(line);
-    if (!cleanedLine) continue;
-    const lower = cleanedLine.toLowerCase();
-
-    let score = 0;
-
-    // Prefer lines with typical strain words.
-    for (const hint of STRAIN_HINTS) {
-      if (lower.includes(hint)) score += 2;
-    }
-
-    // Prefer lines that overlap with any DB names.
-    for (const name of dbNames) {
-      if (!name) continue;
-      const nameLower = name.toLowerCase();
-      if (lower.includes(nameLower) || nameLower.includes(lower)) {
-        score += 3;
-      }
-    }
-
-    if (score > bestScore) {
-      bestScore = score;
-      best = cleanedLine;
-    }
-  }
-
-  return best;
-}
-
 function StrainActionsRow({ strainSlug, strainName }) {
   if (!strainSlug || !strainName) return null;
 
   const basePath = `/strains/${strainSlug}`;
 
   return (
-    <Stack
-      direction="row"
-      spacing={1.5}
-      sx={{ mt: 2, flexWrap: 'wrap' }}
-    >
+    <Stack direction="row" spacing={1.5} sx={{ mt: 2, flexWrap: "wrap" }}>
       <Button
         size="small"
         variant="outlined"
@@ -469,100 +432,157 @@ function StrainActionsRow({ strainSlug, strainName }) {
 export default function ScanResultCard({ result }) {
   if (!result) return null;
 
-  const {
-    imageUrl,
-    topMatch,
-  } = result;
+  const { imageUrl } = result;
 
-  // --- Primary / secondary name resolution ---
-
+  // ----- label info -----
   const labelInsights = result?.labelInsights || {};
   const rawText = labelInsights.rawText || "";
+  const labelStrainName = labelInsights.strainName || null;
 
-  // Explicitly define aiSummary to prevent ReferenceError
-  const aiSummary = result?.aiSummary || labelInsights.aiSummary || null;
-  const aiTitleFromBackend = cleanCandidateName(aiSummary?.title || null);
-  const hasAiSummary = !!(aiSummary && (aiSummary.title || aiSummary.summary));
-  const aiOverview = aiSummary?.summary || null;
+  // ----- visual matches (DB) -----
+  const visual = result?.visualMatches || {};
+  const matchesFromVisual = Array.isArray(visual.matches)
+    ? visual.matches
+    : visual.match
+    ? [visual.match]
+    : [];
+  const matchesFromLegacy = Array.isArray(result?.matches)
+    ? result.matches
+    : [];
+  const matches =
+    matchesFromVisual.length > 0
+      ? matchesFromVisual
+      : matchesFromLegacy;
 
-  // Compute labelFromRaw using the new helper
-  const labelFromRaw = extractLabelNameFromRawText(rawText);
-  
+  const primaryMatch = matches[0] || result?.topMatch || null;
+
   const dbName =
-    result?.matched_strain_name ||
+    primaryMatch?.name ||
+    visual?.match?.name ||
     result?.topMatch?.name ||
-    (result?.matches && result.matches[0]?.name) ||
     null;
 
-  const isPackagedProduct =
-    labelInsights.category === 'vape' ||
-    labelInsights.category === 'edible' ||
-    labelInsights.category === 'concentrate' ||
-    labelInsights.isPackagedProduct === true;
+  const dbType =
+    primaryMatch?.type ||
+    visual?.match?.type ||
+    result?.topMatch?.type ||
+    null;
 
-  // Name resolution rules
+  const dbConfidence =
+    typeof primaryMatch?.confidence === "number"
+      ? primaryMatch.confidence
+      : typeof visual?.match?.confidence === "number"
+      ? visual.match.confidence
+      : null;
+
+  // ----- packaged-product detection -----
+  const categoryRaw =
+    labelInsights.category || result?.category || "";
+
+  const packagedKeywords = [
+    "vape",
+    "cartridge",
+    "cart",
+    "edible",
+    "gummy",
+    "preroll",
+    "pre-roll",
+    "concentrate",
+    "hash",
+    "rosin",
+    "live resin",
+    "disposable",
+  ];
+
+  const isPackagedProduct =
+    labelInsights.isPackagedProduct === true ||
+    packagedKeywords.some((kw) =>
+      categoryRaw.toLowerCase().includes(kw)
+    ) ||
+    /vape|cartridge|cart|gummy|preroll|pre-roll|disposable/i.test(rawText);
+
+  // ----- AI summary -----
+  const aiSummary =
+    result?.aiSummary ||
+    result?.labelInsights?.aiSummary ||
+    null;
+
+  const aiTitleFromBackend = aiSummary?.title ?? null;
+  const aiOverview =
+    aiSummary?.summary ||
+    aiSummary?.overview ||
+    null;
+
+  const hasAiSummary = !!(aiTitleFromBackend || aiOverview);
+
+  // ----- NAME RESOLUTION -----
+  const productNameFromRaw = extractProductNameFromRawText(rawText);
+
   let primaryName = null;
   let secondaryDbName = null;
 
   if (isPackagedProduct) {
+    // LABEL-FIRST for packaged products - NEVER show "Unknown strain"
+    // Try multiple sources before falling back to "Unknown product"
     primaryName =
-      labelFromRaw ||
+      productNameFromRaw ||
+      labelStrainName ||
       aiTitleFromBackend ||
-      labelInsights.strainName ||
-      'Unknown product';
+      (categoryDisplay && categoryDisplay !== 'unknown' ? categoryDisplay : null) ||
+      dbName ||
+      "Unknown product";
 
-    if (dbName && dbName.toLowerCase() !== primaryName.toLowerCase()) {
+    // Show DB name as secondary only if it's different from primary
+    if (
+      dbName &&
+      primaryName &&
+      dbName.toLowerCase().trim() !== primaryName.toLowerCase().trim() &&
+      primaryName !== "Unknown product"
+    ) {
       secondaryDbName = dbName;
     }
   } else {
+    // PLANT-FIRST for bud/plant scans
     primaryName =
       dbName ||
-      labelFromRaw ||
-      labelInsights.strainName ||
+      labelStrainName ||
       aiTitleFromBackend ||
-      'Unknown strain';
-
-    secondaryDbName = null;
+      productNameFromRaw ||
+      "Unknown strain";
   }
 
   const nameDisplay = primaryName;
-
-  const dbConfidence =
-    result?.topMatch?.confidence ??
-    result?.matches?.[0]?.confidence ??
-    result?.databaseMatchConfidence ??
-    null;
-
   const isPackage = Boolean(isPackagedProduct);
-  
   const dbConfidenceNormalized = normalizeConfidence(dbConfidence);
-  const primaryMatch = result?.matches?.[0] || result?.topMatch || null;
-  const dbType = primaryMatch?.type || primaryMatch?.strain_type || null;
 
   const weightText = formatWeight(labelInsights);
   const potencyText = formatPotency(labelInsights);
-  const categoryDisplay = labelInsights.category || labelInsights.productType || null;
+  const categoryDisplay =
+    labelInsights.category || labelInsights.productType || null;
 
   const terpenes = Array.isArray(labelInsights.terpenes)
     ? labelInsights.terpenes
     : [];
 
-  const terpeneChips = terpenes.slice(0, 6).map((t) => ({
-    label:
-      t.percent != null
-        ? `${titleCase(t.name)} • ${t.percent}%`
-        : titleCase(t.name),
-  }));
-
-  // ---------- small reusable bits ----------
+  const terpeneChips = terpenes.slice(0, 6).map((t) => {
+    const name =
+      typeof t === "string"
+        ? t
+        : t.name || t.key || "";
+    if (!name) return null;
+    return {
+      label:
+        typeof t === "object" && t.percent != null
+          ? `${titleCase(name)} • ${t.percent}%`
+          : titleCase(name),
+    };
+  }).filter(Boolean);
 
   const TagRow = ({ children }) => (
     <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
       {children}
     </Stack>
   );
-
-  // ---------- render ----------
 
   return (
     <Box sx={{ mt: 3, mb: 8 }}>
@@ -572,7 +592,8 @@ export default function ScanResultCard({ result }) {
           <Typography
             variant="h6"
             component="h2"
-            sx={{ fontWeight: 700, mb: secondaryDbName ? 0.5 : 1 }}
+            gutterBottom
+            sx={{ fontWeight: 700 }}
           >
             {nameDisplay}
           </Typography>
@@ -580,10 +601,10 @@ export default function ScanResultCard({ result }) {
           {secondaryDbName && (
             <Typography
               variant="body2"
-              sx={{ color: 'success.main', mb: 1 }}
+              sx={{ mb: 1, color: "success.main" }}
             >
               {`Database strain (best guess): ${secondaryDbName}${
-                dbConfidence ? ` • ${dbConfidence}% match` : ''
+                dbConfidenceNormalized ? ` • ${dbConfidenceNormalized}` : ""
               }`}
             </Typography>
           )}
@@ -611,7 +632,10 @@ export default function ScanResultCard({ result }) {
               label={categoryDisplay}
               size="small"
               variant="outlined"
-              sx={{ borderColor: "rgba(255,255,255,0.25)", color: "#fff" }}
+              sx={{
+                borderColor: "rgba(255,255,255,0.25)",
+                color: "#fff",
+              }}
             />
           )}
           {dbType && (
@@ -619,7 +643,10 @@ export default function ScanResultCard({ result }) {
               label={dbType}
               size="small"
               variant="outlined"
-              sx={{ borderColor: "rgba(255,255,255,0.25)", color: "#fff" }}
+              sx={{
+                borderColor: "rgba(255,255,255,0.25)",
+                color: "#fff",
+              }}
             />
           )}
           {dbConfidenceNormalized && (
@@ -635,58 +662,43 @@ export default function ScanResultCard({ result }) {
               label={weightText}
               size="small"
               variant="outlined"
-              sx={{ borderColor: "rgba(255,255,255,0.25)", color: "#fff" }}
+              sx={{
+                borderColor: "rgba(255,255,255,0.25)",
+                color: "#fff",
+              }}
             />
           )}
         </TagRow>
       </SectionCard>
 
-      {/* AI decoded label */}
+      {/* AI decoded label (simple inline version) */}
       {hasAiSummary && (
-        <Box sx={{ mt: 2 }}>
-          <Typography
-            variant="subtitle2"
-            sx={{ fontWeight: 600, mb: 0.5 }}
-          >
-            AI decoded label
-          </Typography>
+        <SectionCard title="AI decoded label">
           {aiTitleFromBackend && (
             <Typography
               variant="body2"
-              sx={{ fontWeight: 500, mb: 0.25 }}
+              sx={{ fontWeight: 500, mb: 0.75 }}
             >
               {aiTitleFromBackend}
             </Typography>
           )}
-          {aiOverview && (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              {aiOverview}
-            </Typography>
-          )}
-        </Box>
+          {aiOverview && renderTextWithBullets(aiOverview)}
+        </SectionCard>
       )}
 
       {/* Package lab details */}
       {isPackagedProduct && (
-        <Box mt={3} mb={3}>
-          <Typography
-            variant="overline"
-            color="text.secondary"
-            gutterBottom
-          >
-            PACKAGE LAB DETAILS
-          </Typography>
-
+        <SectionCard title="PACKAGE LAB DETAILS">
           {(labelInsights?.thc != null || labelInsights?.cbd != null) && (
-            <Typography variant="body2">
+            <Typography variant="body2" sx={{ mb: 0.75 }}>
               {labelInsights?.thc != null && (
                 <>
-                  <strong>THC:</strong> {labelInsights.thc}%{' '}
+                  <strong>THC:</strong> {labelInsights.thc}%{" "}
                 </>
               )}
               {labelInsights?.cbd != null && (
                 <>
-                  <strong>CBD:</strong> {labelInsights.cbd}%{' '}
+                  <strong>CBD:</strong> {labelInsights.cbd}%{" "}
                 </>
               )}
             </Typography>
@@ -694,13 +706,17 @@ export default function ScanResultCard({ result }) {
 
           {Array.isArray(labelInsights?.terpenes) &&
             labelInsights.terpenes.length > 0 && (
-              <Typography variant="body2">
-                <strong>Terpenes:</strong>{' '}
+              <Typography variant="body2" sx={{ mb: 0.75 }}>
+                <strong>Terpenes:</strong>{" "}
                 {labelInsights.terpenes
                   .slice(0, 3)
-                  .map(t => (typeof t === 'string' ? t : t.name || t.key || ''))
+                  .map((t) =>
+                    typeof t === "string"
+                      ? t
+                      : t.name || t.key || ""
+                  )
                   .filter(Boolean)
-                  .join(', ')}
+                  .join(", ")}
               </Typography>
             )}
 
@@ -711,17 +727,17 @@ export default function ScanResultCard({ result }) {
             <Typography variant="body2">
               {labelInsights?.labName && (
                 <>
-                  <strong>Testing lab:</strong> {labelInsights.labName}{' '}
+                  <strong>Testing lab:</strong> {labelInsights.labName}{" "}
                 </>
               )}
               {labelInsights?.batchId && (
                 <>
-                  • <strong>Batch:</strong> {labelInsights.batchId}{' '}
+                  • <strong>Batch:</strong> {labelInsights.batchId}{" "}
                 </>
               )}
               {labelInsights?.testDate && (
                 <>
-                  • <strong>Tested:</strong> {labelInsights.testDate}{' '}
+                  • <strong>Tested:</strong> {labelInsights.testDate}{" "}
                 </>
               )}
               {labelInsights?.expirationDate && (
@@ -731,7 +747,7 @@ export default function ScanResultCard({ result }) {
               )}
             </Typography>
           )}
-        </Box>
+        </SectionCard>
       )}
 
       {/* Potency / terpenes from label */}
@@ -753,7 +769,10 @@ export default function ScanResultCard({ result }) {
                   label={t.label}
                   size="small"
                   variant="outlined"
-                  sx={{ borderColor: "rgba(255,255,255,0.25)", color: "#fff" }}
+                  sx={{
+                    borderColor: "rgba(255,255,255,0.25)",
+                    color: "#fff",
+                  }}
                 />
               ))}
             </TagRow>
@@ -793,9 +812,7 @@ export default function ScanResultCard({ result }) {
                     }}
                     label={
                       normalizeConfidence(m.confidence)
-                        ? `${m.name} • ${normalizeConfidence(
-                            m.confidence
-                          )}`
+                        ? `${m.name} • ${normalizeConfidence(m.confidence)}`
                         : m.name
                     }
                   />
@@ -809,10 +826,14 @@ export default function ScanResultCard({ result }) {
       {(() => {
         const { slug, name } = getStrainIdentityFromResult(result) || {};
         if (!slug) return null;
-        return <StrainActionsRow strainSlug={slug} strainName={primaryName || name} />;
+        return (
+          <StrainActionsRow
+            strainSlug={slug}
+            strainName={primaryName || name}
+          />
+        );
       })()}
 
-      {/* Little spacer at bottom so it doesn't hit the FAB */}
       <Box sx={{ height: 40 }} />
     </Box>
   );

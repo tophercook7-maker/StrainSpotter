@@ -1146,6 +1146,22 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
         
         if (aiSummary) {
           console.log('[process] AI summary generated successfully');
+          
+          // Transform AI summary to match frontend expectations
+          // Frontend expects: { title, summary/overview, ... }
+          // AI returns: { product_name, label_explanation, ... }
+          const transformedAiSummary = {
+            title: aiSummary.product_name || null,
+            summary: aiSummary.label_explanation || null,
+            overview: aiSummary.label_explanation || null, // Alias for compatibility
+            brand: aiSummary.brand || null,
+            productType: aiSummary.product_type || null,
+            warnings: Array.isArray(aiSummary.warnings) ? aiSummary.warnings : [],
+            // Include other fields for future use
+            ...aiSummary
+          };
+          
+          aiSummary = transformedAiSummary;
         }
       } catch (aiErr) {
         console.error('[AI] Failed to generate label summary:', aiErr);
