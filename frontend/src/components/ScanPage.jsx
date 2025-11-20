@@ -1,6 +1,6 @@
 // frontend/src/components/ScanPage.jsx
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -56,13 +56,62 @@ export default function ScanPage({ onBack, onNavigate }) {
   const [error, setError] = useState(null);
   const [guestScansUsed, setGuestScansUsedState] = useState(() => getGuestScansUsed());
   const [showPlans, setShowPlans] = useState(false);
-  const [scanPhase, setScanPhase] = useState('idle'); // 'idle' | 'uploading' | 'analyzing' | 'ai' | 'done'
+  const [scanPhase, setScanPhase] = useState('camera-loading'); // 'camera-loading' | 'ready' | 'capturing' | 'uploading' | 'processing' | 'done' | 'error'
+  const [statusMessage, setStatusMessage] = useState('Opening scanner…');
+  const [cameraReady, setCameraReady] = useState(false);
+  const [lastPhotoUrl, setLastPhotoUrl] = useState(null);
+  const [framePulsing, setFramePulsing] = useState(false);
+  
+  // View state management
+  const [activeView, setActiveView] = useState('scanner'); // 'scanner' | 'result'
+  const [completedScan, setCompletedScan] = useState(null); // holds the scan record / payload for the result page
   
   // Track processed scan IDs to avoid duplicate /process calls
   const processedScanIdsRef = useRef(new Set());
 
+  // On mount, simulate camera loading then become ready
+  useEffect(() => {
+    setScanPhase('camera-loading');
+    setStatusMessage('Opening scanner…');
+    const t = setTimeout(() => {
+      setCameraReady(true);
+      setScanPhase('ready');
+      setStatusMessage('Take or choose a photo of any weed product or packaging.');
+    }, 200);
+    return () => clearTimeout(t);
+  }, []);
+
   const handleBack = () => {
     if (onBack) onBack();
+  };
+
+  const handleScanAgain = () => {
+    // Reset the scanner state to start fresh
+    setError(null);
+    setScanPhase('ready');
+    setStatusMessage('Take or choose a new photo.');
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setScanResult(null);
+    setCompletedScan(null);
+    setActiveView('scanner');
+    setLastPhotoUrl(null);
+    setFramePulsing(false);
+  };
+
+  const handleBackToHome = () => {
+    // Prefer using the onBack prop if provided by App/Home
+    if (typeof onBack === 'function') {
+      onBack();
+      return;
+    }
+    // Fallback: hard reset SPA to home
+    if (onNavigate && typeof onNavigate === 'function') {
+      onNavigate('home');
+      return;
+    }
+    // Last resort: reload
+    window.location.href = '/';
   };
 
   // Helper function to start a scan for a given file
@@ -92,10 +141,20 @@ export default function ScanPage({ onBack, onNavigate }) {
     setError(null);
     setScanResult(null);
     setSelectedFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
+    
+    // Generate preview URL and pulse frame
+    const previewUrl = URL.createObjectURL(file);
+    setPreviewUrl(previewUrl);
+    setLastPhotoUrl((oldUrl) => {
+      if (oldUrl) URL.revokeObjectURL(oldUrl);
+      return previewUrl;
+    });
+    setFramePulsing(true);
+    
     setIsUploading(false);
     setIsPolling(false);
-    setScanPhase('idle');
+    setScanPhase('capturing');
+    setStatusMessage('Preparing image…');
 
     // Auto-start scan when file is selected
     startScanForFile(file);
@@ -117,7 +176,8 @@ export default function ScanPage({ onBack, onNavigate }) {
   async function startScan(file) {
     try {
       setError(null);
-      setScanPhase('uploading');
+      setScanPhase('capturing');
+      setStatusMessage('Preparing image…');
 
     // Compress image if needed
     const processedFile = await maybeCompressImage(file);
@@ -145,7 +205,8 @@ export default function ScanPage({ onBack, onNavigate }) {
         setShowPlans(true);
         setIsUploading(false);
         setIsPolling(false);
-        setScanPhase('idle');
+        setScanPhase('error');
+        setStatusMessage('Guest scan limit reached.');
         return;
       }
       setScanPhase('idle');
@@ -176,15 +237,18 @@ export default function ScanPage({ onBack, onNavigate }) {
 
     setIsUploading(false);
     setIsPolling(true);
-    setScanPhase('analyzing');
+    setScanPhase('processing');
+    setStatusMessage('Analyzing label and finding matches…');
 
     await pollScan(scanId);
     } catch (e) {
       console.error('startScan error', e);
       setIsUploading(false);
       setIsPolling(false);
-      setScanPhase('idle');
-      setError(String(e.message || e));
+      setScanPhase('error');
+      const errorMsg = String(e.message || e);
+      setError(errorMsg);
+      setStatusMessage(errorMsg);
     }
   }
 
@@ -237,26 +301,11 @@ export default function ScanPage({ onBack, onNavigate }) {
         !!scan?.error || 
         !!scan?.errorMessage;
 
-      // Check if AI is still running (result present but aiSummary missing for packaged products)
-      const isPackaged = result?.labelInsights?.isPackagedProduct || false;
-      const hasAiSummary = !!(result?.labelInsights?.aiSummary || result?.visualMatches?.labelInsights?.aiSummary);
-      const aiPending = isPackaged && hasResult && !hasAiSummary;
-      
       // If scan is complete OR has a result, stop polling and show results
       if (isComplete || hasResult) {
-        // If AI is still pending, set phase to 'ai' and continue polling
-        if (aiPending) {
-          setScanPhase('ai');
-          // Continue polling for AI summary
-          setTimeout(() => {
-            pollScan(scanId, attempt + 1);
-          }, delayMs);
-          return;
-        }
-        
-        // AI is done or not needed - show results
         setIsPolling(false);
         setScanPhase('done');
+        setStatusMessage('Scan complete.');
         
         // Temporary debug log
         console.log('[pollScan] done', { status, hasResult, result: scan.result });
@@ -265,9 +314,19 @@ export default function ScanPage({ onBack, onNavigate }) {
         if (!normalized) {
           setError('No strain match found yet. Try a clearer photo or different angle.');
           setScanResult(null);
-          setScanPhase('idle');
+          setScanPhase('error');
+          setStatusMessage('Scan failed. Tap to try again.');
         } else {
           setScanResult(normalized);
+
+          // Store the completed scan locally for the result view
+          const processedResult = scan.result || normalized;
+          setCompletedScan({
+            id: scan.id,
+            result: processedResult,
+            created_at: scan.created_at || new Date().toISOString(),
+          });
+          setActiveView('result');
 
           // Count successful guest scans
           if (isGuest) {
@@ -282,17 +341,22 @@ export default function ScanPage({ onBack, onNavigate }) {
       // If scan has an error status or error field, stop polling and show error
       if (isError) {
         setIsPolling(false);
-        setScanPhase('idle');
+        setScanPhase('error');
+        setFramePulsing(false);
         const errorMessage = scan?.error || scan?.errorMessage || 'Scan failed on the server.';
         setError(errorMessage);
+        setStatusMessage(errorMessage);
         return;
       }
 
       // If we've hit max attempts, stop polling
       if (attempt >= maxAttempts) {
         setIsPolling(false);
-        setScanPhase('idle');
-        setError('Scan is taking too long. Please try again with a clearer photo.');
+        setScanPhase('error');
+        setFramePulsing(false);
+        const timeoutError = 'Scan is taking too long. Please try again with a clearer photo.';
+        setError(timeoutError);
+        setStatusMessage(timeoutError);
         return;
       }
 
@@ -303,8 +367,10 @@ export default function ScanPage({ onBack, onNavigate }) {
     } catch (e) {
       console.error('pollScan error', e);
       setIsPolling(false);
-      setScanPhase('idle');
-      setError(String(e.message || e));
+      setScanPhase('error');
+      const errorMsg = String(e.message || e);
+      setError(errorMsg);
+      setStatusMessage(errorMsg);
     }
   }
 
@@ -399,6 +465,177 @@ export default function ScanPage({ onBack, onNavigate }) {
   }
 
 
+  // Show loading state if camera is not ready (for future camera integration)
+  // RESULT MODE
+  if (activeView === 'result' && completedScan) {
+    return (
+      <Container
+        maxWidth="md"
+        sx={{
+          pt: 'calc(env(safe-area-inset-top) + 20px)',
+          pb: 4,
+        }}
+      >
+        {/* Back button */}
+        <Box sx={{ mb: 2, mt: 0, pt: 0, display: 'flex', alignItems: 'center' }}>
+          <IconButton
+            onClick={handleBackToHome}
+            sx={{
+              mr: 1,
+              color: '#C5E1A5',
+            }}
+            aria-label="Back to home"
+          >
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography
+            variant="subtitle2"
+            sx={{ color: '#A5D6A7', fontWeight: 500 }}
+          >
+            Back to home
+          </Typography>
+        </Box>
+
+        {/* Header */}
+        <Box sx={{ mb: 2 }}>
+          <Typography
+            variant="h5"
+            sx={{
+              color: '#F1F8E9',
+              fontWeight: 700,
+              mb: 0.5,
+            }}
+          >
+            Scan result
+          </Typography>
+        </Box>
+
+        {/* Action buttons - always visible above results */}
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{ mb: 2, justifyContent: 'space-between' }}
+        >
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleBackToHome}
+            sx={{
+              flex: 1,
+              textTransform: 'none',
+              borderColor: 'rgba(197, 225, 165, 0.7)',
+              color: '#C5E1A5',
+              '&:hover': {
+                borderColor: '#CDDC39',
+                backgroundColor: 'rgba(156, 204, 101, 0.08)',
+              },
+            }}
+          >
+            Back to home
+          </Button>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleScanAgain}
+            sx={{
+              flex: 1,
+              textTransform: 'none',
+              backgroundColor: '#9CCC65',
+              color: '#050705',
+              '&:hover': {
+                backgroundColor: '#CDDC39',
+              },
+            }}
+          >
+            Scan again
+          </Button>
+        </Stack>
+
+        {/* Result Card */}
+        <ScanResultCard
+          scan={completedScan}
+          result={normalizeScanResult(completedScan)}
+          onCorrectionSaved={() => {
+            console.log('[ScanResultCard] correction saved');
+          }}
+        />
+
+        {/* Redundant action buttons at bottom for extra visibility */}
+        <Stack direction="row" spacing={2} sx={{ mt: 3, mb: 4 }}>
+          <Button
+            variant="outlined"
+            fullWidth
+            onClick={handleBackToHome}
+            sx={{
+              textTransform: 'none',
+              borderColor: '#9CCC65',
+              color: '#C5E1A5',
+              '&:hover': {
+                borderColor: '#CDDC39',
+                backgroundColor: 'rgba(124, 179, 66, 0.1)',
+              },
+            }}
+          >
+            Back to home
+          </Button>
+          <Button
+            variant="contained"
+            fullWidth
+            onClick={handleScanAgain}
+            sx={{
+              textTransform: 'none',
+              background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #8BC34A 0%, #AED581 100%)',
+              },
+            }}
+          >
+            Scan again
+          </Button>
+        </Stack>
+      </Container>
+    );
+  }
+
+  // Camera loading state
+  if (!cameraReady) {
+    return (
+      <Box
+        sx={{
+          minHeight: '100vh',
+          width: '100%',
+          backgroundColor: '#050705',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Paper
+          elevation={6}
+          sx={{
+            p: 4,
+            borderRadius: 3,
+            background: 'rgba(12, 20, 12, 0.95)',
+            border: '1px solid rgba(124, 179, 66, 0.6)',
+            textAlign: 'center',
+            maxWidth: 320,
+          }}
+        >
+          <Stack spacing={2} alignItems="center">
+            <CircularProgress size={48} sx={{ color: '#CDDC39' }} />
+            <Typography variant="h6" sx={{ color: '#F1F8E9', fontWeight: 600 }}>
+              {statusMessage || 'Opening camera…'}
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(224, 242, 241, 0.8)' }}>
+              Preparing scanner for you.
+            </Typography>
+          </Stack>
+        </Paper>
+      </Box>
+    );
+  }
+
+  // SCANNER MODE
   return (
     <Box
       sx={{
@@ -467,7 +704,7 @@ export default function ScanPage({ onBack, onNavigate }) {
               mb: 0.5,
             }}
           >
-            Scan a strain
+            Scan weed products
           </Typography>
           <Typography
             variant="body2"
@@ -505,14 +742,21 @@ export default function ScanPage({ onBack, onNavigate }) {
             <Box
               sx={{
                 borderRadius: 2,
-                border: '1px dashed rgba(200, 230, 201, 0.5)',
-                minHeight: 180,
+                border: '2px dashed rgba(200, 230, 201, 0.5)',
+                minHeight: 200,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 overflow: 'hidden',
                 background:
                   'radial-gradient(circle at top, rgba(76, 175, 80, 0.15), rgba(0, 0, 0, 0.95))',
+                position: 'relative',
+                animation: framePulsing ? 'scan-pulse 1.4s infinite' : 'none',
+                '@keyframes scan-pulse': {
+                  '0%': { boxShadow: '0 0 0 0 rgba(0, 255, 120, 0.5)' },
+                  '70%': { boxShadow: '0 0 0 12px rgba(0, 255, 120, 0)' },
+                  '100%': { boxShadow: '0 0 0 0 rgba(0, 255, 120, 0)' },
+                },
               }}
             >
               {previewUrl ? (
@@ -529,10 +773,35 @@ export default function ScanPage({ onBack, onNavigate }) {
                     variant="body2"
                     sx={{ color: 'rgba(224, 242, 241, 0.9)' }}
                   >
-                    Tap below to take a new photo or choose one from your
-                    library.
+                    {scanPhase === 'ready' && 'Align the label in this area when you take the photo.'}
+                    {scanPhase === 'capturing' && 'Capturing image…'}
+                    {scanPhase === 'uploading' && 'Uploading…'}
+                    {scanPhase === 'processing' && 'Analyzing label and packaging data…'}
+                    {scanPhase === 'done' && 'Scan complete. You can review the details below.'}
+                    {scanPhase !== 'ready' && scanPhase !== 'capturing' && scanPhase !== 'uploading' && scanPhase !== 'processing' && scanPhase !== 'done' && 'Tap below to take a new photo or choose one from your library.'}
                   </Typography>
                 </Stack>
+              )}
+              {lastPhotoUrl && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: 8,
+                    right: 8,
+                    width: 64,
+                    height: 64,
+                    borderRadius: 1,
+                    overflow: 'hidden',
+                    border: '1px solid rgba(255, 255, 255, 0.4)',
+                  }}
+                >
+                  <Box
+                    component="img"
+                    src={lastPhotoUrl}
+                    alt="Last captured"
+                    sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </Box>
               )}
             </Box>
 
@@ -553,7 +822,7 @@ export default function ScanPage({ onBack, onNavigate }) {
                 size="large"
                 startIcon={<CloudUploadIcon />}
                 onClick={handlePickImageClick}
-                disabled={isOpeningPicker || scanPhase === 'uploading' || scanPhase === 'analyzing' || scanPhase === 'ai'}
+                disabled={isOpeningPicker || scanPhase === 'uploading' || scanPhase === 'processing' || scanPhase === 'capturing'}
                 sx={{
                   textTransform: 'none',
                   fontWeight: 700,
@@ -613,25 +882,33 @@ export default function ScanPage({ onBack, onNavigate }) {
               </Typography>
             </Stack>
 
-            {/* Status indicator */}
-            {scanPhase !== 'idle' && scanPhase !== 'done' && (
-              <Stack
-                direction="row"
-                spacing={2}
-                alignItems="center"
-                sx={{ mt: 1 }}
-              >
-                <CircularProgress size={22} sx={{ color: '#CDDC39' }} />
+            {/* Status bar */}
+            <Box
+              sx={{
+                mt: 2,
+                p: 1.5,
+                borderRadius: 1,
+                backgroundColor: 'rgba(124, 179, 66, 0.1)',
+                border: '1px solid rgba(124, 179, 66, 0.3)',
+              }}
+            >
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                {scanPhase !== 'ready' && scanPhase !== 'done' && scanPhase !== 'error' && (
+                  <CircularProgress size={18} sx={{ color: '#CDDC39' }} />
+                )}
                 <Typography
                   variant="body2"
-                  sx={{ color: 'rgba(224, 242, 241, 0.9)' }}
+                  sx={{ color: 'rgba(224, 242, 241, 0.9)', flex: 1 }}
                 >
-                  {scanPhase === 'uploading' && 'Uploading photo…'}
-                  {scanPhase === 'analyzing' && 'Analyzing label and finding strain matches…'}
-                  {scanPhase === 'ai' && 'Generating AI decoded label…'}
+                  {scanPhase === 'ready' && (statusMessage || 'Ready to scan.')}
+                  {scanPhase === 'capturing' && 'Capturing photo…'}
+                  {scanPhase === 'uploading' && 'Uploading photo securely…'}
+                  {scanPhase === 'processing' && 'Analyzing packaging details…'}
+                  {scanPhase === 'done' && 'Scan complete.'}
+                  {scanPhase === 'error' && (errorMessage || 'Scan failed, tap to try again.')}
                 </Typography>
               </Stack>
-            )}
+            </Box>
 
             {error && (
               <Alert
@@ -650,7 +927,7 @@ export default function ScanPage({ onBack, onNavigate }) {
         </Paper>
 
         {/* Skeleton loading state while scanning */}
-        {scanPhase !== 'idle' && scanPhase !== 'done' && !scanResult && !error && (
+        {scanPhase !== 'ready' && scanPhase !== 'done' && scanPhase !== 'error' && !scanResult && !error && (
           <Paper
             elevation={6}
             sx={{
@@ -685,19 +962,29 @@ export default function ScanPage({ onBack, onNavigate }) {
           </Paper>
         )}
 
-        {/* Results */}
-        {scanResult && (
-          <ScanResultCard
-            result={scanResult}
-            isGuest={isGuest}
-            onSaveMatch={undefined}
-            onLogExperience={undefined}
-            onReportMismatch={undefined}
-            onViewStrain={undefined}
-          />
+        {/* Results are now shown in separate result view - removed from scanner view */}
+
+        {scanPhase === 'error' && (
+          <Button
+            variant="outlined"
+            fullWidth
+            onClick={handleScanAgain}
+            sx={{
+              mt: 2,
+              textTransform: 'none',
+              borderColor: '#9CCC65',
+              color: '#C5E1A5',
+              '&:hover': {
+                borderColor: '#CDDC39',
+                backgroundColor: 'rgba(156, 204, 101, 0.1)',
+              },
+            }}
+          >
+            Scan again
+          </Button>
         )}
 
-        {!scanResult && !isUploading && !isPolling && !error && (
+        {!scanResult && scanPhase === 'ready' && !error && (
           <Typography
             variant="body2"
             sx={{

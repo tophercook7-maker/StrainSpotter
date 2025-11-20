@@ -12,6 +12,9 @@ import {
   cleanCandidateName,
   getStrainIdentityFromResult,
 } from "../utils/scanResultUtils";
+import ComplianceSummaryCard from "./ComplianceSummaryCard";
+import BusinessSummaryCard from "./BusinessSummaryCard";
+import { API_BASE } from "../config";
 
 // ---------- helpers ----------
 
@@ -54,6 +57,12 @@ function extractProductNameFromRawText(rawText = "") {
     "warning",
     "keep out of reach",
     "ingredients",
+    "marijuana is for use by",
+    "marihuana is for use by",
+    "patients only",
+    "do not operate",
+    "vehicle or machinery",
+    "under the influence",
   ];
 
   const strainKeywords = [
@@ -99,12 +108,19 @@ function extractProductNameFromRawText(rawText = "") {
     if (words.length >= 2 && words.length <= 6) score += 1;
     if (!/^[A-Z0-9\s]+$/.test(line)) score += 1; // not all caps => more likely nice title
 
+    // add weight for strainy words
     for (const kw of strainKeywords) {
       if (lower.includes(kw)) score += 2;
     }
 
+    // product-y hints
     if (lower.includes("vape") || lower.includes("cartridge") || lower.includes("cart")) {
       score += 2;
+    }
+
+    // small bonus if it clearly looks like a strain name like "Commerce City Kush"
+    if (/\bkush\b/i.test(line) || /\bcity kush\b/i.test(line)) {
+      score += 3;
     }
 
     return score;
@@ -116,6 +132,10 @@ function extractProductNameFromRawText(rawText = "") {
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line) continue;
+
+    // Hard-ban the classic warning line so it can never be the product name
+    if (/vehicle or machinery/i.test(line)) continue;
+
     if (isBanned(line)) continue;
     if (line.length < 3 || line.length > 60) continue;
 
@@ -185,6 +205,475 @@ const SectionCard = ({ title, children }) => (
     </CardContent>
   </Card>
 );
+
+// New component for packagingInsights-based results
+function PackagingInsightsCard({ packaging, visionRaw, scanId, onCorrectionSaved }) {
+  const [showPotency, setShowPotency] = useState(true);
+  const [showTerpenes, setShowTerpenes] = useState(false);
+  const [showRegulatory, setShowRegulatory] = useState(false);
+  const [showRaw, setShowRaw] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+
+  const { basic, potency, terpenes, regulatory, package_details, marketing_copy, business_tags } = packaging || {};
+
+  const [editState, setEditState] = useState({
+    strain_name: basic?.strain_name || "",
+    brand_name: basic?.brand_name || "",
+    thc_percent: potency?.thc_percent ?? "",
+    cbd_percent: potency?.cbd_percent ?? "",
+  });
+
+  const handleEditChange = (field, value) => {
+    setEditState((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveCorrection = async () => {
+    if (!scanId) {
+      setEditError("Scan ID missing");
+      return;
+    }
+    
+    setEditSaving(true);
+    setEditError("");
+    try {
+      const correction = {
+        basic: {
+          strain_name: editState.strain_name || null,
+          brand_name: editState.brand_name || null,
+        },
+        potency: {
+          thc_percent: editState.thc_percent === "" ? null : Number(editState.thc_percent),
+          cbd_percent: editState.cbd_percent === "" ? null : Number(editState.cbd_percent),
+        },
+      };
+      const res = await fetch(`${API_BASE}/api/scans/${scanId}/corrections`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ correction }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      setShowEdit(false);
+      if (onCorrectionSaved) onCorrectionSaved();
+    } catch (e) {
+      setEditError(String(e));
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleBarcodeLookup = async () => {
+    const code = package_details?.unit_barcode;
+    if (!code) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/barcode/lookup?code=${encodeURIComponent(String(code))}`);
+      const data = await res.json();
+      console.log("[barcodeLookup] matches", data);
+      // In future: navigate to a list; for now we just log.
+    } catch (e) {
+      console.error("[barcodeLookup] error", e);
+    }
+  };
+
+  return (
+    <Box sx={{ mt: 3, mb: 8 }}>
+      {/* BASIC HEADER */}
+      <SectionCard>
+        <Box sx={{ mb: 1 }}>
+          <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
+            {basic?.product_type && (
+              <Chip label={basic.product_type} size="small" color="success" variant="outlined" />
+            )}
+            {Array.isArray(basic?.category_tags) && basic.category_tags.map((tag) => (
+              <Chip key={tag} label={tag} size="small" variant="outlined" sx={{ borderColor: "rgba(255,255,255,0.25)", color: "#fff" }} />
+            ))}
+          </Stack>
+          <Typography variant="h6" component="h2" gutterBottom sx={{ fontWeight: 700 }}>
+            {basic?.strain_name || "Unknown strain"}
+          </Typography>
+          {basic?.brand_name && (
+            <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.8)", mb: 0.5 }}>
+              {basic.brand_name}
+              {basic.product_line ? ` • ${basic.product_line}` : ""}
+            </Typography>
+          )}
+          {package_details?.net_weight_grams && (
+            <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
+              {package_details.net_weight_grams} g package
+            </Typography>
+          )}
+          <Typography
+            variant="body2"
+            sx={{ color: "rgba(255,255,255,0.7)", mt: 0.5 }}
+          >
+            Scroll down to see potency, terpenes, compliance, and business tools.
+          </Typography>
+          {package_details?.unit_barcode && (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)", display: 'flex', alignItems: 'center', gap: 1 }}>
+                Barcode: <code style={{ backgroundColor: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: 2 }}>{package_details.unit_barcode}</code>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleBarcodeLookup}
+                  sx={{
+                    textTransform: 'none',
+                    borderColor: 'rgba(255,255,255,0.3)',
+                    color: 'rgba(255,255,255,0.8)',
+                    '&:hover': {
+                      borderColor: 'rgba(255,255,255,0.5)',
+                      backgroundColor: 'rgba(255,255,255,0.1)',
+                    },
+                  }}
+                >
+                  Lookup
+                </Button>
+              </Typography>
+            </Box>
+          )}
+        </Box>
+      </SectionCard>
+
+      {/* Scroll hint */}
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'rgba(255,255,255,0.6)',
+          display: 'block',
+          textAlign: 'center',
+          mb: 2,
+          fontStyle: 'italic',
+        }}
+      >
+        Scroll to see potency, terpenes, compliance, and business tools.
+      </Typography>
+
+      {/* COMPLIANCE SUMMARY */}
+      {packaging && (
+        <ComplianceSummaryCard packaging={packaging} />
+      )}
+
+      {/* BUSINESS SUMMARY */}
+      {packaging && (
+        <BusinessSummaryCard packaging={packaging} />
+      )}
+
+      {/* POTENCY SECTION */}
+      <SectionCard>
+        <Button
+          fullWidth
+          onClick={() => setShowPotency((v) => !v)}
+          sx={{
+            textTransform: 'none',
+            color: '#fff',
+            justifyContent: 'space-between',
+            p: 0,
+            mb: showPotency ? 1.5 : 0,
+          }}
+        >
+          <Typography variant="overline" sx={{ color: "rgba(255,255,255,0.6)", letterSpacing: 1.3 }}>
+            Potency
+          </Typography>
+          <Typography variant="body2">{showPotency ? "▾" : "▸"}</Typography>
+        </Button>
+        {showPotency && (
+          <Box>
+            <Stack direction="row" spacing={3} sx={{ mb: 1.5 }}>
+              <Box>
+                <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.6)", display: 'block', mb: 0.5 }}>THC</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  {potency?.thc_percent != null ? `${potency.thc_percent}%` : "—"}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.6)", display: 'block', mb: 0.5 }}>CBD</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  {potency?.cbd_percent != null ? `${potency.cbd_percent}%` : "—"}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.6)", display: 'block', mb: 0.5 }}>Total cannabinoids</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  {potency?.total_cannabinoids_percent != null ? `${potency.total_cannabinoids_percent}%` : "—"}
+                </Typography>
+              </Box>
+            </Stack>
+            {Array.isArray(potency?.other_cannabinoids) && potency.other_cannabinoids.length > 0 && (
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
+                {potency.other_cannabinoids.map((c) => (
+                  <Chip
+                    key={c.name}
+                    label={`${c.name}${c.percent != null ? ` ${c.percent}%` : ""}`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ borderColor: "rgba(255,255,255,0.25)", color: "#fff" }}
+                  />
+                ))}
+              </Stack>
+            )}
+          </Box>
+        )}
+      </SectionCard>
+
+      {/* TERPENES SECTION */}
+      <SectionCard>
+        <Button
+          fullWidth
+          onClick={() => setShowTerpenes((v) => !v)}
+          sx={{
+            textTransform: 'none',
+            color: '#fff',
+            justifyContent: 'space-between',
+            p: 0,
+            mb: showTerpenes ? 1.5 : 0,
+          }}
+        >
+          <Typography variant="overline" sx={{ color: "rgba(255,255,255,0.6)", letterSpacing: 1.3 }}>
+            Terpenes & flavor
+          </Typography>
+          <Typography variant="body2">{showTerpenes ? "▾" : "▸"}</Typography>
+        </Button>
+        {showTerpenes && (
+          <Box>
+            {Array.isArray(terpenes?.listed_terpenes) && terpenes.listed_terpenes.length > 0 && (
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 1.5 }}>
+                {terpenes.listed_terpenes.map((t) => (
+                  <Chip
+                    key={t.name}
+                    label={`${t.name}${t.percent != null ? ` ${t.percent}%` : ""}`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ borderColor: "rgba(255,255,255,0.25)", color: "#fff" }}
+                  />
+                ))}
+              </Stack>
+            )}
+            {Array.isArray(terpenes?.terpene_profile_tags) && terpenes.terpene_profile_tags.length > 0 && (
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 1.5 }}>
+                {terpenes.terpene_profile_tags.map((tag) => (
+                  <Chip key={tag} label={tag} size="small" variant="outlined" sx={{ borderColor: "rgba(255,255,255,0.25)", color: "#fff" }} />
+                ))}
+              </Stack>
+            )}
+            {Array.isArray(marketing_copy?.flavor_notes) && marketing_copy.flavor_notes.length > 0 && (
+              <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.8)", mt: 1 }}>
+                Flavor notes: {marketing_copy.flavor_notes.join(", ")}
+              </Typography>
+            )}
+          </Box>
+        )}
+      </SectionCard>
+
+      {/* REGULATORY SECTION */}
+      <SectionCard>
+        <Button
+          fullWidth
+          onClick={() => setShowRegulatory((v) => !v)}
+          sx={{
+            textTransform: 'none',
+            color: '#fff',
+            justifyContent: 'space-between',
+            p: 0,
+            mb: showRegulatory ? 1.5 : 0,
+          }}
+        >
+          <Typography variant="overline" sx={{ color: "rgba(255,255,255,0.6)", letterSpacing: 1.3 }}>
+            Regulatory & compliance
+          </Typography>
+          <Typography variant="body2">{showRegulatory ? "▾" : "▸"}</Typography>
+        </Button>
+        {showRegulatory && (
+          <Box>
+            {regulatory?.license_number && (
+              <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.9)", mb: 1 }}>
+                <strong>License:</strong> {regulatory.license_number}
+              </Typography>
+            )}
+            {regulatory?.producer_name && (
+              <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.9)", mb: 1 }}>
+                <strong>Producer:</strong> {regulatory.producer_name}
+              </Typography>
+            )}
+            {regulatory?.testing_lab_name && (
+              <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.9)", mb: 1 }}>
+                <strong>Lab:</strong> {regulatory.testing_lab_name}
+              </Typography>
+            )}
+            {Array.isArray(regulatory?.regulatory_symbols) && regulatory.regulatory_symbols.length > 0 && (
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 1.5 }}>
+                {regulatory.regulatory_symbols.map((s) => (
+                  <Chip key={s} label={s} size="small" variant="outlined" sx={{ borderColor: "rgba(255,255,255,0.25)", color: "#fff" }} />
+                ))}
+              </Stack>
+            )}
+            {Array.isArray(regulatory?.warning_statements) && regulatory.warning_statements.length > 0 && (
+              <Box component="ul" sx={{ pl: 2, mt: 1 }}>
+                {regulatory.warning_statements.map((w, idx) => (
+                  <Typography key={idx} component="li" variant="body2" sx={{ color: "rgba(255,255,255,0.8)", mb: 0.5 }}>
+                    {w}
+                  </Typography>
+                ))}
+              </Box>
+            )}
+          </Box>
+        )}
+      </SectionCard>
+
+      {/* EDIT DETAILS TO FEED CORRECTIONS */}
+      <SectionCard>
+        <Button
+          fullWidth
+          onClick={() => setShowEdit((v) => !v)}
+          sx={{
+            textTransform: 'none',
+            color: '#fff',
+            justifyContent: 'space-between',
+            p: 0,
+            mb: showEdit ? 1.5 : 0,
+          }}
+        >
+          <Typography variant="overline" sx={{ color: "rgba(255,255,255,0.6)", letterSpacing: 1.3 }}>
+            Edit key details
+          </Typography>
+          <Typography variant="body2">{showEdit ? "▾" : "▸"}</Typography>
+        </Button>
+        {showEdit && (
+          <Box>
+            <Stack spacing={2} sx={{ mb: 2 }}>
+              <Box>
+                <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.7)", display: 'block', mb: 0.5 }}>Strain name</Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={editState.strain_name}
+                  onChange={(e) => handleEditChange("strain_name", e.target.value)}
+                  placeholder="Strain name"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      color: '#fff',
+                      '& fieldset': { borderColor: 'rgba(255,255,255,0.3)' },
+                    },
+                  }}
+                />
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.7)", display: 'block', mb: 0.5 }}>Brand name</Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={editState.brand_name}
+                  onChange={(e) => handleEditChange("brand_name", e.target.value)}
+                  placeholder="Brand name"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      color: '#fff',
+                      '& fieldset': { borderColor: 'rgba(255,255,255,0.3)' },
+                    },
+                  }}
+                />
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.7)", display: 'block', mb: 0.5 }}>THC %</Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  value={editState.thc_percent}
+                  onChange={(e) => handleEditChange("thc_percent", e.target.value)}
+                  placeholder="e.g. 28.5"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      color: '#fff',
+                      '& fieldset': { borderColor: 'rgba(255,255,255,0.3)' },
+                    },
+                  }}
+                />
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.7)", display: 'block', mb: 0.5 }}>CBD %</Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  value={editState.cbd_percent}
+                  onChange={(e) => handleEditChange("cbd_percent", e.target.value)}
+                  placeholder="e.g. 0.1"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      color: '#fff',
+                      '& fieldset': { borderColor: 'rgba(255,255,255,0.3)' },
+                    },
+                  }}
+                />
+              </Box>
+            </Stack>
+            {editError && (
+              <Typography variant="body2" sx={{ color: '#f44336', mb: 1 }}>
+                {editError}
+              </Typography>
+            )}
+            <Button
+              variant="contained"
+              fullWidth
+              disabled={editSaving}
+              onClick={handleSaveCorrection}
+              sx={{
+                textTransform: 'none',
+                background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
+              }}
+            >
+              {editSaving ? "Saving…" : "Save correction"}
+            </Button>
+          </Box>
+        )}
+      </SectionCard>
+
+      {/* RAW TEXT SECTION */}
+      <SectionCard>
+        <Button
+          fullWidth
+          onClick={() => setShowRaw((v) => !v)}
+          sx={{
+            textTransform: 'none',
+            color: '#fff',
+            justifyContent: 'space-between',
+            p: 0,
+            mb: showRaw ? 1.5 : 0,
+          }}
+        >
+          <Typography variant="overline" sx={{ color: "rgba(255,255,255,0.6)", letterSpacing: 1.3 }}>
+            Raw label text
+          </Typography>
+          <Typography variant="body2">{showRaw ? "▾" : "▸"}</Typography>
+        </Button>
+        {showRaw && (
+          <Box>
+            <Typography
+              component="pre"
+              variant="body2"
+              sx={{
+                color: "rgba(255,255,255,0.7)",
+                fontSize: '0.75rem',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                fontFamily: 'monospace',
+                p: 1,
+                backgroundColor: 'rgba(0,0,0,0.3)',
+                borderRadius: 1,
+              }}
+            >
+              {packaging.raw?.ocr_text_raw || visionRaw?.fullTextAnnotation?.text || "No raw text available."}
+            </Typography>
+          </Box>
+        )}
+      </SectionCard>
+    </Box>
+  );
+}
 
 // Helper to render text that may contain bullets as a list
 function renderTextWithBullets(text) {
@@ -429,12 +918,24 @@ function StrainActionsRow({ strainSlug, strainName }) {
   );
 }
 
-export default function ScanResultCard({ result }) {
+export default function ScanResultCard({ result, scan }) {
   if (!result) return null;
 
   const { imageUrl } = result;
 
-  // ----- label info -----
+  // ----- packagingInsights (GPT-5 nano) -----
+  const packagingInsights = result?.packagingInsights || null;
+  const visionRaw = result?.visionRaw || null;
+  
+  // Get scan ID from result or scan prop
+  const scanId = result?.id || scan?.id || null;
+
+  // If we have packagingInsights, use the new UI
+  if (packagingInsights) {
+    return <PackagingInsightsCard packaging={packagingInsights} visionRaw={visionRaw} scanId={scanId} onCorrectionSaved={() => {}} />;
+  }
+
+  // ----- label info (fallback to existing logic) -----
   const labelInsights = result?.labelInsights || {};
   const rawText = labelInsights.rawText || "";
   const labelStrainName = labelInsights.strainName || null;

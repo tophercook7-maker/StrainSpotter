@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "nodemon index.js",
+    "dev": "nodemon index.js --watch index.js --watch routes --watch lib --watch utils --ext js,json --ignore ../frontend --ignore ../frontend/dist --ignore ../frontend/ios --ignore ios --ignore dist",
     "start": "node index.js",
     "health": "node ../scripts/setup.js",
     "setup:membership": "node scripts/setup-membership.mjs",

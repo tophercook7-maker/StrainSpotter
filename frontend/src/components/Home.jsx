@@ -6,7 +6,6 @@ import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import SpaIcon from '@mui/icons-material/Spa';
 import FeedbackIcon from '@mui/icons-material/Feedback';
 import TroubleshootIcon from '@mui/icons-material/Troubleshoot';
-import ScanPage from './ScanPage';
 import GardenGate from './GardenGate';
 import Garden from './Garden';
 import FeedbackModal from './FeedbackModal';
@@ -16,22 +15,21 @@ import { isAdminEmail } from '../utils/roles';
 // Landing page: Scan + Garden, no sign-in wall
 
 export default function Home({ onNavigate }) {
-  const [showScan, setShowScan] = useState(false);
+  const [scanButtonBusy, setScanButtonBusy] = useState(false);
   const [showGarden, setShowGarden] = useState(false);
   const [inGarden, setInGarden] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const { user } = useAuth();
   const isAdmin = isAdminEmail(user?.email);
 
-  // Scan flow
-  if (showScan) {
-    return (
-      <ScanPage
-        onBack={() => setShowScan(false)}
-        onNavigate={onNavigate}
-      />
-    );
-  }
+  const handleScanClick = () => {
+    // Immediate visual feedback
+    setScanButtonBusy(true);
+    // Navigate right away so the route changes fast
+    onNavigate?.('scanner');
+    // Fallback: auto-reset after navigation completes
+    setTimeout(() => setScanButtonBusy(false), 3000);
+  };
 
   // Garden gate flow
   if (showGarden && !inGarden) {
@@ -168,7 +166,8 @@ export default function Home({ onNavigate }) {
               variant="contained"
               size="large"
               fullWidth
-              onClick={() => setShowScan(true)}
+              onClick={handleScanClick}
+              disabled={scanButtonBusy}
               startIcon={<CameraAltIcon />}
               sx={{
                 py: 2,
@@ -183,6 +182,7 @@ export default function Home({ onNavigate }) {
                 transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
                 position: 'relative',
                 overflow: 'hidden',
+                opacity: scanButtonBusy ? 0.7 : 1,
                 '&::before': {
                   content: '""',
                   position: 'absolute',
@@ -195,7 +195,7 @@ export default function Home({ onNavigate }) {
                   transition: 'left 0.5s ease',
                 },
                 '&:hover': {
-                  transform: 'translateY(-3px) scale(1.02)',
+                  transform: scanButtonBusy ? 'none' : 'translateY(-3px) scale(1.02)',
                   boxShadow:
                     '0 12px 40px rgba(124, 179, 66, 0.7), 0 0 60px rgba(124, 179, 66, 0.3)',
                   background:
@@ -210,7 +210,7 @@ export default function Home({ onNavigate }) {
                 },
               }}
             >
-              Scan
+              {scanButtonBusy ? 'Opening scanner…' : 'Scan Weed Products & Gear'}
             </Button>
 
             {/* Secondary: Enter Garden */}

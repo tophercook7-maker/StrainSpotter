@@ -1,0 +1,16 @@
+{
+  "watch": ["index.js", "routes", "lib", "utils"],
+  "ext": "js,json",
+  "ignore": [
+    "../frontend",
+    "../frontend/**",
+    "../dist",
+    "../node_modules",
+    "node_modules",
+    "dist",
+    "ios",
+    "android",
+    ".tmp",
+    "tmp"
+  ]
+}

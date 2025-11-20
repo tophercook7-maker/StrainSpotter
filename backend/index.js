@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
+import OpenAI from 'openai';
 import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -91,6 +92,252 @@ try {
   }
 } catch (e) {
   console.warn('[boot] Google Vision client not initialized:', e.message);
+}
+
+// OpenAI client for GPT-5 nano packaging analysis
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+if (!process.env.OPENAI_API_KEY) {
+  console.warn('[boot] OPENAI_API_KEY not set; GPT-5 nano packaging analysis disabled.');
+}
+
+const PACKAGING_SYSTEM_PROMPT = `
+You are the StrainSpotter Packaging Intelligence engine.
+
+Your job:
+- Take noisy OCR text and Vision metadata from cannabis packaging (any country, any language).
+- Output ONE JSON object called "packagingInsights" using the EXACT schema below.
+- Do not include any keys outside this structure.
+
+SCHEMA (fixed):
+
+{
+  "basic": {
+    "detected_language": string | null,
+    "brand_name": string | null,
+    "product_line": string | null,
+    "strain_name": string | null,
+    "strain_slug_guess": string | null,
+    "product_type": string | null,
+    "category_tags": string[],
+    "country": string | null,
+    "region": string | null
+  },
+  "potency": {
+    "thc_percent": number | null,
+    "cbd_percent": number | null,
+    "thc_range": [number, number] | null,
+    "other_cannabinoids": [
+      { "name": string, "percent": number | null }
+    ],
+    "total_cannabinoids_percent": number | null
+  },
+  "terpenes": {
+    "listed_terpenes": [
+      { "name": string, "percent": number | null }
+    ],
+    "terpene_profile_tags": string[]
+  },
+  "package_details": {
+    "net_weight_grams": number | null,
+    "servings": number | null,
+    "harvest_date": string | null,
+    "packaged_date": string | null,
+    "best_by_date": string | null,
+    "batch_number": string | null,
+    "unit_barcode": string | null
+  },
+  "regulatory": {
+    "license_number": string | null,
+    "producer_name": string | null,
+    "producer_address": string | null,
+    "testing_lab_name": string | null,
+    "testing_lab_license": string | null,
+    "regulatory_symbols": string[],
+    "age_restriction": string | null,
+    "warning_statements": string[],
+    "compliance_flags": string[]
+  },
+  "marketing_copy": {
+    "effects_claims": string[],
+    "flavor_notes": string[],
+    "use_cases": string[]
+  },
+  "business_tags": {
+    "intended_channel": string[],
+    "price_tier_guess": string | null,
+    "bundle_type": string | null,
+    "has_loyalty_program_mentions": boolean
+  },
+  "raw": {
+    "ocr_text_raw": string,
+    "ocr_text_cleaned": string,
+    "vision_labels": string[],
+    "model_notes": string
+  },
+  "confidence": {
+    "overall": number,
+    "strain_name": number,
+    "potency": number,
+    "license_number": number,
+    "country_inference": number
+  }
+}
+
+CRUCIAL RULES:
+- Return ONLY that JSON object (no explanations).
+- If a field is missing or unclear, use null, [], or "" instead of guessing wildly.
+- Keep brand_name, product_line, and strain_name exactly as written on the label (do NOT translate).
+- When a strain name on the label contains multiple words, keep the FULL phrase in basic.strain_name.
+  - Example: if the label text says "Commerce City Kush", basic.strain_name MUST be "Commerce City Kush" exactly.
+  - Do NOT shorten it to "City Kush", "Kush", or any other subset of the words.
+- Do NOT replace the printed strain name with a more popular or standardized strain, even if you think it might be related.
+  - Example: never change "Commerce City Kush" to "MAC" or "Miracle Alien Cookies", even if they seem related.
+- If the same phrase appears as both a location and part of the strain name, prefer to treat it as part of the strain name when it is printed together with "kush", "og", or other strain keywords.
+- If a clear strain name cannot be found in the OCR text at all, then:
+  - Set basic.strain_name = null,
+  - Put any best-effort guess into basic.strain_slug_guess instead,
+  - And keep confidence.strain_name <= 0.5.
+- If the OCR text clearly contains a strain name, set confidence.strain_name >= 0.9 and DO NOT change that printed name based on external knowledge or popularity.
+- detected_language describes the OCR text language (e.g., "en", "fr").
+- product_type should be terms like "flower", "pre-roll", "vape", "edible", "concentrate", "tincture", "topical", "capsule", etc.
+
+POTENCY INTERPRETATION:
+- Map any clearly labeled "THC" or "Total THC" percentage to potency.thc_percent.
+  Example: "THC 28.5%" → 28.5
+- If a range is shown ("THC 27–29%"), fill thc_range: [27, 29].
+- If numbers are in mg per package or per serving, do NOT convert to percent unless percent is printed.
+  - mg-only values can contribute to total_cannabinoids_percent = null.
+- If a "Total Cannabinoids" percentage is present, set total_cannabinoids_percent to that number.
+- For other cannabinoids like CBG, CBN, CBC, etc., put each as { "name": "CBG", "percent": 0.8 } if a % is shown.
+- If only mg is shown for a cannabinoid and no percentage, set percent=null but still include it by name.
+
+TERPENES:
+- listed_terpenes: only terpenes actually named on the label (e.g., limonene, myrcene, caryophyllene).
+- terpene_profile_tags: short human-friendly tags like "citrus", "gassy", "earthy", "sweet", "herbal".
+
+REGION / COUNTRY:
+- If you see symbols like the California cannabis warning triangle or text like "Government Warning (California)", infer country="US", region="CA".
+- If nothing suggests region, leave both as null.
+
+COMPLIANCE_FLAGS:
+- Use string flags like:
+  - "has_state_warning_text"
+  - "has_state_symbol"
+  - "has_license_number"
+  - "has_lab_results"
+  - "missing_license_number"
+  - "missing_state_symbol"
+  etc.
+- Only include flags you are confident about.
+
+CONFIDENCE:
+- overall, strain_name, potency, license_number, country_inference must be in [0.0, 1.0].
+- If the strain name text clearly appears on the label, strain_name confidence >= 0.9.
+- If potency numbers appear next to THC/CBD labels, potency confidence >= 0.95.
+- Be conservative with license_number and country_inference: only high if the label is explicit.
+
+NEVER OVERRIDE PRINTED STRAIN NAMES:
+
+- If the OCR text clearly contains a strain name (for example: "Commerce City Kush", "Apple Fritter", "Gary Payton"), you MUST copy it exactly into basic.strain_name.
+
+- Do NOT replace the printed strain name with a more popular or standardized strain name, even if they are similar.
+  - Example: if the package says "Commerce City Kush", do NOT change it to "MAC" or "Miracle Alien Cookies" or anything else.
+  - Example: if the package says "Gary Payton", keep "Gary Payton" exactly, even if you think it might be a different spelling or a different variant.
+
+- Never infer a strain name that is not printed on the label. If a strain name does not appear in the OCR text, leave basic.strain_name = null and basic.strain_slug_guess can be a best-effort guess.
+
+- If the OCR text clearly contains a strain name, set confidence.strain_name >= 0.9 and do not change that name based on external popularity.
+
+RAW VS INTERPRETATION:
+
+- Whenever there is a conflict between "what the label literally says" and "what you think it might be", always trust the label.
+
+- The JSON must represent the text on the packaging first; educated guesses go only into fields like basic.strain_slug_guess, business_tags, or model_notes, never into basic.strain_name.
+
+raw.model_notes:
+- Add short notes about any weirdness or uncertainty (e.g., "THC printed as 'Total THC 1000 mg per package' – mg only, no percent.").
+`;
+
+async function buildPackagingInsightsFromVision({ visionResult, strainLibrarySample = [], countryHint = null, regionHint = null }) {
+  if (!openai.apiKey) {
+    console.warn('[packagingInsights] OPENAI_API_KEY missing; skipping GPT analysis.');
+    return null;
+  }
+
+  // Extract OCR text & labels from Vision result
+  const fullText = visionResult?.fullTextAnnotation?.text || '';
+  const labelAnnotations = Array.isArray(visionResult?.labelAnnotations)
+    ? visionResult.labelAnnotations
+    : [];
+  const webEntities = Array.isArray(visionResult?.webDetection?.webEntities)
+    ? visionResult.webDetection.webEntities
+    : [];
+
+  const cleanedText = fullText
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const visionLabels = [
+    ...labelAnnotations.map(l => l.description).filter(Boolean),
+    ...webEntities.map(w => w.description).filter(Boolean),
+  ].filter(Boolean);
+
+  const payload = {
+    ocr_text_raw: fullText,
+    ocr_text_cleaned: cleanedText,
+    vision_labels: visionLabels.slice(0, 40),
+    country_hint: countryHint,
+    region_hint: regionHint,
+    strain_library_sample: strainLibrarySample.slice(0, 150), // keep prompt small
+  };
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini', // Using gpt-4o-mini as gpt-5.1-nano doesn't exist yet
+      messages: [
+        { role: 'system', content: PACKAGING_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: JSON.stringify(payload),
+        },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+    });
+
+    const text = response?.choices?.[0]?.message?.content;
+    if (!text) {
+      console.error('[packagingInsights] Missing text in OpenAI response');
+      return null;
+    }
+    
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (parseErr) {
+      console.error('[packagingInsights] JSON parse error', parseErr);
+      return null;
+    }
+    
+    console.log('[packagingInsights] success', {
+      ocrChars: payload.ocr_text_raw?.length || 0,
+      labels: payload.vision_labels?.slice(0, 5) || [],
+      countryHint: payload.country_hint || null,
+      regionHint: payload.region_hint || null,
+    });
+    
+    return parsed;
+  } catch (err) {
+    console.error('[packagingInsights] Error from GPT-5 nano', {
+      message: err?.message || String(err),
+      ocrChars: payload.ocr_text_raw?.length || 0,
+      labels: payload.vision_labels?.slice(0, 5) || [],
+    });
+    return null;
+  }
 }
 
 const app = express();
@@ -935,6 +1182,8 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     if (!scan.image_url) return res.status(400).json({ error: 'scan has no image_url' });
     if (!visionClient) return res.status(500).json({ error: 'Google Vision client not configured' });
 
+    console.log('[scan-process] start', { id, imageUrl: scan.image_url, status: scan.status });
+
     if (scan.status === 'done' && scan.result) {
       const result = scan.result;
       return res.json({
@@ -1063,10 +1312,11 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       ],
     });
 
-    console.log('[Vision Debug] Labels:', result.labelAnnotations?.length || 0);
-    console.log('[Vision Debug] Web entities:', result.webDetection?.webEntities?.length || 0);
-    console.log('[Vision Debug] Dominant colors:', result.imagePropertiesAnnotation?.dominantColors?.colors?.length || 0);
-    console.log('[Vision Debug] Objects:', result.localizedObjectAnnotations?.length || 0);
+    console.log('[scan-process] vision complete', {
+      id,
+      hasText: !!result?.fullTextAnnotation?.text,
+      labelCount: (result?.labelAnnotations || []).length || 0,
+    });
 
     // Analyze plant health
     const plantHealth = analyzePlantHealth(result);
@@ -1185,9 +1435,50 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       visualMatches.labelInsights = labelInsights;
     }
 
-    // Merge Vision result with visual matches
+    // Generate GPT-5 nano packaging insights AFTER Vision processing
+    let packagingInsights = null;
+    try {
+      // Sample strain library for GPT context
+      let strainLibrarySample = [];
+      try {
+        const { data: strainRows, error: strainErr } = await readClient
+          .from('strains')
+          .select('name,slug,type')
+          .limit(200);
+
+        if (!strainErr && Array.isArray(strainRows)) {
+          strainLibrarySample = strainRows.map(r => ({
+            name: r.name,
+            slug: r.slug,
+            type: r.type,
+          }));
+        }
+      } catch (e) {
+        console.warn('[packagingInsights] Could not load strain library sample:', e.message);
+      }
+
+      packagingInsights = await buildPackagingInsightsFromVision({
+        visionResult: result,
+        strainLibrarySample,
+        countryHint: null,
+        regionHint: null,
+      });
+
+      console.log('[scan-process] packagingInsights computed', {
+        id,
+        hasInsights: !!packagingInsights,
+        strainName: packagingInsights?.basic?.strain_name || null,
+        overallConfidence: packagingInsights?.confidence?.overall ?? null,
+      });
+    } catch (packagingErr) {
+      console.error('[packagingInsights] Error generating packaging insights:', packagingErr);
+      // Don't fail the scan - continue without packaging insights
+    }
+
+    // Merge Vision result with visual matches and packaging insights
     const finalResult = {
-      ...result,
+      vision_raw: result,
+      packagingInsights: packagingInsights || null,
       visualMatches,
       labelInsights
     };
@@ -1202,6 +1493,13 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       })
       .eq('id', id);
     if (upErr) return res.status(500).json({ error: upErr.message });
+
+    console.log('[scan-process] done', {
+      id,
+      status: 'done',
+      hasVision: !!finalResult.vision_raw,
+      hasPackagingInsights: !!finalResult.packagingInsights,
+    });
 
     // Return debug info and plant health analysis in response
     res.json({
@@ -1465,6 +1763,205 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // In Vercel serverless, don't call listen(); export the app handler instead
 if (!process.env.VERCEL) {
+// GET /api/analytics/summary - Analytics dashboard data
+app.get('/api/analytics/summary', async (req, res) => {
+  const readClient = supabaseAdmin ?? supabase;
+  try {
+    // Limit to recent scans to avoid huge payloads (e.g., last 30 days or last 5000 rows)
+    const { data: scans, error } = await readClient
+      .from('scans')
+      .select('id, created_at, result')
+      .order('created_at', { ascending: false })
+      .limit(5000);
+
+    if (error) {
+      console.error('[analytics] supabase error', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    const byStrain = new Map();
+    const byBrand = new Map();
+    const potencyBuckets = {
+      '0-10': 0,
+      '10-20': 0,
+      '20-25': 0,
+      '25-30': 0,
+      '30+': 0,
+      'unknown': 0,
+    };
+
+    const recentScans = [];
+
+    for (const scan of scans || []) {
+      const result = scan.result || {};
+      const packaging = result.packagingInsights || null;
+      const basic = packaging?.basic || {};
+      const potency = packaging?.potency || {};
+      const thc = typeof potency?.thc_percent === 'number' ? potency.thc_percent : null;
+
+      // Recent list entry
+      recentScans.push({
+        id: scan.id,
+        created_at: scan.created_at,
+        strain_name: basic.strain_name || null,
+        brand_name: basic.brand_name || null,
+        product_type: basic.product_type || null,
+        thc_percent: thc,
+      });
+
+      // Top strains
+      if (basic.strain_name) {
+        const key = basic.strain_name;
+        byStrain.set(key, (byStrain.get(key) || 0) + 1);
+      }
+
+      // Top brands
+      if (basic.brand_name) {
+        const key = basic.brand_name;
+        byBrand.set(key, (byBrand.get(key) || 0) + 1);
+      }
+
+      // THC buckets
+      if (thc == null) {
+        potencyBuckets.unknown++;
+      } else if (thc < 10) {
+        potencyBuckets['0-10']++;
+      } else if (thc < 20) {
+        potencyBuckets['10-20']++;
+      } else if (thc < 25) {
+        potencyBuckets['20-25']++;
+      } else if (thc < 30) {
+        potencyBuckets['25-30']++;
+      } else {
+        potencyBuckets['30+']++;
+      }
+    }
+
+    const topStrains = Array.from(byStrain.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([name, count]) => ({ name, count }));
+
+    const topBrands = Array.from(byBrand.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([name, count]) => ({ name, count }));
+
+    res.json({
+      topStrains,
+      topBrands,
+      potencyBuckets,
+      recentScans,
+      totalScans: scans?.length || 0,
+    });
+  } catch (e) {
+    console.error('[analytics] unexpected error', e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/scans/:id/corrections - Store user corrections
+app.post('/api/scans/:id/corrections', express.json(), async (req, res) => {
+  const writeClient = supabaseAdmin ?? supabase;
+  const scanId = req.params.id;
+  const correction = req.body?.correction;
+
+  if (!correction || typeof correction !== 'object') {
+    return res.status(400).json({ error: 'Missing or invalid correction object' });
+  }
+
+  try {
+    const { data: scan, error: fetchErr } = await writeClient
+      .from('scans')
+      .select('id, result')
+      .eq('id', scanId)
+      .maybeSingle();
+
+    if (fetchErr) {
+      console.error('[corrections] fetch error', fetchErr);
+      return res.status(500).json({ error: fetchErr.message });
+    }
+    if (!scan) {
+      return res.status(404).json({ error: 'Scan not found' });
+    }
+
+    const existingResult = scan.result || {};
+    const existingCorrections = Array.isArray(existingResult.corrections)
+      ? existingResult.corrections
+      : [];
+
+    const stamped = {
+      ...correction,
+      _created_at: new Date().toISOString(),
+    };
+
+    const newResult = {
+      ...existingResult,
+      corrections: [...existingCorrections, stamped],
+    };
+
+    const { error: upErr } = await writeClient
+      .from('scans')
+      .update({ result: newResult })
+      .eq('id', scanId);
+
+    if (upErr) {
+      console.error('[corrections] update error', upErr);
+      return res.status(500).json({ error: upErr.message });
+    }
+
+    console.log('[corrections] stored', { scanId, keys: Object.keys(correction) });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[corrections] unexpected error', e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/barcode/lookup - Find scans by barcode
+app.get('/api/barcode/lookup', async (req, res) => {
+  const barcode = req.query?.code;
+  if (!barcode || typeof barcode !== 'string') {
+    return res.status(400).json({ error: 'Missing barcode "code" query parameter' });
+  }
+
+  const readClient = supabaseAdmin ?? supabase;
+  try {
+    const { data: scans, error } = await readClient
+      .from('scans')
+      .select('id, created_at, result')
+      .order('created_at', { ascending: false })
+      .limit(2000);
+
+    if (error) {
+      console.error('[barcode] supabase error', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    const matches = [];
+    for (const scan of scans || []) {
+      const result = scan.result || {};
+      const packaging = result.packagingInsights || null;
+      const details = packaging?.package_details || {};
+      const code = details.unit_barcode;
+      if (code && String(code).replace(/\s+/g, '') === barcode.replace(/\s+/g, '')) {
+        matches.push({
+          id: scan.id,
+          created_at: scan.created_at,
+          brand: packaging?.basic?.brand_name || null,
+          strain: packaging?.basic?.strain_name || null,
+          product_type: packaging?.basic?.product_type || null,
+        });
+      }
+    }
+
+    res.json({ matches });
+  } catch (e) {
+    console.error('[barcode] unexpected error', e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
   app.listen(PORT, () => {
     console.log(`[strainspotter] backend listening on http://localhost:${PORT}`);
   });

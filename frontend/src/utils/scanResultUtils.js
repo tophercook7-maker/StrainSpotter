@@ -325,6 +325,9 @@ export function normalizeScanResult(scan) {
     first?.slug ||
     null;
 
+  // Extract packagingInsights from result
+  const packagingInsights = result.packagingInsights || null;
+
   return {
     topMatch: toItem(first),
     otherMatches: rest.map(toItem),
@@ -333,6 +336,8 @@ export function normalizeScanResult(scan) {
     labelInsights,
     aiSummary: labelInsights?.aiSummary || null,
     isPackagedProduct: labelInsights?.isPackagedProduct || false,
+    packagingInsights, // GPT-5 nano packaging insights
+    visionRaw: result.vision_raw || null, // Raw Vision API result
   };
 }
 

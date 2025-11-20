@@ -38,6 +38,8 @@ import FloatingScanButton from './components/FloatingScanButton';
 import ScanBalanceIndicator from './components/ScanBalanceIndicator';
 import BuyScansModal from './components/BuyScansModal';
 import AdminStatus from './components/AdminStatus';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import HistoryPage from './components/HistoryPage';
 import { logEvent } from './utils/analyticsClient.js';
 
 import PasswordReset from './components/PasswordReset';
@@ -46,7 +48,7 @@ const theme = createTheme(muiThemeOverrides);
 
 function App() {
   const [ageVerified, setAgeVerified] = useState(false);
-  const [currentView, setCurrentView] = useState('scanner');
+  const [currentView, setCurrentView] = useState('home');
   const [showIntro, setShowIntro] = useState(() => {
     if (typeof window === 'undefined') {
       return false;
@@ -164,7 +166,7 @@ function App() {
                   // Ignore localStorage errors
                 }
                 setShowIntro(false);
-                setCurrentView('scanner');
+                setCurrentView('home');
               }}
             />
             <ScanBalanceIndicator onBuyCredits={() => setShowGlobalBuyScans(true)} />
@@ -245,6 +247,12 @@ function App() {
             )}
             {currentView === 'emergency-logout' && (
               <EmergencyLogout />
+            )}
+            {currentView === 'analytics' && (
+              <AnalyticsDashboard onBack={() => setCurrentView('home')} />
+            )}
+            {currentView === 'history' && (
+              <HistoryPage onBack={() => setCurrentView('home')} />
             )}
             <FloatingScanButton onClick={() => setCurrentView('scanner')} />
           </div>
