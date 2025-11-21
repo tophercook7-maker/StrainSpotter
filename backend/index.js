@@ -1170,6 +1170,7 @@ app.get('/api/scans/:id', async (req, res, next) => {
 });
 
 // POST /api/scans/:id/process - Vision annotate and save
+// Supports both single-frame and multi-frame (multi-angle) processing
 app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) => {
   // Use service role for all scan operations when available
   const readClient = supabaseAdmin ?? supabase;
@@ -1177,13 +1178,20 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
   let creditConsumed = false;
   try {
     const id = req.params.id;
+    const { frameImageUrls } = req.body || {}; // Optional: array of additional frame image URLs for multi-angle
+    
     const { data: scan, error: fetchErr } = await readClient.from('scans').select('*').eq('id', id).maybeSingle();
     if (fetchErr) return res.status(500).json({ error: fetchErr.message });
     if (!scan) return res.status(404).json({ error: 'scan not found' });
     if (!scan.image_url) return res.status(400).json({ error: 'scan has no image_url' });
     if (!visionClient) return res.status(500).json({ error: 'Google Vision client not configured' });
 
-    console.log('[scan-process] start', { id, imageUrl: scan.image_url, status: scan.status });
+    // Determine if this is a multi-frame scan
+    const isMultiFrame = Array.isArray(frameImageUrls) && frameImageUrls.length > 0;
+    const allFrameUrls = isMultiFrame ? [scan.image_url, ...frameImageUrls] : [scan.image_url];
+    const numberOfFrames = allFrameUrls.length;
+
+    console.log('[scan-process] start', { id, imageUrl: scan.image_url, status: scan.status, isMultiFrame, numberOfFrames });
 
     if (scan.status === 'done' && scan.result) {
       const result = scan.result;

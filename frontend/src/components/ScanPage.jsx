@@ -71,6 +71,11 @@ export default function ScanPage({ onBack, onNavigate }) {
   const [guestScansUsed, setGuestScansUsedState] = useState(() => getGuestScansUsed());
   const [showPlans, setShowPlans] = useState(false);
   
+  // Multi-angle capture state
+  const [capturedFrames, setCapturedFrames] = useState([]); // Array of { file, previewUrl }
+  const [multiAngleMode, setMultiAngleMode] = useState(false); // Toggle for multi-angle mode
+  const MAX_FRAMES = 3;
+  
   // Now everyone depends on totalAvailableScans, including members.
   const canScan = totalAvailableScans > 0;
   const [scanPhase, setScanPhase] = useState('camera-loading'); // 'camera-loading' | 'ready' | 'capturing' | 'uploading' | 'processing' | 'done' | 'error'
