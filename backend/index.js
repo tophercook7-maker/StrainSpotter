@@ -1389,9 +1389,15 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       stabilityScore,
     });
 
-    // Analyze plant health
-    const plantHealth = analyzePlantHealth(result);
-    console.log('[Plant Health] Stage:', plantHealth.growthStage.stage, 'Health:', plantHealth.healthStatus.status);
+    // Analyze plant health (use first frame's result for analysis)
+    let plantHealth = null;
+    try {
+      plantHealth = analyzePlantHealth(result);
+      console.log('[Plant Health] Stage:', plantHealth.growthStage.stage, 'Health:', plantHealth.healthStatus.status);
+    } catch (healthErr) {
+      console.warn('[Plant Health] Error analyzing plant health:', healthErr);
+      plantHealth = { growthStage: { stage: 'unknown' }, healthStatus: { status: 'unknown' } };
+    }
 
     // Extract matches from aggregated result (already matched above)
     let visualMatches = null;
