@@ -43,7 +43,14 @@
 //     }
 //   }
 
-export function buildScanAISummary({ visionResult, matches }) {
+export function buildScanAISummary({ 
+  visionResult, 
+  matches, 
+  scanType = null, 
+  stabilityScore = 1.0, 
+  stabilityLabel = 'single-frame', 
+  numberOfFrames = 1 
+}) {
   const textAnn = visionResult?.textAnnotations || [];
 
   const labelAnn = visionResult?.labelAnnotations || [];
@@ -68,6 +75,9 @@ export function buildScanAISummary({ visionResult, matches }) {
     hasCbd: labelInfo.cbdPercent != null,
   });
 
+  // Classify scan type if not provided
+  const detectedScanType = scanType || classifyScanType(visionResult, fullText, labels, isPackagedProduct);
+
   const estimateType = computeEstimateType({
     isPackagedProduct,
     fullText,
@@ -80,6 +90,9 @@ export function buildScanAISummary({ visionResult, matches }) {
     isPackagedProduct,
     topMatch,
     labelInfo,
+    scanType: detectedScanType,
+    stabilityLabel,
+    numberOfFrames,
   });
 
   return {
@@ -89,6 +102,10 @@ export function buildScanAISummary({ visionResult, matches }) {
     estimateConfidenceLabel,
     estimateType,
     notes,
+    scanType: detectedScanType,
+    stabilityScore,
+    stabilityLabel,
+    numberOfFrames,
     label: {
       productName: labelInfo.productName,
       brandName: labelInfo.brandName,
@@ -108,7 +125,7 @@ export function buildScanAISummary({ visionResult, matches }) {
   };
 }
 
-function normalizeMatchConfidence(topMatch) {
+function normalizeMatchConfidenceForSummary(topMatch) {
   if (!topMatch) return null;
   if (typeof topMatch.confidence === 'number') {
     // Assume 0–1; clamp just in case.
@@ -304,12 +321,67 @@ function computeEstimateType({ isPackagedProduct, fullText, labels }) {
   return isPackagedProduct ? 'visual+label' : 'visual-only';
 }
 
+/**
+ * Classify scan type: package, bud, or plant
+ */
+export function classifyScanType(visionResult, fullText, labels, isPackagedProduct) {
+  // If already detected as packaged product, return "package"
+  if (isPackagedProduct) {
+    return 'package';
+  }
+
+  const upper = (fullText || '').toUpperCase();
+  const labelTexts = labels.join(' ').toLowerCase();
+
+  // Plant indicators
+  const plantKeywords = ['plant', 'leaf', 'leaves', 'hemp', 'shrub', 'outdoor plant', 'vegetation', 'foliage', 'stem', 'branch'];
+  const hasPlantLabels = plantKeywords.some(kw => labelTexts.includes(kw));
+  const hasPlantText = /(plant|leaf|hemp|shrub|outdoor|vegetation|foliage|stem|branch)/i.test(fullText);
+
+  // Bud/flower indicators
+  const budKeywords = ['cannabis', 'marijuana', 'weed', 'bud', 'nug', 'nugs', 'flower', 'buds', 'trichome'];
+  const hasBudLabels = budKeywords.some(kw => labelTexts.includes(kw));
+  const hasBudText = /(cannabis|marijuana|weed|bud|nug|flower|trichome)/i.test(fullText);
+
+  // Package indicators (already checked via isPackagedProduct, but double-check)
+  const hasPackagingText = /(NET WT|NET WEIGHT|BATCH|LOT|INGREDIENTS|MANUFACTURED|PACKAGED|GOVERNMENT WARNING)/i.test(upper);
+  const hasThcCbd = /(THC|CBD)[^0-9]{0,10}[0-9]+/.test(upper);
+
+  // Classification logic
+  if (hasPackagingText && hasThcCbd) {
+    return 'package';
+  }
+
+  if (hasPlantLabels || hasPlantText) {
+    // If it looks like a plant and NOT like packaged product, return "plant"
+    if (!hasPackagingText && !hasThcCbd) {
+      return 'plant';
+    }
+  }
+
+  // Default to "bud" if cannabis-related labels dominate
+  if (hasBudLabels || hasBudText) {
+    return 'bud';
+  }
+
+  // Fallback: if we have any cannabis-ish content, assume bud
+  if (labelTexts.length > 0 || fullText.length > 0) {
+    return 'bud';
+  }
+
+  // Ultimate fallback
+  return 'bud';
+}
+
 function buildNotes({
   matchConfidence,
   estimateConfidenceLabel,
   isPackagedProduct,
   topMatch,
   labelInfo,
+  scanType = 'bud',
+  stabilityLabel = 'single-frame',
+  numberOfFrames = 1,
 }) {
   const parts = [];
 
@@ -320,7 +392,20 @@ function buildNotes({
     parts.push(`${estimateConfidenceLabel} (${pct}% confidence) based on visual features and label text.`);
   }
 
-  if (isPackagedProduct) {
+  // Add scan type context
+  if (scanType === 'package') {
+    parts.push(
+      'This scan looks like a packaged retail product. THC/CBD and label details were read directly from the photo and used to refine the match.'
+    );
+  } else if (scanType === 'bud') {
+    parts.push(
+      'This looks like loose flower. The estimate is based mostly on visual structure (buds, trichomes, coloration).'
+    );
+  } else if (scanType === 'plant') {
+    parts.push(
+      'This appears to be a live plant shot. Estimates for live plants are usually less precise than packaged/bud scans.'
+    );
+  } else if (isPackagedProduct) {
     parts.push(
       'This looks like a packaged product: potency and label details were read directly from the photo and used to refine the match.'
     );
@@ -328,6 +413,19 @@ function buildNotes({
     parts.push(
       'No full retail label was detected; this estimate leans more on visual features and may be less precise.'
     );
+  }
+
+  // Add stability context
+  if (numberOfFrames > 1) {
+    if (stabilityLabel === 'high') {
+      parts.push('Results were consistent across multiple angles of the same product.');
+    } else if (stabilityLabel === 'medium') {
+      parts.push('Results were mostly consistent across angles, with some variation.');
+    } else if (stabilityLabel === 'low') {
+      parts.push('Different angles gave conflicting signals. Consider rescanning with clearer shots.');
+    }
+  } else {
+    parts.push('Single-frame scan. Add more angles in future updates for higher stability.');
   }
 
   if (labelInfo.thcPercent != null || labelInfo.cbdPercent != null) {

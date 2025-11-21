@@ -21,7 +21,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import ScanResultCard from './ScanResultCard';
-import { ScanAISummaryPanel } from './ScanAISummaryPanel';
+import ScanAISummaryPanel from './ScanAISummaryPanel';
 import StrainResultCard from './StrainResultCard';
 import { useAuth } from '../hooks/useAuth';
 import { useMembership } from '../membership/MembershipContext';
@@ -680,6 +680,13 @@ export default function ScanPage({ onBack, onNavigate }) {
                 aiSummary={completedScan.ai_summary}
                 visionText={completedScan.visionText || null}
               />
+            </Box>
+          )}
+          
+          {/* AI summary from /api/visual-match endpoint */}
+          {completedScan?.aiSummary && !completedScan?.summary && !completedScan?.ai_summary && (
+            <Box sx={{ mt: 2 }}>
+              <ScanAISummaryPanel summary={completedScan.aiSummary} />
             </Box>
           )}
         </Box>

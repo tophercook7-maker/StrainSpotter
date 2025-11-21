@@ -1732,29 +1732,95 @@ app.post('/api/scans/:id/match', async (req, res) => {
 });
 
 // POST /api/visual-match - Match strain by Vision API results + AI summary
+// Supports both single-frame and multi-frame (multi-angle) scanning
 app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
   try {
-    const { visionResult } = req.body;
-    if (!visionResult) {
-      return res.status(400).json({ error: 'visionResult required' });
+    const { visionResult, frames } = req.body;
+    
+    // Support both single-frame (backward compat) and multi-frame
+    let frameResults = [];
+    let numberOfFrames = 1;
+    let stabilityScore = 1.0;
+    let stabilityLabel = 'single-frame';
+    let aggregatedMatchResult = null;
+    let combinedVisionResult = null;
+
+    if (frames && Array.isArray(frames) && frames.length > 0) {
+      // Multi-frame mode
+      numberOfFrames = frames.length;
+      console.log(`[VisualMatch] Multi-frame mode: ${numberOfFrames} frames`);
+
+      let strains = [];
+      try {
+        strains = await loadStrainLibrary();
+      } catch (e) {
+        console.error('[VisualMatch] Could not load strain library:', e);
+        return res.status(500).json({ error: 'Strain library unavailable', details: e.message });
+      }
+
+      // Process each frame
+      const frameMatchResults = [];
+      const frameVisionResults = [];
+
+      for (let i = 0; i < frames.length; i++) {
+        const frame = frames[i];
+        const frameVisionResult = frame.visionResult || frame;
+        
+        if (!frameVisionResult) {
+          console.warn(`[VisualMatch] Frame ${i + 1} missing visionResult, skipping`);
+          continue;
+        }
+
+        frameVisionResults.push(frameVisionResult);
+        const frameMatchResult = matchStrainByVisuals(frameVisionResult, strains);
+        frameMatchResults.push(frameMatchResult);
+      }
+
+      if (frameMatchResults.length === 0) {
+        return res.status(400).json({ error: 'No valid frames provided' });
+      }
+
+      // Aggregate matches across frames
+      aggregatedMatchResult = aggregateMultiFrameMatches(frameMatchResults);
+      
+      // Combine vision results (use first frame's text/labels, merge label annotations)
+      combinedVisionResult = combineVisionResults(frameVisionResults);
+      
+      // Calculate stability
+      const stability = calculateStability(frameMatchResults, aggregatedMatchResult);
+      stabilityScore = stability.score;
+      stabilityLabel = stability.label;
+
+      console.log(`[VisualMatch] Multi-frame: ${frameMatchResults.length} frames processed, stability: ${stabilityLabel} (${(stabilityScore * 100).toFixed(0)}%)`);
+    } else if (visionResult) {
+      // Single-frame mode (backward compatibility)
+      let strains = [];
+      try {
+        strains = await loadStrainLibrary();
+      } catch (e) {
+        console.error('[VisualMatch] Could not load strain library:', e);
+        return res.status(500).json({ error: 'Strain library unavailable', details: e.message });
+      }
+
+      aggregatedMatchResult = matchStrainByVisuals(visionResult, strains);
+      combinedVisionResult = visionResult;
+    } else {
+      return res.status(400).json({ error: 'visionResult or frames array required' });
     }
 
-    let strains = [];
-    try {
-      strains = await loadStrainLibrary();
-    } catch (e) {
-      console.error('[VisualMatch] Could not load strain library:', e);
-      return res.status(500).json({ error: 'Strain library unavailable', details: e.message });
-    }
-
-    const matchResult = matchStrainByVisuals(visionResult, strains);
-    const matches = matchResult?.matches || [];
-    const labelInsights = matchResult?.labelInsights || null;
+    const matches = aggregatedMatchResult?.matches || [];
+    const labelInsights = aggregatedMatchResult?.labelInsights || null;
 
     console.log(`[VisualMatch] Found ${matches.length} matches, top score: ${matches[0]?.score || 0}`);
 
-    // Build AI summary
-    const aiSummary = buildScanAISummary({ visionResult, matches: matchResult });
+    // Build AI summary with stability and scan type info
+    const aiSummary = buildScanAISummary({ 
+      visionResult: combinedVisionResult, 
+      matches: aggregatedMatchResult,
+      stabilityScore,
+      stabilityLabel,
+      numberOfFrames,
+    });
 
     res.json({
       success: true,
@@ -1776,13 +1842,172 @@ app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
         confidence: m.confidence,
         reasoning: m.reasoning
       })),
-      labelInsights
+      labelInsights,
+      stability: {
+        score: stabilityScore,
+        label: stabilityLabel,
+        numberOfFrames
+      }
     });
   } catch (e) {
     console.error('[VisualMatch] Error:', e);
     res.status(500).json({ error: String(e) });
   }
 });
+
+/**
+ * Aggregate matches across multiple frames
+ */
+function aggregateMultiFrameMatches(frameMatchResults) {
+  if (frameMatchResults.length === 0) return null;
+  if (frameMatchResults.length === 1) return frameMatchResults[0];
+
+  // Map to track aggregated confidence per strain
+  const strainMap = new Map();
+
+  // Process each frame's matches
+  for (const frameResult of frameMatchResults) {
+    const frameMatches = frameResult?.matches || [];
+    
+    for (const match of frameMatches) {
+      const strainId = match.strain?.slug || match.strain?.name || match.name || 'unknown';
+      const confidence = normalizeMatchConfidence(match);
+      
+      if (confidence == null) continue;
+
+      if (!strainMap.has(strainId)) {
+        strainMap.set(strainId, {
+          strain: match.strain,
+          name: match.strain?.name || match.name,
+          confidences: [],
+          scores: [],
+          reasoning: match.reasoning || '',
+        });
+      }
+
+      const entry = strainMap.get(strainId);
+      entry.confidences.push(confidence);
+      if (typeof match.score === 'number') {
+        entry.scores.push(match.score);
+      }
+    }
+  }
+
+  // Calculate average confidence per strain
+  const aggregatedMatches = Array.from(strainMap.values()).map(entry => {
+    const avgConfidence = entry.confidences.length > 0
+      ? entry.confidences.reduce((a, b) => a + b, 0) / entry.confidences.length
+      : 0;
+    
+    const avgScore = entry.scores.length > 0
+      ? entry.scores.reduce((a, b) => a + b, 0) / entry.scores.length
+      : 0;
+
+    return {
+      strain: entry.strain,
+      name: entry.name,
+      confidence: avgConfidence,
+      score: avgScore,
+      reasoning: entry.reasoning || `Aggregated from ${entry.confidences.length} frames`,
+    };
+  });
+
+  // Sort by confidence descending
+  aggregatedMatches.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+
+  // Return in the same format as single-frame match result
+  return {
+    matches: aggregatedMatches,
+    labelInsights: frameMatchResults[0]?.labelInsights || null,
+  };
+}
+
+/**
+ * Calculate stability score and label from multi-frame results
+ */
+function calculateStability(frameMatchResults, aggregatedResult) {
+  if (frameMatchResults.length <= 1) {
+    return { score: 1.0, label: 'single-frame' };
+  }
+
+  const topStrain = aggregatedResult?.matches?.[0];
+  if (!topStrain) {
+    return { score: 0, label: 'low' };
+  }
+
+  const topStrainId = topStrain.strain?.slug || topStrain.strain?.name || topStrain.name;
+  
+  // Count how many frames have this strain as their top match
+  let matchingFrames = 0;
+  
+  for (const frameResult of frameMatchResults) {
+    const frameTop = frameResult?.matches?.[0];
+    if (frameTop) {
+      const frameTopId = frameTop.strain?.slug || frameTop.strain?.name || frameTop.name;
+      if (frameTopId === topStrainId) {
+        matchingFrames++;
+      }
+    }
+  }
+
+  const stabilityScore = matchingFrames / frameMatchResults.length;
+  
+  let stabilityLabel;
+  if (stabilityScore >= 0.8) {
+    stabilityLabel = 'high';
+  } else if (stabilityScore >= 0.5) {
+    stabilityLabel = 'medium';
+  } else {
+    stabilityLabel = 'low';
+  }
+
+  return { score: stabilityScore, label: stabilityLabel };
+}
+
+/**
+ * Combine multiple vision results into one
+ */
+function combineVisionResults(visionResults) {
+  if (visionResults.length === 0) return null;
+  if (visionResults.length === 1) return visionResults[0];
+
+  // Use first frame's text annotations (most complete)
+  const combined = { ...visionResults[0] };
+
+  // Merge label annotations from all frames (deduplicate)
+  const labelMap = new Map();
+  for (const result of visionResults) {
+    const labels = result.labelAnnotations || [];
+    for (const label of labels) {
+      const key = label.description?.toLowerCase() || '';
+      if (key && !labelMap.has(key)) {
+        labelMap.set(key, label);
+      }
+    }
+  }
+
+  combined.labelAnnotations = Array.from(labelMap.values());
+
+  return combined;
+}
+
+/**
+ * Normalize match confidence to 0-1 scale
+ */
+function normalizeMatchConfidence(match) {
+  if (!match) return null;
+  if (typeof match.confidence === 'number') {
+    const c = match.confidence;
+    if (c <= 0) return 0;
+    if (c >= 1) return 1;
+    return c;
+  }
+  if (typeof match.score === 'number') {
+    const score = Math.max(0, Math.min(200, match.score));
+    return score / 200;
+  }
+  return null;
+}
 
 // --- Mount Route Modules ---
 // Apply general rate limiting to all /api routes

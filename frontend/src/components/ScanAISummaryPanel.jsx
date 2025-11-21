@@ -65,6 +65,10 @@ export default function ScanAISummaryPanel({ summary }) {
     estimateConfidenceLabel,
     estimateType,
     notes,
+    scanType = 'bud',
+    stabilityScore = 1.0,
+    stabilityLabel = 'single-frame',
+    numberOfFrames = 1,
     label = {},
   } = summary;
 
@@ -126,6 +130,8 @@ export default function ScanAISummaryPanel({ summary }) {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'baseline',
+          flexWrap: 'wrap',
+          gap: 8,
         }}
       >
         <div>
@@ -149,6 +155,39 @@ export default function ScanAISummaryPanel({ summary }) {
                   (matchConfidence <= 1 ? matchConfidence * 100 : matchConfidence)
                 )}
                 %
+              </>
+            )}
+          </div>
+          {/* Scan type and stability info */}
+          <div
+            style={{
+              fontSize: 11,
+              opacity: 0.7,
+              marginTop: 4,
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span>
+              Scan type: {scanType === 'package' ? 'Packaged product' : scanType === 'bud' ? 'Loose flower' : 'Live plant'}
+            </span>
+            {numberOfFrames > 1 && (
+              <>
+                <span>•</span>
+                <span>{numberOfFrames}-angle scan</span>
+                <span>•</span>
+                <span>
+                  Stability: {stabilityLabel === 'high' ? 'High' : stabilityLabel === 'medium' ? 'Medium' : 'Low'}
+                  {stabilityLabel === 'low' && ' (angles disagree, consider rescanning)'}
+                  {stabilityLabel === 'medium' && ' (angles partly agree)'}
+                </span>
+              </>
+            )}
+            {numberOfFrames === 1 && (
+              <>
+                <span>•</span>
+                <span>Single-frame scan. Add more angles in future updates for higher stability.</span>
               </>
             )}
           </div>
