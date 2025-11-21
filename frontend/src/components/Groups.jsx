@@ -1956,6 +1956,23 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                               </IconButton>
                             </Tooltip>
                           )}
+                          <Tooltip title="Reply to this message">
+                            <IconButton
+                              edge="end"
+                              size="small"
+                              onClick={() => {
+                                setReplyTo(m);
+                                // Scroll to composer (if needed)
+                                setTimeout(() => {
+                                  const composer = document.querySelector('[data-message-composer]');
+                                  composer?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                }, 100);
+                              }}
+                              sx={{ color: '#9CCC65', opacity: 0.7 }}
+                            >
+                              <ChatIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Report this message">
                             <IconButton
                               edge="end"
