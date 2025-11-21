@@ -121,6 +121,33 @@ export default function ScanPage({ onBack, onNavigate }) {
     setActiveView('scanner');
     setCompletedScan(null);
     processedScanIdsRef.current.clear();
+    // Reset multi-angle state
+    setCapturedFrames([]);
+    setMultiAngleMode(false);
+  };
+  
+  // Handle multi-angle scan start
+  const handleStartMultiAngleScan = async () => {
+    if (capturedFrames.length === 0) {
+      setError('Please capture at least one photo');
+      return;
+    }
+    
+    // Start scan with first frame (additional frames will be uploaded in startScan)
+    await startScan(capturedFrames[0].file);
+  };
+  
+  // Toggle multi-angle mode
+  const toggleMultiAngleMode = () => {
+    setMultiAngleMode(!multiAngleMode);
+    setCapturedFrames([]);
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    if (!multiAngleMode) {
+      setStatusMessage('Step 1/3: Capture the product from the front / top');
+    } else {
+      setStatusMessage('Take or choose a photo of the product or packaging.');
+    }
   };
 
   const handleScanAgain = () => {
@@ -166,12 +193,10 @@ export default function ScanPage({ onBack, onNavigate }) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Clear previous state
     setError(null);
     setScanResult(null);
-    setSelectedFile(file);
     
-    // Generate preview URL and pulse frame
+    // Generate preview URL
     const previewUrl = URL.createObjectURL(file);
     setPreviewUrl(previewUrl);
     setLastPhotoUrl((oldUrl) => {
@@ -180,13 +205,41 @@ export default function ScanPage({ onBack, onNavigate }) {
     });
     setFramePulsing(true);
     
-    setIsUploading(false);
-    setIsPolling(false);
-    setScanPhase('capturing');
-    setStatusMessage('Preparing image…');
-
-    // Auto-start scan when file is selected
-    startScanForFile(file);
+    if (multiAngleMode && capturedFrames.length < MAX_FRAMES) {
+      // Multi-angle mode: add to frames array
+      const newFrame = { file, previewUrl };
+      const updatedFrames = [...capturedFrames, newFrame];
+      setCapturedFrames(updatedFrames);
+      
+      if (updatedFrames.length >= MAX_FRAMES) {
+        // All frames captured, ready to scan
+        setStatusMessage(`All ${MAX_FRAMES} photos captured. Ready to scan.`);
+        setScanPhase('ready');
+      } else {
+        // More frames needed
+        const step = updatedFrames.length + 1;
+        const instructions = [
+          'Capture the product from the front / top',
+          'Capture from a side angle',
+          'Capture a close-up of the bud/label'
+        ];
+        setStatusMessage(`Step ${step}/${MAX_FRAMES}: ${instructions[step - 1]}`);
+        setScanPhase('ready');
+      }
+    } else {
+      // Single-frame mode (default)
+      setSelectedFile(file);
+      setIsUploading(false);
+      setIsPolling(false);
+      setScanPhase('capturing');
+      setStatusMessage('Preparing image…');
+      
+      // Auto-start scan when file is selected
+      startScanForFile(file);
+    }
+    
+    // Reset file input so same file can be selected again
+    event.target.value = '';
   };
 
   const handlePickImageClick = () => {
@@ -270,8 +323,37 @@ export default function ScanPage({ onBack, onNavigate }) {
     if (!processedScanIdsRef.current.has(scanId)) {
       processedScanIdsRef.current.add(scanId);
       try {
+        // If multi-angle mode, upload additional frames and pass their URLs
+        let frameImageUrls = [];
+        if (multiAngleMode && capturedFrames.length > 1) {
+          // Upload remaining frames
+          for (let i = 1; i < capturedFrames.length; i++) {
+            const frame = capturedFrames[i];
+            const processedFrame = await maybeCompressImage(frame.file);
+            const frameBase64 = await fileToBase64(processedFrame);
+            const framePayload = {
+              filename: processedFrame.name || `frame-${i}.jpg`,
+              contentType: processedFrame.type || 'image/jpeg',
+              base64: frameBase64,
+            };
+            
+            const frameRes = await fetch(apiUrl('/api/uploads'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(framePayload),
+            });
+            
+            const frameData = await safeJson(frameRes);
+            if (frameRes.ok && frameData.image_url) {
+              frameImageUrls.push(frameData.image_url);
+            }
+          }
+        }
+        
         const processRes = await fetch(apiUrl(`/api/scans/${scanId}/process`), {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ frameImageUrls }),
         });
         if (!processRes.ok) {
           console.warn('[startScan] Process endpoint returned non-OK:', processRes.status);
