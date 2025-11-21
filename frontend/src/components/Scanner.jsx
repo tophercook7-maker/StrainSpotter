@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Button,
@@ -11,11 +11,19 @@ import CannabisLeafIcon from './CannabisLeafIcon';
 import { API_BASE } from '../config';
 import { useMembership } from '../membership/MembershipContext';
 
-export default function Scanner({ onViewHistory }) {
+export default function Scanner(props) {
+  const { onViewHistory, onBack, onNavigate } = props;
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [result, setResult] = useState(null);
+  const [debugEvents, setDebugEvents] = useState([]);
+
+  function logDebug(message) {
+    const line = `[${new Date().toISOString()}] ${message}`;
+    setDebugEvents(prev => [...prev, line].slice(-20));
+    console.log('[Scanner]', message);
+  }
 
   const {
     isMember,
@@ -39,16 +47,17 @@ export default function Scanner({ onViewHistory }) {
     if (!file) return;
 
     if (!canScan) {
-      setError(
-        `You're out of scans. Members get ${memberCap} scans included; you can also top up scan packs any time.`
-      );
+      const msg = `You're out of scans. Members get ${memberCap} scans included; you can also top up scan packs any time.`;
+      setErrorMessage(msg);
+      logDebug(`ERROR: ${msg}`);
       return;
     }
 
-    setError('');
+    setErrorMessage('');
     setResult(null);
     setUploading(true);
     setProcessing(false);
+    logDebug('Scan started');
 
     try {
       const reader = new FileReader();
@@ -69,12 +78,18 @@ export default function Scanner({ onViewHistory }) {
       });
 
       if (!uploadRes.ok) {
-        const body = await uploadRes.json().catch(() => ({}));
-        throw new Error(body.error || 'Upload failed');
+        let body = null;
+        try {
+          body = await uploadRes.json();
+        } catch {}
+        const err = new Error(body?.error || `Scan server error (${uploadRes.status})`);
+        err.responseJson = body;
+        throw err;
       }
 
       const uploadData = await uploadRes.json();
       const scanId = uploadData.id;
+      logDebug('Upload complete');
 
       setUploading(false);
       setProcessing(true);
@@ -88,19 +103,30 @@ export default function Scanner({ onViewHistory }) {
       );
 
       if (!processRes.ok) {
-        const body = await processRes.json().catch(() => ({}));
-        throw new Error(body.error || 'Processing failed');
+        let body = null;
+        try {
+          body = await processRes.json();
+        } catch {}
+        const err = new Error(body?.error || `Scan server error (${processRes.status})`);
+        err.responseJson = body;
+        throw err;
       }
 
       const processData = await processRes.json();
       setResult(processData);
+      logDebug('Scan processing complete');
 
       // ✅ Count only successful scans for everyone
       registerScanConsumed();
       setProcessing(false);
     } catch (err) {
-      console.error('[Scanner] Error during scan', err);
-      setError(err.message || 'Scan failed. Please try again.');
+      console.error('[Scanner] scan error', err);
+      let msg =
+        err?.responseJson?.error ||
+        err?.message ||
+        'Something went wrong while scanning. Please try again.';
+      setErrorMessage(msg);
+      logDebug(`ERROR: ${msg}`);
       setUploading(false);
       setProcessing(false);
     }
@@ -108,9 +134,9 @@ export default function Scanner({ onViewHistory }) {
 
   const handleScanClick = () => {
     if (!canScan) {
-      setError(
-        `You're out of scans. Members get ${memberCap} scans included; you can also top up scan packs any time.`
-      );
+      const msg = `You're out of scans. Members get ${memberCap} scans included; you can also top up scan packs any time.`;
+      setErrorMessage(msg);
+      logDebug(`ERROR: ${msg}`);
       return;
     }
     const input = document.getElementById('scanner-file-input');
@@ -122,7 +148,58 @@ export default function Scanner({ onViewHistory }) {
   const isBusy = uploading || processing;
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', mt: 4 }}>
+    <div
+      className="scanner-root"
+      style={{
+        minHeight: '100vh',
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)',
+        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#050c08',
+        color: '#f5fff5',
+      }}
+    >
+      {/* TOP BAR */}
+      <div
+        style={{
+          padding: '0 16px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onBack || (() => onNavigate?.('home'))}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            color: '#f5fff5',
+            fontSize: 16,
+            cursor: 'pointer',
+            padding: '4px 8px',
+          }}
+        >
+          ‹ Back
+        </button>
+        <span style={{ fontSize: 14, opacity: 0.85 }}>Scanner</span>
+        <span style={{ width: 40 }} /> {/* spacer */}
+      </div>
+
+      {/* MAIN SCROLL AREA */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '0 16px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+        }}
+      >
+        <Box sx={{ maxWidth: 600, mx: 'auto', width: '100%' }}>
       <Paper
         elevation={6}
         sx={{
@@ -450,14 +527,45 @@ export default function Scanner({ onViewHistory }) {
           </Box>
         )}
 
-        {/* Error text */}
-        {error && (
-          <Typography
-            variant="body2"
-            sx={{ mt: 2, color: '#fecaca', textAlign: 'center' }}
+        {/* Error panel */}
+        {errorMessage && (
+          <div
+            style={{
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: 'rgba(180, 40, 40, 0.2)',
+              border: '1px solid rgba(255, 120, 120, 0.5)',
+              fontSize: 13,
+              marginTop: 16,
+            }}
           >
-            {error}
-          </Typography>
+            <strong>Scan error:</strong>
+            <div style={{ marginTop: 4 }}>{errorMessage}</div>
+          </div>
+        )}
+
+        {/* Debug log */}
+        {debugEvents.length > 0 && (
+          <div
+            style={{
+              marginTop: 8,
+              padding: 8,
+              borderRadius: 8,
+              backgroundColor: 'rgba(255,255,255,0.03)',
+              fontSize: 11,
+              maxHeight: 120,
+              overflowY: 'auto',
+            }}
+          >
+            <div style={{ opacity: 0.7, marginBottom: 4 }}>
+              Scanner log (last 20 events)
+            </div>
+            {debugEvents.map((line, idx) => (
+              <div key={idx} style={{ whiteSpace: 'pre-wrap' }}>
+                {line}
+              </div>
+            ))}
+          </div>
         )}
 
         {/* Dev / debug result block (keep or trim later) */}
@@ -505,6 +613,8 @@ export default function Scanner({ onViewHistory }) {
           </Box>
         )}
       </Paper>
-    </Box>
+        </Box>
+      </div>
+    </div>
   );
 }
