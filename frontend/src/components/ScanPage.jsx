@@ -27,6 +27,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useMembership } from '../membership/MembershipContext';
 import { API_BASE } from '../config';
 import { normalizeScanResult } from '../utils/scanResultUtils';
+import { resizeImageToBase64 } from '../utils/resizeImageToBase64';
 
 const GUEST_LIMIT = 20;
 
@@ -316,15 +317,18 @@ export default function ScanPage({ onBack, onNavigate }) {
       setScanPhase('capturing');
       setStatusMessage('Preparing image…');
 
-    // Compress image if needed
-    const processedFile = await maybeCompressImage(file);
-    const base64 = await fileToBase64(processedFile);
+      // Resize and compress image using the new utility
+      setScanPhase('uploading');
+      setStatusMessage('Resizing image for faster upload…');
+      
+      const { base64, contentType } = await resizeImageToBase64(file, 1280, 0.7);
 
-    const payload = {
-      filename: processedFile.name || 'scan.jpg',
-      contentType: processedFile.type || 'image/jpeg',
-      base64,
-    };
+      setStatusMessage('Uploading image…');
+      const payload = {
+        filename: file.name || 'scan.jpg',
+        contentType: contentType || 'image/jpeg',
+        base64,
+      };
 
     const res = await fetch(apiUrl('/api/uploads'), {
       method: 'POST',
@@ -377,11 +381,10 @@ export default function ScanPage({ onBack, onNavigate }) {
           // Upload remaining frames
           for (let i = 1; i < capturedFrames.length; i++) {
             const frame = capturedFrames[i];
-            const processedFrame = await maybeCompressImage(frame.file);
-            const frameBase64 = await fileToBase64(processedFrame);
+            const { base64: frameBase64, contentType: frameContentType } = await resizeImageToBase64(frame.file, 1280, 0.7);
             const framePayload = {
-              filename: processedFrame.name || `frame-${i}.jpg`,
-              contentType: processedFrame.type || 'image/jpeg',
+              filename: frame.file.name || `frame-${i}.jpg`,
+              contentType: frameContentType || 'image/jpeg',
               base64: frameBase64,
             };
             
@@ -415,9 +418,21 @@ export default function ScanPage({ onBack, onNavigate }) {
     setIsUploading(false);
     setIsPolling(true);
     setScanPhase('processing');
-    setStatusMessage('Analyzing label and finding matches…');
+    setStatusMessage('Processing image with Vision API…');
 
-    await pollScan(scanId);
+    // Set up hard timeout to prevent infinite hanging
+    const timeoutId = setTimeout(() => {
+      setIsPolling(false);
+      setScanPhase('error');
+      setError('Scan is taking too long. The server may be overloaded. Please try again in a moment.');
+      setStatusMessage('Scan timed out. Please try again.');
+    }, 35000); // 35 seconds hard timeout
+
+    try {
+      await pollScan(scanId, 0, timeoutId);
+    } finally {
+      clearTimeout(timeoutId);
+    }
     } catch (e) {
       console.error('startScan error', e);
       setIsUploading(false);
@@ -448,11 +463,24 @@ export default function ScanPage({ onBack, onNavigate }) {
     }
   }
 
-  async function pollScan(scanId, attempt = 0) {
-    const maxAttempts = 25; // ~25s at 1s delay
+  async function pollScan(scanId, attempt = 0, timeoutRef = null) {
+    const maxAttempts = 30; // ~30s at 1s delay (hard timeout)
     const delayMs = 1000; // 1 second polling interval
 
     try {
+      // Update status message based on attempt number to show progress
+      if (attempt === 0) {
+        setStatusMessage('Processing image with Vision API…');
+      } else if (attempt < 5) {
+        setStatusMessage('Extracting text from label…');
+      } else if (attempt < 10) {
+        setStatusMessage('Matching against strain database…');
+      } else if (attempt < 20) {
+        setStatusMessage('Analyzing product details…');
+      } else {
+        setStatusMessage('Finalizing results…');
+      }
+
       const res = await fetch(apiUrl(`/api/scans/${scanId}`));
       const data = await safeJson(res);
 
@@ -509,9 +537,10 @@ export default function ScanPage({ onBack, onNavigate }) {
 
       // If scan is complete OR has a result, stop polling and show results
       if (isComplete || hasResult) {
+        if (timeoutRef) clearTimeout(timeoutRef);
         setIsPolling(false);
         setScanPhase('done');
-        setStatusMessage('Scan complete.');
+        setStatusMessage('Scan complete!');
         
         // Temporary debug log
         console.log('[pollScan] done', { status, hasResult, result: scan.result });
@@ -574,21 +603,32 @@ export default function ScanPage({ onBack, onNavigate }) {
 
       // If scan has an error status or error field, stop polling and show error
       if (isError) {
+        if (timeoutRef) clearTimeout(timeoutRef);
         setIsPolling(false);
         setScanPhase('error');
         setFramePulsing(false);
         const errorMessage = scan?.error || scan?.errorMessage || 'Scan failed on the server.';
-        setError(errorMessage);
-        setStatusMessage(errorMessage);
+        // Provide more specific error messages
+        let userMessage = errorMessage;
+        if (errorMessage.includes('Vision') || errorMessage.includes('OCR')) {
+          userMessage = 'Could not read text from the image. Try a clearer photo with better lighting.';
+        } else if (errorMessage.includes('match') || errorMessage.includes('strain')) {
+          userMessage = 'Could not find a matching strain. Try a photo that shows the product label clearly.';
+        } else if (errorMessage.includes('storage') || errorMessage.includes('bucket')) {
+          userMessage = 'Storage error. Please try again in a moment.';
+        }
+        setError(userMessage);
+        setStatusMessage(userMessage);
         return;
       }
 
       // If we've hit max attempts, stop polling
       if (attempt >= maxAttempts) {
+        if (timeoutRef) clearTimeout(timeoutRef);
         setIsPolling(false);
         setScanPhase('error');
         setFramePulsing(false);
-        const timeoutError = 'Scan is taking too long. Please try again with a clearer photo.';
+        const timeoutError = 'Scan is taking too long. The server may be processing many requests. Please try again in a moment.';
         setError(timeoutError);
         setStatusMessage(timeoutError);
         return;
@@ -599,12 +639,22 @@ export default function ScanPage({ onBack, onNavigate }) {
         pollScan(scanId, attempt + 1);
       }, delayMs);
     } catch (e) {
+      if (timeoutRef) clearTimeout(timeoutRef);
       console.error('pollScan error', e);
       setIsPolling(false);
       setScanPhase('error');
       const errorMsg = String(e.message || e);
-      setError(errorMsg);
-      setStatusMessage(errorMsg);
+      // Provide user-friendly error messages
+      let userMessage = errorMsg;
+      if (errorMsg.includes('404') || errorMsg.includes('not found')) {
+        userMessage = 'Scan not found. Please try scanning again.';
+      } else if (errorMsg.includes('500') || errorMsg.includes('Server error')) {
+        userMessage = 'Server error while processing scan. Please try again in a moment.';
+      } else if (errorMsg.includes('Network') || errorMsg.includes('fetch')) {
+        userMessage = 'Network problem. Check your connection and try again.';
+      }
+      setError(userMessage);
+      setStatusMessage(userMessage);
     }
   }
 
@@ -1177,10 +1227,10 @@ export default function ScanPage({ onBack, onNavigate }) {
                     sx={{ color: 'rgba(224, 242, 241, 0.9)' }}
                   >
                     {scanPhase === 'ready' && 'Align the label in this area when you take the photo.'}
-                    {scanPhase === 'capturing' && 'Capturing image…'}
-                    {scanPhase === 'uploading' && 'Uploading…'}
-                    {scanPhase === 'processing' && 'Analyzing label and packaging data…'}
-                    {scanPhase === 'done' && 'Scan complete. You can review the details below.'}
+                    {scanPhase === 'capturing' && 'Preparing image…'}
+                    {scanPhase === 'uploading' && (statusMessage || 'Uploading image…')}
+                    {scanPhase === 'processing' && (statusMessage || 'Processing image with Vision API…')}
+                    {scanPhase === 'done' && 'Scan complete! You can review the details below.'}
                     {scanPhase !== 'ready' && scanPhase !== 'capturing' && scanPhase !== 'uploading' && scanPhase !== 'processing' && scanPhase !== 'done' && 'Tap below to take a new photo or choose one from your library.'}
                   </Typography>
                 </Stack>
@@ -1387,10 +1437,10 @@ export default function ScanPage({ onBack, onNavigate }) {
                   }}
                 >
                   {scanPhase === 'ready' && (statusMessage || 'Ready to scan.')}
-                  {scanPhase === 'capturing' && 'Capturing photo…'}
-                  {scanPhase === 'uploading' && 'Uploading photo securely…'}
-                  {scanPhase === 'processing' && 'Analyzing packaging details…'}
-                  {scanPhase === 'done' && 'Scan complete.'}
+                  {scanPhase === 'capturing' && 'Preparing image…'}
+                  {scanPhase === 'uploading' && (statusMessage || 'Uploading image…')}
+                  {scanPhase === 'processing' && (statusMessage || 'Processing image with Vision API…')}
+                  {scanPhase === 'done' && 'Scan complete!'}
                   {scanPhase === 'error' && (error || 'Scan failed. Please try again.')}
                 </Typography>
               </Stack>
