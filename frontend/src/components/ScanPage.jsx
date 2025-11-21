@@ -21,7 +21,10 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import ScanResultCard from './ScanResultCard';
+import { ScanAISummaryPanel } from './ScanAISummaryPanel';
+import StrainResultCard from './StrainResultCard';
 import { useAuth } from '../hooks/useAuth';
+import { useMembership } from '../membership/MembershipContext';
 import { API_BASE } from '../config';
 import { normalizeScanResult } from '../utils/scanResultUtils';
 
@@ -46,16 +49,30 @@ function apiUrl(path) {
 
 export default function ScanPage({ onBack, onNavigate }) {
   const { user } = useAuth();
+  const {
+    isMember,
+    starterRemaining,
+    memberRemaining,
+    memberCap,
+    extraCredits,
+    totalAvailableScans,
+    starterCap,
+    registerScanConsumed,
+  } = useMembership();
   const isGuest = !user;
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
   const [isOpeningPicker, setIsOpeningPicker] = useState(false);
+  const [isChoosingFile, setIsChoosingFile] = useState(false);
   const [scanResult, setScanResult] = useState(null);
   const [error, setError] = useState(null);
   const [guestScansUsed, setGuestScansUsedState] = useState(() => getGuestScansUsed());
   const [showPlans, setShowPlans] = useState(false);
+  
+  // Now everyone depends on totalAvailableScans, including members.
+  const canScan = totalAvailableScans > 0;
   const [scanPhase, setScanPhase] = useState('camera-loading'); // 'camera-loading' | 'ready' | 'capturing' | 'uploading' | 'processing' | 'done' | 'error'
   const [statusMessage, setStatusMessage] = useState('Opening scanner…');
   const [cameraReady, setCameraReady] = useState(false);
@@ -85,18 +102,24 @@ export default function ScanPage({ onBack, onNavigate }) {
     if (onBack) onBack();
   };
 
-  const handleScanAgain = () => {
-    // Reset the scanner state to start fresh
+  // Reset scan state completely
+  const resetScan = () => {
     setError(null);
     setScanPhase('ready');
-    setStatusMessage('Take or choose a new photo.');
+    setStatusMessage('Take or choose a photo of the product or packaging.');
     setSelectedFile(null);
     setPreviewUrl(null);
-    setScanResult(null);
-    setCompletedScan(null);
-    setActiveView('scanner');
     setLastPhotoUrl(null);
-    setFramePulsing(false);
+    setScanResult(null);
+    setIsUploading(false);
+    setIsPolling(false);
+    setActiveView('scanner');
+    setCompletedScan(null);
+    processedScanIdsRef.current.clear();
+  };
+
+  const handleScanAgain = () => {
+    resetScan();
   };
 
   const handleBackToHome = () => {
@@ -134,6 +157,7 @@ export default function ScanPage({ onBack, onNavigate }) {
 
   const handleFileChange = (event) => {
     setIsOpeningPicker(false);
+    setIsChoosingFile(false);
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -168,12 +192,30 @@ export default function ScanPage({ onBack, onNavigate }) {
     input.click();
   };
 
+  const handleChoosePhotoClick = () => {
+    const input = document.getElementById('scan-file-input');
+    if (!input) return;
+    setIsChoosingFile(true);
+    input.click();
+    // Reset after a short delay in case onChange is slow
+    setTimeout(() => {
+      setIsChoosingFile(false);
+    }, 800);
+  };
+
   const handleStartScan = async () => {
     // Re-run scan for the currently selected file
     await startScanForFile(selectedFile);
   };
 
   async function startScan(file) {
+    if (!canScan) {
+      setError(
+        `You're out of scans. Members get ${memberCap} scans included; you can also top up scan packs any time.`
+      );
+      return;
+    }
+
     try {
       setError(null);
       setScanPhase('capturing');
@@ -267,8 +309,10 @@ export default function ScanPage({ onBack, onNavigate }) {
       // Backend may return wrapped { scan: {...} } or direct scan object
       const scan = data?.scan || data;
       
-      // Temporary debug log
-      console.log('[pollScan] response', data);
+      // Extract AI summary, match, and visionText from response (could be at top level or in scan object)
+      const aiSummary = data?.aiSummary || scan?.ai_summary || null;
+      const match = data?.match || null; // Matched strain from backend
+      const visionText = data?.visionText || null; // Vision OCR text from backend
 
       if (!scan) {
         throw new Error('Invalid scan response from server');
@@ -312,7 +356,7 @@ export default function ScanPage({ onBack, onNavigate }) {
         
         const normalized = normalizeScanResult(scan);
         if (!normalized) {
-          setError('No strain match found yet. Try a clearer photo or different angle.');
+          setError('We couldn\'t read enough from that photo. Try again closer to the text on the label.');
           setScanResult(null);
           setScanPhase('error');
           setStatusMessage('Scan failed. Tap to try again.');
@@ -321,18 +365,45 @@ export default function ScanPage({ onBack, onNavigate }) {
 
           // Store the completed scan locally for the result view
           const processedResult = scan.result || normalized;
+          
+          // Extract matched strain from multiple sources (prioritize backend match, then fallback to result)
+          // Note: serializeMatch flattens the structure, so match already has strain fields at top level
+          const matchedStrain = 
+            match || // From backend response (already serialized)
+            result?.visualMatches?.match || // Already serialized (flattened structure)
+            result?.matches?.[0] || // Array of matches
+            normalized?.top_match || // Normalized result
+            null;
+          
+          // Extract vision text (prioritize backend response, then fallback to result)
+          const extractedVisionText =
+            visionText || // From backend response
+            result?.vision_raw?.textAnnotations?.[0]?.description ||
+            result?.vision_raw?.fullTextAnnotation?.text ||
+            result?.visionRaw?.textAnnotations?.[0]?.description ||
+            result?.visionRaw?.fullTextAnnotation?.text ||
+            null;
+          
           setCompletedScan({
             id: scan.id,
             result: processedResult,
             created_at: scan.created_at || new Date().toISOString(),
+            ai_summary: aiSummary || scan.ai_summary || null,
+            matchedStrain: matchedStrain || null,
+            visionText: extractedVisionText || null,
+            matched_strain_slug: scan.matched_strain_slug || null,
           });
           setActiveView('result');
 
-          // Count successful guest scans
-          if (isGuest) {
-            const used = guestScansUsed + 1;
-            setGuestScansUsedState(used);
-            setGuestScansUsed(used);
+          // Count successful scans (only for non-members)
+          if (!isMember) {
+            registerScanConsumed();
+            // Also maintain legacy guest scan tracking for backward compatibility
+            if (isGuest) {
+              const used = guestScansUsed + 1;
+              setGuestScansUsedState(used);
+              setGuestScansUsed(used);
+            }
           }
         }
         return;
@@ -385,7 +456,7 @@ export default function ScanPage({ onBack, onNavigate }) {
     }
 
     try {
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           const img = new Image();
@@ -451,7 +522,7 @@ export default function ScanPage({ onBack, onNavigate }) {
           reject(e);
         }
       };
-      reader.onerror = (e) => reject(e);
+      reader.onerror = reject;
       reader.readAsDataURL(file);
     });
   }
@@ -474,6 +545,9 @@ export default function ScanPage({ onBack, onNavigate }) {
         sx={{
           pt: 'calc(env(safe-area-inset-top) + 20px)',
           pb: 4,
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: '100vh',
         }}
       >
         {/* Back button */}
@@ -510,89 +584,149 @@ export default function ScanPage({ onBack, onNavigate }) {
           </Typography>
         </Box>
 
-        {/* Action buttons - always visible above results */}
-        <Stack
-          direction="row"
-          spacing={1.5}
-          sx={{ mb: 2, justifyContent: 'space-between' }}
-        >
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={handleBackToHome}
-            sx={{
-              flex: 1,
-              textTransform: 'none',
-              borderColor: 'rgba(197, 225, 165, 0.7)',
-              color: '#C5E1A5',
-              '&:hover': {
-                borderColor: '#CDDC39',
-                backgroundColor: 'rgba(156, 204, 101, 0.08)',
-              },
-            }}
-          >
-            Back to home
-          </Button>
-          <Button
-            variant="contained"
-            size="small"
-            onClick={handleScanAgain}
-            sx={{
-              flex: 1,
-              textTransform: 'none',
-              backgroundColor: '#9CCC65',
-              color: '#050705',
-              '&:hover': {
-                backgroundColor: '#CDDC39',
-              },
-            }}
-          >
-            Scan again
-          </Button>
-        </Stack>
-
-        {/* Result Card */}
-        <ScanResultCard
-          scan={completedScan}
-          result={normalizeScanResult(completedScan)}
-          onCorrectionSaved={() => {
-            console.log('[ScanResultCard] correction saved');
+        {/* Results area (scrollable) */}
+        <Box
+          sx={{
+            flex: 1,
+            mt: 2,
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            pb: 10, // space so last card isn't hidden behind sticky buttons
           }}
-        />
+        >
+          {/* Strain Result Card - shows matched strain if present */}
+          {completedScan?.matchedStrain && (
+            <Box sx={{ mb: 1 }}>
+              <StrainResultCard
+                matchedStrain={completedScan.matchedStrain}
+                scan={completedScan}
+              />
+            </Box>
+          )}
 
-        {/* Redundant action buttons at bottom for extra visibility */}
-        <Stack direction="row" spacing={2} sx={{ mt: 3, mb: 4 }}>
-          <Button
-            variant="outlined"
-            fullWidth
-            onClick={handleBackToHome}
-            sx={{
-              textTransform: 'none',
-              borderColor: '#9CCC65',
-              color: '#C5E1A5',
-              '&:hover': {
-                borderColor: '#CDDC39',
-                backgroundColor: 'rgba(124, 179, 66, 0.1)',
-              },
+          {/* Fallback basic scan info if no matched strain */}
+          {!completedScan?.matchedStrain && (
+            <Box
+              sx={{
+                mb: 1.5,
+                p: 1,
+                borderRadius: 1.5,
+                border: '1px solid rgba(90, 130, 90, 0.7)',
+                background: 'rgba(5, 10, 5, 0.96)',
+                color: '#d6f5d6',
+                fontSize: '0.84rem',
+              }}
+            >
+              <Typography
+                variant="overline"
+                sx={{
+                  fontSize: '0.78rem',
+                  letterSpacing: '0.08em',
+                  opacity: 0.75,
+                  mb: 0.5,
+                  display: 'block',
+                }}
+              >
+                Scan details
+              </Typography>
+              <Box
+                component="pre"
+                sx={{
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  fontFamily:
+                    'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                  fontSize: '0.76rem',
+                  opacity: 0.88,
+                }}
+              >
+                {JSON.stringify(
+                  {
+                    id: completedScan.id,
+                    matched_strain_slug: completedScan.matched_strain_slug,
+                    created_at: completedScan.created_at,
+                  },
+                  null,
+                  2
+                )}
+              </Box>
+            </Box>
+          )}
+
+          {/* Legacy ScanResultCard for packaging insights */}
+          <ScanResultCard
+            scan={completedScan}
+            result={normalizeScanResult(completedScan)}
+            onCorrectionSaved={() => {
+              console.log('[ScanResultCard] correction saved');
             }}
-          >
-            Back to home
-          </Button>
-          <Button
-            variant="contained"
-            fullWidth
-            onClick={handleScanAgain}
-            sx={{
-              textTransform: 'none',
-              background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #8BC34A 0%, #AED581 100%)',
-              },
-            }}
-          >
-            Scan again
-          </Button>
-        </Stack>
+          />
+
+          {/* AI Summary Panel */}
+          {completedScan?.ai_summary && (
+            <Box sx={{ mt: 2 }}>
+              <ScanAISummaryPanel
+                aiSummary={completedScan.ai_summary}
+                visionText={completedScan.visionText || null}
+              />
+            </Box>
+          )}
+        </Box>
+
+        {/* Sticky bottom action bar - always visible when scrolling */}
+        <Box
+          sx={{
+            position: 'sticky',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 20,
+            px: 2,
+            pb: 1.5,
+            pt: 1,
+            background:
+              'linear-gradient(to top, rgba(5, 7, 5, 0.96), rgba(5, 7, 5, 0.2))',
+            backdropFilter: 'blur(6px)',
+            mt: 3,
+          }}
+        >
+          <Stack direction="row" spacing={1.5}>
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={handleBackToHome}
+              sx={{
+                textTransform: 'none',
+                borderColor: 'rgba(197, 225, 165, 0.8)',
+                color: '#C5E1A5',
+                fontWeight: 500,
+                '&:hover': {
+                  borderColor: '#CDDC39',
+                  backgroundColor: 'rgba(156, 204, 101, 0.08)',
+                },
+              }}
+            >
+              Back home
+            </Button>
+            <Button
+              variant="contained"
+              fullWidth
+              onClick={handleScanAgain}
+              sx={{
+                textTransform: 'none',
+                backgroundColor: '#9CCC65',
+                color: '#050705',
+                fontWeight: 600,
+                '&:hover': {
+                  backgroundColor: '#CDDC39',
+                },
+              }}
+            >
+              Scan again
+            </Button>
+          </Stack>
+        </Box>
       </Container>
     );
   }
@@ -696,23 +830,94 @@ export default function ScanPage({ onBack, onNavigate }) {
 
         {/* Header */}
         <Box sx={{ mb: 2 }}>
-          <Typography
-            variant="h5"
-            sx={{
-              color: '#F1F8E9',
-              fontWeight: 700,
-              mb: 0.5,
-            }}
-          >
-            Scan weed products
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{ color: 'rgba(224, 242, 241, 0.9)' }}
-          >
-            Choose or take a photo of a cannabis product or bud. We'll analyze
-            it and show you the closest strain matches.
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+            <Box sx={{ flex: 1 }}>
+              <Typography
+                variant="h5"
+                sx={{
+                  color: '#F1F8E9',
+                  fontWeight: 700,
+                  mb: 0.5,
+                }}
+              >
+                Scan weed products
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ color: 'rgba(224, 242, 241, 0.9)' }}
+              >
+                Choose or take a photo of a cannabis product or bud. We'll analyze
+                it and show you the closest strain matches.
+              </Typography>
+            </Box>
+            {/* Scan credits summary */}
+            <Box sx={{ textAlign: 'right', ml: 2, minWidth: 160 }}>
+              {isMember ? (
+                <>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'rgba(163, 230, 186, 0.9)',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                    }}
+                  >
+                    Member
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'rgba(255,255,255,0.9)',
+                      fontWeight: 500,
+                    }}
+                  >
+                    Included scans: {memberCap - memberRemaining}/{memberCap}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: 'rgba(190, 242, 100, 0.9)' }}
+                  >
+                    Scans left: {totalAvailableScans}
+                    {extraCredits > 0 ? ' (with top-ups)' : ''}
+                  </Typography>
+                </>
+              ) : (
+                <>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: 'rgba(248, 250, 252, 0.7)' }}
+                  >
+                    Free starter scans used:{' '}
+                    <strong>{starterCap - starterRemaining}</strong> / {starterCap}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      mt: 0.25,
+                      color:
+                        totalAvailableScans === 0
+                          ? '#fecaca'
+                          : totalAvailableScans <= 5
+                          ? '#fde68a'
+                          : '#bbf7d0',
+                    fontWeight: 600,
+                  }}
+                >
+                  Scans available: {totalAvailableScans}
+                </Typography>
+                  {extraCredits > 0 && (
+                    <Typography
+                      variant="caption"
+                      sx={{ color: 'rgba(190, 242, 100, 0.9)' }}
+                    >
+                      Includes {extraCredits} top-up scans
+                    </Typography>
+                  )}
+                </>
+              )}
+            </Box>
+          </Box>
         </Box>
 
         {/* Signed-in hint (non-blocking) */}
@@ -822,7 +1027,7 @@ export default function ScanPage({ onBack, onNavigate }) {
                 size="large"
                 startIcon={<CloudUploadIcon />}
                 onClick={handlePickImageClick}
-                disabled={isOpeningPicker || scanPhase === 'uploading' || scanPhase === 'processing' || scanPhase === 'capturing'}
+                disabled={isOpeningPicker || scanPhase === 'uploading' || scanPhase === 'processing' || scanPhase === 'capturing' || !canScan}
                 sx={{
                   textTransform: 'none',
                   fontWeight: 700,
@@ -840,15 +1045,23 @@ export default function ScanPage({ onBack, onNavigate }) {
                   },
                 }}
               >
-                {isOpeningPicker ? 'Opening camera…' : 'Take or choose photo'}
+                {scanPhase === 'uploading' 
+                  ? 'Uploading…' 
+                  : scanPhase === 'processing' 
+                  ? 'Processing…' 
+                  : isOpeningPicker 
+                  ? 'Opening camera…' 
+                  : !canScan
+                  ? 'Upgrade to keep scanning'
+                  : 'Take or choose photo'}
               </Button>
 
               <Button
                 variant="outlined"
                 fullWidth
                 size="large"
-                onClick={handleStartScan}
-                disabled={!selectedFile || isUploading || isPolling}
+                onClick={selectedFile ? handleStartScan : handleChoosePhotoClick}
+                disabled={(!selectedFile && isChoosingFile) || isUploading || isPolling}
               sx={{
                 textTransform: 'none',
                 fontWeight: 700,
@@ -870,7 +1083,9 @@ export default function ScanPage({ onBack, onNavigate }) {
                 ? 'Analyzing…'
                 : selectedFile
                 ? 'Start scan'
-                : 'Choose a photo to enable scan'}
+                : isChoosingFile
+                ? 'Opening photos…'
+                : 'Choose photo'}
               </Button>
 
               <Typography
@@ -905,7 +1120,7 @@ export default function ScanPage({ onBack, onNavigate }) {
                   {scanPhase === 'uploading' && 'Uploading photo securely…'}
                   {scanPhase === 'processing' && 'Analyzing packaging details…'}
                   {scanPhase === 'done' && 'Scan complete.'}
-                  {scanPhase === 'error' && (errorMessage || 'Scan failed, tap to try again.')}
+                  {scanPhase === 'error' && (error || 'Scan failed, tap to try again.')}
                 </Typography>
               </Stack>
             </Box>
@@ -1041,3 +1256,78 @@ export default function ScanPage({ onBack, onNavigate }) {
     </Box>
   );
 }
+
+// ============================================================================
+// END-TO-END TEST CHECKLIST
+// ============================================================================
+//
+// BACKEND TESTS:
+// ---------------
+// 1) Start backend: npm run dev (from backend folder)
+// 2) Hit GET /health → confirm supabaseConfigured and googleVisionConfigured are true
+// 3) Upload a known-good label via the Scanner in the app or Dev dashboard
+// 4) Confirm:
+//    - A row appears in public.scans with image_url set
+//    - After processing, matched_strain_slug is set (for known strains)
+//    - ai_summary column is a JSON object with the expected keys:
+//      * userFacingSummary (string)
+//      * effectsAndUseCases (array)
+//      * risksAndWarnings (array)
+//      * dispensaryNotes (string)
+//      * growerNotes (string)
+//      * confidenceNote (string)
+// 5) Temporarily break OPENAI_API_KEY (e.g., comment out in env or set to empty) and repeat a scan:
+//    - Scan must still complete successfully
+//    - ai_summary should be null, but no 500 errors
+//    - Frontend should still show at least the basic scan result without crashing
+// 6) Test with a scan that has no matched strain:
+//    - AI summary should still generate using OCR/labels only
+//    - confidenceNote should indicate uncertainty
+//
+// FRONTEND TESTS (mobile/web):
+// -----------------------------
+// 1) Upload a very clear label → Expect:
+//    - Correct strain matched
+//    - High-quality AI summary appears under result card
+//    - All sections populated (summary, effects, warnings, notes)
+// 2) Upload a noisy label with lots of legal text → Expect:
+//    - Scan completes successfully
+//    - AI summary emphasizes uncertainty in confidenceNote
+//    - "risks & cautions" list still shows generic safe advice
+//    - No crashes or freezes
+// 3) Upload a blurry/bad photo → Expect:
+//    - Either no match or low-confidence match
+//    - AI summary indicates low confidence or is empty
+//    - UI suggests retaking photo (not crash)
+//    - "Scan again" button works to reset state
+// 4) On each scan, verify that the UI:
+//    - Doesn't reuse previous AI summary for a new scan (state resets correctly)
+//    - Disables the scan button while processing (uploading/processing states)
+//    - Shows correct button text: "Uploading…" → "Processing…" → "Take or choose photo"
+//    - Allows "Scan again" to cleanly reset all state
+//    - AI summary panel only appears when ai_summary exists
+// 5) Test error handling:
+//    - Network failure during upload → Shows error, allows retry
+//    - Network failure during processing → Shows error, allows retry
+//    - Backend returns error → Shows error message, doesn't crash
+//
+// INTEGRATION TESTS:
+// -------------------
+// 1) Full flow: Upload → Process → Poll → Display:
+//    - Upload completes → status shows "Processing…"
+//    - Polling detects completion → status shows "Scan complete"
+//    - Result view shows ScanResultCard + ScanAISummaryPanel
+//    - Both components render without errors
+// 2) State management:
+//    - "Scan again" resets all state (scanResult, completedScan, error, phase)
+//    - Active view switches correctly (scanner ↔ result)
+//    - No memory leaks or stale state between scans
+// 3) Guest vs authenticated:
+//    - Guest scans count correctly (localStorage)
+//    - Guest limit enforced (shows plans dialog)
+//    - Authenticated users bypass limit
+//
+// If any of these steps fail, log details to the console on both backend and frontend,
+// but never throw uncaught exceptions in production paths.
+//
+// ============================================================================

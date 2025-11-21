@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import MobileOnlyGuard from './components/MobileOnlyGuard';
@@ -6,12 +6,10 @@ import AgeGate from './components/AgeGate';
 import Auth from './components/Auth';
 import ScanHistory from './components/ScanHistory';
 import ScanWizard from './components/ScanWizard';
-import ScanPage from './components/ScanPage';
 // Navigation components removed in favor of on-screen action buttons
 import FeedbackChat from './components/FeedbackChat';
 import { API_BASE } from './config';
 import { supabase } from './supabaseClient';
-import Home from './components/Home';
 import GrowerDirectory from './components/GrowerDirectory';
 import Groups from './components/Groups';
 import { muiThemeOverrides } from './theme/cannabisTheme';
@@ -38,11 +36,18 @@ import FloatingScanButton from './components/FloatingScanButton';
 import ScanBalanceIndicator from './components/ScanBalanceIndicator';
 import BuyScansModal from './components/BuyScansModal';
 import AdminStatus from './components/AdminStatus';
-import AnalyticsDashboard from './components/AnalyticsDashboard';
-import HistoryPage from './components/HistoryPage';
 import { logEvent } from './utils/analyticsClient.js';
 
+// Lazy-load heavy views for faster initial boot
+const Home = React.lazy(() => import('./components/Home'));
+const ScanPage = React.lazy(() => import('./components/ScanPage'));
+const HistoryPage = React.lazy(() => import('./components/HistoryPage'));
+const AnalyticsDashboard = React.lazy(() => import('./components/AnalyticsDashboard'));
+
 import PasswordReset from './components/PasswordReset';
+// NEW imports:
+import { MembershipProvider } from './membership/MembershipContext';
+import FeatureGate from './components/FeatureGate';
 // Apply full marijuana-themed design with cannabis leaf icon and hero.png
 const theme = createTheme(muiThemeOverrides);
 
@@ -140,7 +145,8 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <MobileOnlyGuard>
+        <MembershipProvider>
+          <MobileOnlyGuard>
           {/* Global background layer - restored, no dark filter or overlay */}
           <div style={{
             position: 'fixed', inset: 0, zIndex: 0,
@@ -171,37 +177,67 @@ function App() {
             />
             <ScanBalanceIndicator onBuyCredits={() => setShowGlobalBuyScans(true)} />
             {currentView === 'home' && (
-              <Home onNavigate={setCurrentView} />
+              <Suspense fallback={null}>
+                <Home onNavigate={setCurrentView} />
+              </Suspense>
             )}
             {['scanner', 'guest-scan', 'scan'].includes(currentView) && (
-              <ScanPage
-                onBack={() => setCurrentView('home')}
-                onNavigate={(view) => setCurrentView(view)}
-              />
+              <Suspense
+                fallback={
+                  <div style={{ padding: 16, color: '#C5E1A5' }}>
+                    Opening scanner…
+                  </div>
+                }
+              >
+                <ScanPage
+                  onBack={() => setCurrentView('home')}
+                  onNavigate={(view) => setCurrentView(view)}
+                />
+              </Suspense>
             )}
             {currentView === 'wizard' && (
               <ScanWizard onBack={() => setCurrentView('home')} />
             )}
+            {/* LOGBOOK-style view: gate for non-members */}
             {currentView === 'history' && (
-              <ScanHistory onBack={() => setCurrentView('home')} />
+              <FeatureGate featureKey="logbook">
+                <ScanHistory onBack={() => setCurrentView('home')} />
+              </FeatureGate>
             )}
             {currentView === 'feedback' && (
               <FeedbackChat onBack={() => setCurrentView('home')} />
             )}
+            {/* GARDEN-style: grower directory / registration / groups */}
             {currentView === 'growers' && (
-              <GrowerDirectory onNavigate={setCurrentView} onBack={() => setCurrentView('home')} />
-            )}
-            {currentView === 'seeds' && (
-              <Seeds onBack={() => setCurrentView('home')} />
-            )}
-            {currentView === 'dispensaries' && (
-              <Dispensaries onBack={() => setCurrentView('home')} />
+              <FeatureGate featureKey="garden">
+                <GrowerDirectory onNavigate={setCurrentView} onBack={() => setCurrentView('home')} />
+              </FeatureGate>
             )}
             {currentView === 'register' && (
-              <GrowerRegistration onBack={() => setCurrentView('home')} />
+              <FeatureGate featureKey="garden">
+                <GrowerRegistration onBack={() => setCurrentView('home')} />
+              </FeatureGate>
             )}
             {currentView === 'groups' && (
-              <Groups onNavigate={setCurrentView} onBack={() => setCurrentView('home')} />
+              <FeatureGate featureKey="garden">
+                <Groups onNavigate={setCurrentView} onBack={() => setCurrentView('home')} />
+              </FeatureGate>
+            )}
+            {currentView === 'friends' && (
+              <FeatureGate featureKey="garden">
+                <Friends onBack={() => setCurrentView('home')} />
+              </FeatureGate>
+            )}
+            {/* REVIEWS-style: seeds / dispensaries / strains browser */}
+            {currentView === 'seeds' && (
+              <FeatureGate featureKey="reviews">
+                <Seeds onBack={() => setCurrentView('home')} />
+              </FeatureGate>
+            )}
+            {currentView === 'dispensaries' && (
+              <FeatureGate featureKey="reviews">
+                <Dispensaries onBack={() => setCurrentView('home')} />
+              </FeatureGate>
             )}
             {currentView === 'grow-coach' && (
               <GrowCoach onBack={() => setCurrentView('home')} />
@@ -215,9 +251,6 @@ function App() {
             {currentView === 'login' && (
               <Auth onBack={() => setCurrentView('home')} />
             )}
-            {currentView === 'friends' && (
-              <Friends onBack={() => setCurrentView('home')} />
-            )}
             {currentView === 'admin-status' && (
               <AdminStatus onBack={() => setCurrentView('home')} onNavigate={setCurrentView} />
             )}
@@ -225,7 +258,9 @@ function App() {
               <JournalPage onBack={() => setCurrentView('home')} />
             )}
             {currentView === 'strains' && (
-              <StrainBrowser onNavigate={setCurrentView} />
+              <FeatureGate featureKey="reviews">
+                <StrainBrowser onNavigate={setCurrentView} />
+              </FeatureGate>
             )}
             {currentView === 'membership-admin' && (
               <MembershipAdmin onBack={() => setCurrentView('home')} />
@@ -249,10 +284,14 @@ function App() {
               <EmergencyLogout />
             )}
             {currentView === 'analytics' && (
-              <AnalyticsDashboard onBack={() => setCurrentView('home')} />
+              <Suspense fallback={null}>
+                <AnalyticsDashboard onBack={() => setCurrentView('home')} />
+              </Suspense>
             )}
             {currentView === 'history' && (
-              <HistoryPage onBack={() => setCurrentView('home')} />
+              <Suspense fallback={null}>
+                <HistoryPage onBack={() => setCurrentView('home')} />
+              </Suspense>
             )}
             <FloatingScanButton onClick={() => setCurrentView('scanner')} />
           </div>
@@ -260,6 +299,7 @@ function App() {
       </ErrorBoundary>
         </MobileOnlyGuard>
         <BuyScansModal open={showGlobalBuyScans} onClose={() => setShowGlobalBuyScans(false)} />
+        </MembershipProvider>
       </AuthProvider>
     </ThemeProvider>
   );

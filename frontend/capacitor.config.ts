@@ -6,6 +6,7 @@ const config: CapacitorConfig = {
   appId: 'com.strainspotter.app',
   appName: 'StrainSpotter',
   webDir: 'dist',
+  bundledWebRuntime: false,
   backgroundColor: '#0C1910',
   server: useDevServer
     ? {

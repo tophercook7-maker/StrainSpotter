@@ -2,25 +2,68 @@ import React, { useMemo, useState } from "react";
 import { Box, Card, CardContent, Typography, TextField, Stack } from "@mui/material";
 
 function BusinessSummaryCard({ packaging }) {
-  if (!packaging) return null;
-  
+  if (!packaging) {
+    return null;
+  }
+
   const potency = packaging.potency || {};
   const details = packaging.package_details || {};
   const [price, setPrice] = useState("");
 
+  const thcPercent =
+    typeof potency.thc_percent === 'number'
+      ? potency.thc_percent
+      : typeof potency.thc_total_percent === 'number'
+      ? potency.thc_total_percent
+      : null;
+
+  const netWeightG =
+    typeof details.net_weight_grams === 'number'
+      ? details.net_weight_grams
+      : null;
+
+  // If we don't have the required fields, show an info message instead
+  if (thcPercent == null || netWeightG == null) {
+    return (
+      <Card
+        variant="outlined"
+        elevation={6}
+        sx={{
+          mb: 2.5,
+          background: "linear-gradient(135deg, rgba(0,0,0,0.52), rgba(0,0,0,0.72))",
+          borderRadius: 3,
+          border: "1px solid rgba(255,255,255,0.08)",
+          backdropFilter: "blur(14px)",
+        }}
+      >
+        <Box sx={{ p: 2.5 }}>
+          <Typography
+            variant="overline"
+            sx={{ color: "rgba(255,255,255,0.6)", letterSpacing: 1.3, mb: 1.5, display: 'block' }}
+          >
+            Business mode
+          </Typography>
+          <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.8)" }}>
+            THC% and net weight weren't clearly detected from this image. Try scanning a
+            package label with readable potency and weight to use the cost calculator.
+          </Typography>
+        </Box>
+      </Card>
+    );
+  }
+
   const metrics = useMemo(() => {
-    const thcPercent = typeof potency.thc_percent === "number" ? potency.thc_percent : null;
-    const grams = typeof details.net_weight_grams === "number" ? details.net_weight_grams : null;
-    if (!thcPercent || !grams) {
+    // Only here do we compute total mg THC:
+    const totalMgTHC = (thcPercent / 100) * netWeightG * 1000;
+    // Guard all math with finite checks
+    if (!Number.isFinite(totalMgTHC) || totalMgTHC <= 0) {
       return null;
     }
-    // Rough estimate: mg THC = grams * 1000 * (thcPercent / 100)
-    const mgThc = grams * 1000 * (thcPercent / 100);
     const priceNum = parseFloat(price);
-    const costPerMg = !isNaN(priceNum) && priceNum > 0 ? priceNum / mgThc : null;
-    const costPerGram = !isNaN(priceNum) && priceNum > 0 ? priceNum / grams : null;
-    return { mgThc, costPerMg, costPerGram };
-  }, [potency.thc_percent, details.net_weight_grams, price]);
+    const costPerMg = Number.isFinite(priceNum) && priceNum > 0 ? priceNum / totalMgTHC : null;
+    const costPerGram = Number.isFinite(priceNum) && priceNum > 0 ? priceNum / netWeightG : null;
+    return { mgThc: totalMgTHC, costPerMg, costPerGram };
+  }, [thcPercent, netWeightG, price]);
 
   return (
     <Card

@@ -23,12 +23,18 @@ export default function Home({ onNavigate }) {
   const isAdmin = isAdminEmail(user?.email);
 
   const handleScanClick = () => {
-    // Immediate visual feedback
+    if (scanButtonBusy) return; // ignore double taps
     setScanButtonBusy(true);
-    // Navigate right away so the route changes fast
-    onNavigate?.('scanner');
-    // Fallback: auto-reset after navigation completes
-    setTimeout(() => setScanButtonBusy(false), 3000);
+
+    // Navigate to scanner view
+    if (typeof onNavigate === 'function') {
+      onNavigate('scanner');
+    }
+
+    // Safety timeout to reset the button in case scanner load is slow
+    setTimeout(() => {
+      setScanButtonBusy(false);
+    }, 2500);
   };
 
   // Garden gate flow
@@ -168,41 +174,29 @@ export default function Home({ onNavigate }) {
               fullWidth
               onClick={handleScanClick}
               disabled={scanButtonBusy}
-              startIcon={<CameraAltIcon />}
               sx={{
-                py: 2,
-                fontSize: '1.1rem',
-                fontWeight: 700,
+                mt: 2,
+                py: 1.5,
+                textTransform: 'none',
+                fontSize: '1.05rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 1,
+                opacity: scanButtonBusy ? 0.8 : 1,
                 borderRadius: '16px',
                 background:
                   'linear-gradient(135deg, #7CB342 0%, #9CCC65 50%, #CDDC39 100%)',
                 boxShadow:
                   '0 8px 32px rgba(124, 179, 66, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
-                textTransform: 'none',
                 transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
-                position: 'relative',
-                overflow: 'hidden',
-                opacity: scanButtonBusy ? 0.7 : 1,
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: 0,
-                  left: '-100%',
-                  width: '100%',
-                  height: '100%',
-                  background:
-                    'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
-                  transition: 'left 0.5s ease',
-                },
                 '&:hover': {
                   transform: scanButtonBusy ? 'none' : 'translateY(-3px) scale(1.02)',
                   boxShadow:
                     '0 12px 40px rgba(124, 179, 66, 0.7), 0 0 60px rgba(124, 179, 66, 0.3)',
                   background:
                     'linear-gradient(135deg, #8BC34A 0%, #AED581 50%, #CDDC39 100%)',
-                  '&::before': {
-                    left: '100%',
-                  },
                 },
                 '&:active': {
                   transform: 'translateY(-1px) scale(0.98)',
@@ -210,7 +204,13 @@ export default function Home({ onNavigate }) {
                 },
               }}
             >
-              {scanButtonBusy ? 'Opening scanner…' : 'Scan Weed Products & Gear'}
+              {scanButtonBusy && (
+                <Box
+                  component="span"
+                  className="scan-button-spinner"
+                />
+              )}
+              {scanButtonBusy ? 'Opening scanner…' : 'Scan'}
             </Button>
 
             {/* Secondary: Enter Garden */}

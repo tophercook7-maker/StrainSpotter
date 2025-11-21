@@ -211,3 +211,19 @@ html {
     box-shadow: 0 0 40px rgba(124, 179, 66, 0.6);
   }
 }
+
+/* Scan button spinner */
+.scan-button-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(5, 7, 5, 0.1);
+  border-top-color: #050705;
+  animation: scanBtnSpin 0.7s linear infinite;
+}
+
+@keyframes scanBtnSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
