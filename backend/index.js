@@ -1401,39 +1401,31 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
 
     // Extract matches from aggregated result (already matched above)
     let visualMatches = null;
+    let matchedStrainSlug = null;
     const matches = matchResult?.matches || [];
     const labelInsights = matchResult?.labelInsights || null;
     const topMatch = matches[0] || null;
     const otherMatches = matches.slice(1, 5) || [];
-      
-      // Debug log labelInsights.strainName if present
-      if (labelInsights?.strainName) {
-        console.log(`[process] Label strain name detected: "${labelInsights.strainName}"`);
-      }
-      
-      if (topMatch) {
-        visualMatches = {
-          match: serializeMatch(topMatch),
-          candidates: otherMatches.map(serializeMatch).filter(Boolean),
-          labelInsights
-        };
-        matchedStrainSlug = visualMatches.match?.strain_slug || null;
-        console.log(`[process] Visual matching found ${matches.length} matches, top: ${visualMatches.match?.name || 'unknown'}`);
-      } else {
-        console.log('[process] Visual matching found no matches above threshold');
-        visualMatches = {
-          match: null,
-          candidates: [],
-          labelInsights
-        };
-      }
-    } catch (matchErr) {
-      console.error('[process] Error during visual matching:', matchErr);
-      // Don't fail the whole request - still save Vision result
+    
+    // Debug log labelInsights.strainName if present
+    if (labelInsights?.strainName) {
+      console.log(`[process] Label strain name detected: "${labelInsights.strainName}"`);
+    }
+    
+    if (topMatch) {
+      visualMatches = {
+        match: serializeMatch(topMatch),
+        candidates: otherMatches.map(serializeMatch).filter(Boolean),
+        labelInsights
+      };
+      matchedStrainSlug = visualMatches.match?.strain_slug || null;
+      console.log(`[process] Visual matching found ${matches.length} matches, top: ${visualMatches.match?.name || 'unknown'}`);
+    } else {
+      console.log('[process] Visual matching found no matches above threshold');
       visualMatches = {
         match: null,
         candidates: [],
-        error: 'Matching failed'
+        labelInsights
       };
     }
 
