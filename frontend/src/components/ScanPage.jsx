@@ -1027,8 +1027,9 @@ export default function ScanPage({ onBack, onNavigate }) {
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)',
+        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
+        boxSizing: 'border-box',
       }}
     >
       {/* Subtle overlay - ensure it doesn't block touches */}
@@ -1042,62 +1043,84 @@ export default function ScanPage({ onBack, onNavigate }) {
         }}
       />
 
-        {/* Content */}
+      {/* Top bar with back button */}
+      <Box
+        sx={{
+          position: 'relative',
+          zIndex: 1,
+          px: 2,
+          pb: 1.5,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          pointerEvents: 'auto',
+        }}
+      >
+        <IconButton
+          onClick={handleBack}
+          sx={{
+            color: '#C5E1A5',
+            padding: 1,
+          }}
+          aria-label="Back"
+        >
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography
+          variant="subtitle2"
+          sx={{ color: '#A5D6A7', fontWeight: 500, fontSize: 14 }}
+        >
+          Scanner
+        </Typography>
+        <Box sx={{ width: 40 }} /> {/* Spacer for centering */}
+      </Box>
+
+      {/* Scrollable content area */}
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          position: 'relative',
+          zIndex: 1,
+          px: 2,
+          pb: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          pointerEvents: 'auto',
+        }}
+      >
         <Container
           maxWidth="sm"
           sx={{
-            position: 'relative',
-            zIndex: 1,
-            pt: '20px',
-            pb: 4,
-            flex: 1,
+            px: 0,
             display: 'flex',
             flexDirection: 'column',
-            pointerEvents: 'auto',
+            gap: 2,
           }}
         >
-        {/* Back button */}
-        <Box sx={{ mb: 2, mt: 0, pt: 0, display: 'flex', alignItems: 'center' }}>
-          <IconButton
-            onClick={handleBack}
-            sx={{
-              mr: 1,
-              color: '#C5E1A5',
-            }}
-            aria-label="Back"
-          >
-            <ArrowBackIcon />
-          </IconButton>
-          <Typography
-            variant="subtitle2"
-            sx={{ color: '#A5D6A7', fontWeight: 500 }}
-          >
-            Back to home
-          </Typography>
-        </Box>
-
-        {/* Header */}
-        <Box sx={{ mb: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-            <Box sx={{ flex: 1 }}>
-              <Typography
-                variant="h5"
-                sx={{
-                  color: '#F1F8E9',
-                  fontWeight: 700,
-                  mb: 0.5,
-                }}
-              >
-                Scan weed products
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ color: 'rgba(224, 242, 241, 0.9)' }}
-              >
-                Choose or take a photo of a cannabis product or bud. We'll analyze
-                it and show you the closest strain matches.
-              </Typography>
-            </Box>
+          {/* Header */}
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+              <Box sx={{ flex: 1 }}>
+                <Typography
+                  variant="h5"
+                  sx={{
+                    color: '#F1F8E9',
+                    fontWeight: 700,
+                    mb: 0.5,
+                  }}
+                >
+                  Scan weed products
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ color: 'rgba(224, 242, 241, 0.9)' }}
+                >
+                  Choose or take a photo of a cannabis product or bud. We'll analyze
+                  it and show you the closest strain matches.
+                </Typography>
+              </Box>
             {/* Scan credits summary */}
             <Box sx={{ textAlign: 'right', ml: 2, minWidth: 160 }}>
               {isMember ? (
@@ -1551,19 +1574,69 @@ export default function ScanPage({ onBack, onNavigate }) {
           </Button>
         )}
 
-        {!scanResult && scanPhase === 'ready' && !error && (
-          <Typography
-            variant="body2"
-            sx={{
-              color: 'rgba(224, 242, 241, 0.8)',
-              textAlign: 'center',
-            }}
-          >
-            After you scan, we'll show you the best match and similar strains
-            here.
-          </Typography>
-        )}
-      </Container>
+          {!scanResult && scanPhase === 'ready' && !error && (
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'rgba(224, 242, 241, 0.8)',
+                textAlign: 'center',
+              }}
+            >
+              After you scan, we'll show you the best match and similar strains
+              here.
+            </Typography>
+          )}
+
+          {/* Debug error area - always show errors clearly */}
+          {error && (
+            <Paper
+              elevation={4}
+              sx={{
+                mt: 2,
+                p: 2,
+                borderRadius: 2,
+                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                border: '2px solid rgba(239, 68, 68, 0.5)',
+              }}
+            >
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  color: '#fecaca',
+                  fontWeight: 700,
+                  mb: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                }}
+              >
+                <span>⚠</span> Scanner Error
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: '#fee2e2',
+                  mb: 1.5,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {error}
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'rgba(254, 226, 226, 0.7)',
+                  display: 'block',
+                  mt: 1,
+                }}
+              >
+                Phase: {scanPhase} | Status: {statusMessage || 'N/A'}
+              </Typography>
+            </Paper>
+          )}
+        </Container>
+      </Box>
 
       {/* Plans popup for guests who hit the limit */}
       <Dialog
