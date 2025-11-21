@@ -103,6 +103,43 @@ export default function ScanPage({ onBack, onNavigate }) {
     return () => clearTimeout(t);
   }, []);
 
+  // Cleanup image URLs on unmount or when scan completes to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      // Cleanup preview URLs when component unmounts
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      if (lastPhotoUrl) {
+        URL.revokeObjectURL(lastPhotoUrl);
+      }
+      // Cleanup multi-angle frame URLs
+      capturedFrames.forEach(frame => {
+        if (frame.previewUrl) {
+          URL.revokeObjectURL(frame.previewUrl);
+        }
+      });
+    };
+  }, []); // Only run on unmount
+
+  // Cleanup when scan completes successfully
+  useEffect(() => {
+    if (scanPhase === 'done' && completedScan) {
+      // Clean up preview URLs after a short delay to allow user to see the result
+      const cleanupTimer = setTimeout(() => {
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+          setPreviewUrl(null);
+        }
+        if (lastPhotoUrl) {
+          URL.revokeObjectURL(lastPhotoUrl);
+          setLastPhotoUrl(null);
+        }
+      }, 2000);
+      return () => clearTimeout(cleanupTimer);
+    }
+  }, [scanPhase, completedScan]);
+
   const handleBack = () => {
     if (onBack) onBack();
   };
@@ -299,19 +336,30 @@ export default function ScanPage({ onBack, onNavigate }) {
 
     const data = await safeJson(res);
 
-    if (!res.ok) {
-      // Check if it's a guest limit error
-      if (res.status === 403 && data?.error === 'Guest scan limit reached') {
-        setShowPlans(true);
-        setIsUploading(false);
-        setIsPolling(false);
+      if (!res.ok) {
+        // Check if it's a guest limit error
+        if (res.status === 403 && data?.error === 'Guest scan limit reached') {
+          setShowPlans(true);
+          setIsUploading(false);
+          setIsPolling(false);
+          setScanPhase('error');
+          setStatusMessage('Guest scan limit reached.');
+          return;
+        }
+        
+        // Improved error messages based on status code
+        let errorMessage = data?.error || data?.hint || `Upload failed (${res.status})`;
+        if (res.status === 413 || errorMessage.includes('too large')) {
+          errorMessage = 'Image is too large. Try taking the photo a bit farther away or with lower resolution.';
+        } else if (res.status === 400) {
+          errorMessage = 'Image problem (too large or wrong type). Try another photo.';
+        } else if (res.status >= 500) {
+          errorMessage = 'Scan failed on the server. Try again in a moment.';
+        }
+        
         setScanPhase('error');
-        setStatusMessage('Guest scan limit reached.');
-        return;
+        throw new Error(errorMessage);
       }
-      setScanPhase('idle');
-      throw new Error(data?.error || data?.hint || `Upload failed (${res.status})`);
-    }
 
     const scanId = data.id || data.scan_id || data.scanId;
     if (!scanId) {
@@ -375,9 +423,28 @@ export default function ScanPage({ onBack, onNavigate }) {
       setIsUploading(false);
       setIsPolling(false);
       setScanPhase('error');
+      
+      // Improved error handling with specific messages
       const errorMsg = String(e.message || e);
-      setError(errorMsg);
-      setStatusMessage(errorMsg);
+      let userMessage = errorMsg;
+      
+      // Map common errors to user-friendly messages
+      if (errorMsg.includes('413') || errorMsg.includes('too large') || errorMsg.includes('PayloadTooLargeError')) {
+        userMessage = 'Image is too large. Try taking the photo a bit farther away or with lower resolution.';
+      } else if (errorMsg.includes('400') || errorMsg.includes('Bad Request')) {
+        userMessage = 'Image problem (too large or wrong type). Try another photo.';
+      } else if (errorMsg.includes('Network') || errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
+        userMessage = 'Network problem. Check your connection and try again.';
+      } else if (errorMsg.includes('500') || errorMsg.includes('Internal Server Error')) {
+        userMessage = 'Scan failed on the server. Try again in a moment.';
+      } else if (errorMsg.includes('403') || errorMsg.includes('Guest scan limit')) {
+        userMessage = 'You\'ve reached the guest scan limit. Sign up or upgrade to continue scanning.';
+      } else if (!errorMsg || errorMsg === 'undefined' || errorMsg === 'null') {
+        userMessage = 'Something went wrong. Please try again.';
+      }
+      
+      setError(userMessage);
+      setStatusMessage(userMessage);
     }
   }
 
@@ -390,7 +457,14 @@ export default function ScanPage({ onBack, onNavigate }) {
       const data = await safeJson(res);
 
       if (!res.ok) {
-        throw new Error(data?.error || `Scan lookup failed (${res.status})`);
+        // Improved error messages for polling failures
+        let errorMessage = data?.error || `Scan lookup failed (${res.status})`;
+        if (res.status >= 500) {
+          errorMessage = 'Server error while processing scan. Try again in a moment.';
+        } else if (res.status === 404) {
+          errorMessage = 'Scan not found. Please try scanning again.';
+        }
+        throw new Error(errorMessage);
       }
 
       // Backend may return wrapped { scan: {...} } or direct scan object
@@ -536,12 +610,17 @@ export default function ScanPage({ onBack, onNavigate }) {
 
   // Lightweight image compression for large files
   async function maybeCompressImage(file) {
-    const MAX_SIZE = 2 * 1024 * 1024; // 2MB
-    const MAX_DIMENSION = 1600;
-    const QUALITY = 0.7;
+    // More aggressive compression for iOS to prevent memory crashes
+    const MAX_SIZE = 1 * 1024 * 1024; // 1MB (reduced from 2MB)
+    const MAX_DIMENSION = 1280; // Reduced from 1600 for faster processing
+    const QUALITY = 0.75; // Slightly higher quality but still compressed
 
-    if (file.size <= MAX_SIZE) {
-      return file; // No compression needed
+    // Always compress on mobile/Capacitor for consistency
+    const isMobile = typeof window !== 'undefined' && 
+      (window.location.protocol === 'capacitor:' || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+
+    if (!isMobile && file.size <= MAX_SIZE) {
+      return file; // No compression needed on desktop for small files
     }
 
     try {
@@ -554,7 +633,8 @@ export default function ScanPage({ onBack, onNavigate }) {
             let width = img.width;
             let height = img.height;
             
-            if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+            // Always resize if larger than max dimension (for mobile) or if file is large
+            if (width > MAX_DIMENSION || height > MAX_DIMENSION || file.size > MAX_SIZE) {
               if (width > height) {
                 height = (height / width) * MAX_DIMENSION;
                 width = MAX_DIMENSION;
@@ -578,6 +658,8 @@ export default function ScanPage({ onBack, onNavigate }) {
                     type: 'image/jpeg',
                     lastModified: Date.now(),
                   });
+                  // Clean up the object URL
+                  URL.revokeObjectURL(e.target.result);
                   resolve(compressedFile);
                 } else {
                   resolve(file); // Fallback to original
@@ -587,7 +669,10 @@ export default function ScanPage({ onBack, onNavigate }) {
               QUALITY
             );
           };
-          img.onerror = () => resolve(file); // Fallback to original
+          img.onerror = () => {
+            URL.revokeObjectURL(e.target.result);
+            resolve(file); // Fallback to original
+          };
           img.src = e.target.result;
         };
         reader.onerror = () => resolve(file); // Fallback to original
@@ -835,7 +920,7 @@ export default function ScanPage({ onBack, onNavigate }) {
     );
   }
 
-  // Camera loading state
+  // Camera loading state - ensure no black overlay blocks touches
   if (!cameraReady) {
     return (
       <Box
@@ -846,6 +931,10 @@ export default function ScanPage({ onBack, onNavigate }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          position: 'relative',
+          zIndex: 1,
+          paddingTop: 'env(safe-area-inset-top)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
         }}
       >
         <Paper
@@ -857,6 +946,7 @@ export default function ScanPage({ onBack, onNavigate }) {
             border: '1px solid rgba(124, 179, 66, 0.6)',
             textAlign: 'center',
             maxWidth: 320,
+            pointerEvents: 'auto',
           }}
         >
           <Stack spacing={2} alignItems="center">
@@ -873,7 +963,7 @@ export default function ScanPage({ onBack, onNavigate }) {
     );
   }
 
-  // SCANNER MODE
+  // SCANNER MODE - ensure no black overlays block touches
   return (
     <Box
       sx={{
@@ -887,31 +977,35 @@ export default function ScanPage({ onBack, onNavigate }) {
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {/* Subtle overlay */}
+      {/* Subtle overlay - ensure it doesn't block touches */}
       <Box
         sx={{
           position: 'absolute',
           inset: 0,
           background: 'radial-gradient(circle at top, rgba(124,179,66,0.25), transparent 55%)',
           pointerEvents: 'none',
+          zIndex: 0,
         }}
       />
 
-      {/* Content */}
-      <Container
-        maxWidth="sm"
-        sx={{
-          position: 'relative',
-          zIndex: 1,
-          pt: 'calc(env(safe-area-inset-top) + 20px)',
-          pb: 4,
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
+        {/* Content */}
+        <Container
+          maxWidth="sm"
+          sx={{
+            position: 'relative',
+            zIndex: 1,
+            pt: '20px',
+            pb: 4,
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            pointerEvents: 'auto',
+          }}
+        >
         {/* Back button */}
         <Box sx={{ mb: 2, mt: 0, pt: 0, display: 'flex', alignItems: 'center' }}>
           <IconButton
@@ -1268,26 +1362,69 @@ export default function ScanPage({ onBack, onNavigate }) {
                 mt: 2,
                 p: 1.5,
                 borderRadius: 1,
-                backgroundColor: 'rgba(124, 179, 66, 0.1)',
-                border: '1px solid rgba(124, 179, 66, 0.3)',
+                backgroundColor: scanPhase === 'error' 
+                  ? 'rgba(239, 68, 68, 0.15)' 
+                  : 'rgba(124, 179, 66, 0.1)',
+                border: `1px solid ${scanPhase === 'error' 
+                  ? 'rgba(239, 68, 68, 0.4)' 
+                  : 'rgba(124, 179, 66, 0.3)'}`,
               }}
             >
               <Stack direction="row" spacing={1.5} alignItems="center">
                 {scanPhase !== 'ready' && scanPhase !== 'done' && scanPhase !== 'error' && (
                   <CircularProgress size={18} sx={{ color: '#CDDC39' }} />
                 )}
+                {scanPhase === 'error' && (
+                  <Typography sx={{ color: '#fecaca', fontSize: 18 }}>⚠</Typography>
+                )}
                 <Typography
                   variant="body2"
-                  sx={{ color: 'rgba(224, 242, 241, 0.9)', flex: 1 }}
+                  sx={{ 
+                    color: scanPhase === 'error' 
+                      ? '#fecaca' 
+                      : 'rgba(224, 242, 241, 0.9)', 
+                    flex: 1 
+                  }}
                 >
                   {scanPhase === 'ready' && (statusMessage || 'Ready to scan.')}
                   {scanPhase === 'capturing' && 'Capturing photo…'}
                   {scanPhase === 'uploading' && 'Uploading photo securely…'}
                   {scanPhase === 'processing' && 'Analyzing packaging details…'}
                   {scanPhase === 'done' && 'Scan complete.'}
-                  {scanPhase === 'error' && (error || 'Scan failed, tap to try again.')}
+                  {scanPhase === 'error' && (error || 'Scan failed. Please try again.')}
                 </Typography>
               </Stack>
+              {scanPhase === 'error' && (
+                <Button
+                  variant="contained"
+                  fullWidth
+                  size="medium"
+                  onClick={() => {
+                    setError(null);
+                    setScanPhase('ready');
+                    setStatusMessage('Ready to scan.');
+                    setSelectedFile(null);
+                    setPreviewUrl(null);
+                    if (previewUrl) {
+                      URL.revokeObjectURL(previewUrl);
+                    }
+                    if (lastPhotoUrl) {
+                      URL.revokeObjectURL(lastPhotoUrl);
+                    }
+                    setCapturedFrames([]);
+                  }}
+                  sx={{
+                    mt: 1.5,
+                    textTransform: 'none',
+                    background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #8BC34A, #AED581)',
+                    },
+                  }}
+                >
+                  Try again
+                </Button>
+              )}
             </Box>
 
             {error && (
