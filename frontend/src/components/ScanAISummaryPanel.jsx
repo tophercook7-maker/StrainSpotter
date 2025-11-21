@@ -207,8 +207,8 @@ export default function ScanAISummaryPanel({ summary }) {
         )}
       </div>
 
-      {/* Packaged product callout */}
-      {isPackagedProduct && (
+      {/* Scan type callout */}
+      {scanType === 'package' && (
         <div
           style={{
             marginBottom: 16,
@@ -233,9 +233,65 @@ export default function ScanAISummaryPanel({ summary }) {
             Packaged product detected
           </div>
           <div>
-            This looks like a packaged cannabis product. THC, CBD, and other
-            label details were read directly from the photo and used to refine
-            the strain estimate.
+            This scan looks like a packaged retail product. THC/CBD and label details were read and combined with visual features.
+          </div>
+        </div>
+      )}
+      {scanType === 'bud' && !isPackagedProduct && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 12,
+            borderRadius: 16,
+            background:
+              'linear-gradient(135deg, rgba(30,60,25,0.9), rgba(10,30,15,0.95))',
+            border: '1px solid rgba(180,240,180,0.18)',
+            fontSize: 13,
+            lineHeight: 1.4,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              textTransform: 'uppercase',
+              letterSpacing: 1,
+              opacity: 0.7,
+              marginBottom: 4,
+            }}
+          >
+            Loose flower detected
+          </div>
+          <div>
+            This looks like loose flower. The estimate is based mostly on visual structure (buds, trichomes, coloration).
+          </div>
+        </div>
+      )}
+      {scanType === 'plant' && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 12,
+            borderRadius: 16,
+            background:
+              'linear-gradient(135deg, rgba(25,50,20,0.9), rgba(8,25,12,0.95))',
+            border: '1px solid rgba(160,220,160,0.18)',
+            fontSize: 13,
+            lineHeight: 1.4,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              textTransform: 'uppercase',
+              letterSpacing: 1,
+              opacity: 0.7,
+              marginBottom: 4,
+            }}
+          >
+            Live plant detected
+          </div>
+          <div>
+            This appears to be a live plant shot. Estimates for live plants are usually less precise than packaged/bud scans.
           </div>
         </div>
       )}
@@ -323,6 +379,27 @@ export default function ScanAISummaryPanel({ summary }) {
             </>
           )}
         </p>
+        {/* Stability info for multi-angle scans */}
+        {numberOfFrames > 1 && (
+          <p
+            style={{
+              fontSize: 13,
+              lineHeight: 1.5,
+              marginTop: 8,
+              opacity: 0.85,
+            }}
+          >
+            {stabilityLabel === 'high' && (
+              <>Results were consistent across multiple angles of the same product.</>
+            )}
+            {stabilityLabel === 'medium' && (
+              <>Results were mostly consistent across angles, with some variation.</>
+            )}
+            {stabilityLabel === 'low' && (
+              <>Different angles gave conflicting signals. Consider rescanning with clearer shots of the bud/label.</>
+            )}
+          </p>
+        )}
         {notes && (
           <p
             style={{
