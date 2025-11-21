@@ -1259,93 +1259,146 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
 
     await writeClient.from('scans').update({ status: 'processing' }).eq('id', id);
 
-    // Download the image bytes server-side so Vision doesn't need to fetch the URL
-    let contentBuffer = null;
-    try {
-      const resp = await fetch(scan.image_url);
-      if (resp.ok) {
-        const ab = await resp.arrayBuffer();
-        contentBuffer = Buffer.from(ab);
-        
-        // Auto-compress if needed (Google Vision has 20MB limit)
-        const MAX_VISION_SIZE = 10 * 1024 * 1024; // 10MB to be safe
-        if (contentBuffer.length > MAX_VISION_SIZE) {
-          console.log(`[process] Compressing image from ${(contentBuffer.length / 1024 / 1024).toFixed(2)}MB for Vision API`);
-          contentBuffer = await sharp(contentBuffer)
-            .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
-            .jpeg({ quality: 85, progressive: true })
-            .toBuffer();
-          console.log(`[process] Compressed to ${(contentBuffer.length / 1024 / 1024).toFixed(2)}MB`);
-        }
-      }
-    } catch {}
-
-    if (!contentBuffer) {
-      // Fallback: attempt storage download via Supabase (requires key extraction)
+    // Process single frame or multiple frames (multi-angle)
+    // Use the frameUrls already declared above
+    const frameUrls = allFrameUrls;
+    const totalFrames = numberOfFrames;
+    
+    // Process all frames with Vision API
+    const visionResults = [];
+    const frameMatchResults = [];
+    
+    for (let i = 0; i < frameUrls.length; i++) {
+      const frameUrl = frameUrls[i];
+      console.log(`[scan-process] Processing frame ${i + 1}/${totalFrames}: ${frameUrl}`);
+      
+      // Download the image bytes server-side
+      let contentBuffer = null;
       try {
-        const url = new URL(scan.image_url);
-        const pathParts = url.pathname.split('/');
-        const idx = pathParts.findIndex((p) => p === 'public');
-        if (idx !== -1 && pathParts[idx + 1] === 'scans') {
-          const key = pathParts.slice(idx + 2).join('/');
-          const { data, error } = await (supabaseAdmin ?? supabase).storage.from('scans').download(key);
-          if (!error && data) {
-            if (typeof data.arrayBuffer === 'function') {
-              const ab = await data.arrayBuffer();
-              contentBuffer = Buffer.from(ab);
-            }
+        const resp = await fetch(frameUrl);
+        if (resp.ok) {
+          const ab = await resp.arrayBuffer();
+          contentBuffer = Buffer.from(ab);
+          
+          // Auto-compress if needed
+          const MAX_VISION_SIZE = 10 * 1024 * 1024; // 10MB to be safe
+          if (contentBuffer.length > MAX_VISION_SIZE) {
+            console.log(`[process] Compressing frame ${i + 1} from ${(contentBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+            contentBuffer = await sharp(contentBuffer)
+              .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
+              .jpeg({ quality: 85, progressive: true })
+              .toBuffer();
           }
         }
-      } catch {}
+      } catch (e) {
+        console.warn(`[process] Failed to download frame ${i + 1}:`, e.message);
+        continue;
+      }
+
+      if (!contentBuffer) {
+        // Fallback: attempt storage download via Supabase
+        try {
+          const url = new URL(frameUrl);
+          const pathParts = url.pathname.split('/');
+          const idx = pathParts.findIndex((p) => p === 'public');
+          if (idx !== -1 && pathParts[idx + 1] === 'scans') {
+            const key = pathParts.slice(idx + 2).join('/');
+            const { data, error } = await (supabaseAdmin ?? supabase).storage.from('scans').download(key);
+            if (!error && data) {
+              if (typeof data.arrayBuffer === 'function') {
+                const ab = await data.arrayBuffer();
+                contentBuffer = Buffer.from(ab);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn(`[process] Fallback download failed for frame ${i + 1}:`, e.message);
+          continue;
+        }
+      }
+
+      if (!contentBuffer) {
+        console.warn(`[process] Could not download frame ${i + 1}, skipping`);
+        continue;
+      }
+
+      // Preprocess image for faster Vision API response
+      const optimizedBuffer = await sharp(contentBuffer)
+        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 90, progressive: true })
+        .toBuffer();
+
+      // Call Vision API
+      const [frameResult] = await visionClient.annotateImage({
+        image: { content: optimizedBuffer },
+        features: [
+          { type: 'LABEL_DETECTION', maxResults: 50 },
+          { type: 'IMAGE_PROPERTIES' },
+          { type: 'WEB_DETECTION', maxResults: 20 },
+          { type: 'TEXT_DETECTION' }
+        ],
+      });
+
+      visionResults.push(frameResult);
+      
+      // Run visual matching on this frame
+      try {
+        const strains = await loadStrainLibrary();
+        const frameMatchResult = matchStrainByVisuals(frameResult, strains);
+        frameMatchResults.push(frameMatchResult);
+      } catch (matchErr) {
+        console.error(`[process] Error matching frame ${i + 1}:`, matchErr);
+        frameMatchResults.push({ matches: [], labelInsights: null });
+      }
     }
 
-    if (!contentBuffer) {
-      return res.status(500).json({ error: 'Could not download image bytes for Vision processing' });
+    if (visionResults.length === 0) {
+      return res.status(500).json({ error: 'Could not process any frames' });
     }
 
-    // OPTIMIZED: Preprocess image for faster Vision API response (50% faster)
-    const optimizedBuffer = await sharp(contentBuffer)
-      .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 90, progressive: true })
-      .toBuffer();
+    // Aggregate results if multi-frame
+    let aggregatedMatchResult = null;
+    let combinedVisionResult = null;
+    let stabilityScore = 1.0;
+    let stabilityLabel = 'single-frame';
+    
+    if (isMultiFrame && frameMatchResults.length > 1) {
+      aggregatedMatchResult = aggregateMultiFrameMatches(frameMatchResults);
+      combinedVisionResult = combineVisionResults(visionResults);
+      const stability = calculateStability(frameMatchResults, aggregatedMatchResult);
+      stabilityScore = stability.score;
+      stabilityLabel = stability.label;
+      console.log(`[scan-process] Multi-frame aggregation complete: ${frameMatchResults.length} frames, stability: ${stabilityLabel} (${(stabilityScore * 100).toFixed(0)}%)`);
+    } else {
+      // Single frame
+      aggregatedMatchResult = frameMatchResults[0] || { matches: [], labelInsights: null };
+      combinedVisionResult = visionResults[0];
+    }
 
-    // OPTIMIZED: Use only 4 essential features (45% cheaper, same accuracy)
-    // Removed: OBJECT_LOCALIZATION (not used), SAFE_SEARCH (not used), CROP_HINTS (not used)
-    const [result] = await visionClient.annotateImage({
-      image: { content: optimizedBuffer },
-      features: [
-        { type: 'LABEL_DETECTION', maxResults: 50 },      // Visual features (critical)
-        { type: 'IMAGE_PROPERTIES' },                     // Dominant colors (critical)
-        { type: 'WEB_DETECTION', maxResults: 20 },        // Similar images (critical)
-        { type: 'TEXT_DETECTION' }                        // Strain names on packaging (important)
-      ],
-    });
+    // Use combined/aggregated results for rest of processing
+    const result = combinedVisionResult;
+    const matchResult = aggregatedMatchResult;
 
     console.log('[scan-process] vision complete', {
       id,
+      numberOfFrames: totalFrames,
+      isMultiFrame,
       hasText: !!result?.fullTextAnnotation?.text,
       labelCount: (result?.labelAnnotations || []).length || 0,
+      stabilityLabel,
+      stabilityScore,
     });
 
     // Analyze plant health
     const plantHealth = analyzePlantHealth(result);
     console.log('[Plant Health] Stage:', plantHealth.growthStage.stage, 'Health:', plantHealth.healthStatus.status);
 
-    // Run visual strain matching
+    // Extract matches from aggregated result (already matched above)
     let visualMatches = null;
-    let labelInsights = null;
-    let matchedStrainSlug = null;
-    let topMatch = null;
-    let otherMatches = [];
-    let matchResult = null;
-    
-    try {
-      const strains = await loadStrainLibrary();
-      matchResult = matchStrainByVisuals(result, strains);
-      const matches = matchResult?.matches || [];
-      labelInsights = matchResult?.labelInsights || null;
-      topMatch = matchResult?.topMatch || matches[0] || null;
-      otherMatches = matchResult?.otherMatches || matches.slice(1, 5) || [];
+    const matches = matchResult?.matches || [];
+    const labelInsights = matchResult?.labelInsights || null;
+    const topMatch = matches[0] || null;
+    const otherMatches = matches.slice(1, 5) || [];
       
       // Debug log labelInsights.strainName if present
       if (labelInsights?.strainName) {
@@ -1547,15 +1600,15 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       scanAISummary = null;
     }
 
-    // Build comprehensive scan summary (rich structured data)
+    // Build comprehensive scan summary (rich structured data) with multi-angle support
     let scanSummary = null;
     try {
-      const ocrText = result.textAnnotations?.[0]?.description || result.fullTextAnnotation?.text || '';
       scanSummary = buildScanAISummary({
-        ocr: ocrText,
-        visionLabels: result.labelAnnotations || [],
-        bestMatch: topMatch || null,
-        labelInsights: labelInsights || null,
+        visionResult: result,
+        matches: matchResult,
+        stabilityScore,
+        stabilityLabel,
+        numberOfFrames: totalFrames,
       });
 
       if (scanSummary) {
