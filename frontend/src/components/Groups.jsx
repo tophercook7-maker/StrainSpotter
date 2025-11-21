@@ -35,6 +35,7 @@ import FlagIcon from '@mui/icons-material/Flag';
 import GroupsIcon from '@mui/icons-material/Groups';
 import ChatIcon from '@mui/icons-material/Chat';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
+import PushPinIcon from '@mui/icons-material/PushPin';
 import ProfileSetupDialog from './ProfileSetupDialog.jsx';
 import { API_BASE } from '../config';
 import { supabase } from '../supabaseClient';
@@ -48,6 +49,8 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [members, setMembers] = useState([]);
   const [messages, setMessages] = useState([]); // Group messages
+  const [pinnedMessages, setPinnedMessages] = useState([]); // Pinned messages
+  const [userRole, setUserRole] = useState('consumer'); // Current user's role
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -255,15 +258,16 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           if (email) {
             const { data: profile } = await supabase
               .from('profiles')
-              .select('display_name, username, email')
+              .select('display_name, username, email, role')
               .eq('user_id', userId)
               .single();
 
             const profileWithEmail = profile
               ? { ...profile, email: profile.email ?? email }
-              : { display_name: null, username: null, email };
+              : { display_name: null, username: null, email, role: 'consumer' };
 
             setProfileInfo(profileWithEmail);
+            setUserRole(profile?.role || 'consumer');
 
             const userName = deriveDisplayName(profileWithEmail, email, userId);
             setCurrentUserName(userName);
@@ -377,16 +381,53 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       console.log('📥 Load messages response:', res.status, res.ok);
       if (res.ok) {
         const data = await res.json();
-        console.log('📥 Loaded messages:', data.length, 'messages');
-        console.log('📥 First message:', data[0]);
-        console.log('📥 Setting messages state to:', data);
-        setMessages(data);
+        // Handle both old format (array) and new format (object with messages/pinnedMessages)
+        if (Array.isArray(data)) {
+          setMessages(data);
+          setPinnedMessages([]);
+        } else {
+          setMessages(data.messages || []);
+          setPinnedMessages(data.pinnedMessages || []);
+        }
+        console.log('📥 Loaded messages:', (data.messages || data).length, 'messages');
+        console.log('📥 Loaded pinned messages:', (data.pinnedMessages || []).length);
         setLastRefresh(new Date());
       } else {
         console.error('❌ Failed to load messages:', res.status, res.statusText);
       }
     } catch (e) {
       console.error('❌ Error loading messages:', e);
+    }
+  };
+
+  // Pin/unpin handlers
+  const canPin = ['grower', 'dispensary', 'moderator', 'admin'].includes(userRole);
+
+  const handlePin = async (msg) => {
+    if (!canPin || !userId || !selectedGroup) return;
+    try {
+      await fetch(`${API_BASE}/api/groups/${selectedGroup.id}/messages/${msg.id}/pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId })
+      });
+      loadMessages(selectedGroup.id);
+    } catch (e) {
+      console.error('Error pinning message:', e);
+    }
+  };
+
+  const handleUnpin = async (msg) => {
+    if (!canPin || !userId || !selectedGroup) return;
+    try {
+      await fetch(`${API_BASE}/api/groups/${selectedGroup.id}/messages/${msg.id}/unpin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId })
+      });
+      loadMessages(selectedGroup.id);
+    } catch (e) {
+      console.error('Error unpinning message:', e);
     }
   };
 
@@ -1747,6 +1788,73 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
               </Typography>
             </Stack>
 
+            {/* Pinned Messages Bar */}
+            {pinnedMessages.length > 0 && (
+              <Box
+                sx={{
+                  mb: 2,
+                  p: 1.5,
+                  borderRadius: 2,
+                  bgcolor: 'rgba(205, 220, 57, 0.15)',
+                  border: '2px solid rgba(205, 220, 57, 0.4)',
+                  backdropFilter: 'blur(10px)',
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    color: '#CDDC39',
+                    fontWeight: 700,
+                    mb: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                  }}
+                >
+                  <PushPinIcon fontSize="small" />
+                  Pinned Messages
+                </Typography>
+                <Stack spacing={1}>
+                  {pinnedMessages.slice(0, 3).map((pm) => (
+                    <Box
+                      key={pm.id}
+                      sx={{
+                        p: 1,
+                        borderRadius: 1,
+                        bgcolor: 'rgba(0, 0, 0, 0.2)',
+                        border: '1px solid rgba(205, 220, 57, 0.2)',
+                      }}
+                    >
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: '#F1F8E9',
+                          fontSize: '0.875rem',
+                          mb: 0.5,
+                        }}
+                      >
+                        {pm.content}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: '#9CCC65', fontSize: '0.75rem' }}
+                      >
+                        {pm.users?.display_name || pm.users?.username || 'Member'} • {new Date(pm.created_at).toLocaleDateString()}
+                      </Typography>
+                    </Box>
+                  ))}
+                  {pinnedMessages.length > 3 && (
+                    <Typography
+                      variant="caption"
+                      sx={{ color: '#9CCC65', fontSize: '0.75rem', textAlign: 'center', mt: 0.5 }}
+                    >
+                      + {pinnedMessages.length - 3} more pinned message{pinnedMessages.length - 3 > 1 ? 's' : ''}
+                    </Typography>
+                  )}
+                </Stack>
+              </Box>
+            )}
+
             {/* Message Limit Notice */}
             <Alert
               severity="info"
@@ -1792,7 +1900,8 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                     />
                   </ListItem>
                 ) : (
-                  messages.map((m) => (
+                  // Filter out pinned messages from regular list (they're shown in pinned bar)
+                  messages.filter(m => !m.pinned_at).map((m) => (
                     <ListItem
                       key={m.id}
                       alignItems="flex-start"
@@ -1809,19 +1918,36 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                         boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
                       }}
                       secondaryAction={
-                        <Tooltip title="Report this message">
-                          <IconButton
-                            edge="end"
-                            size="small"
-                            onClick={() => {
-                              setReportingMessage(m);
-                              setReportDialogOpen(true);
-                            }}
-                            sx={{ color: '#9CCC65' }}
-                          >
-                            <FlagIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        <Stack direction="row" spacing={0.5}>
+                          {canPin && (
+                            <Tooltip title={m.pinned_at ? 'Unpin message' : 'Pin message'}>
+                              <IconButton
+                                edge="end"
+                                size="small"
+                                onClick={() => m.pinned_at ? handleUnpin(m) : handlePin(m)}
+                                sx={{
+                                  color: m.pinned_at ? '#CDDC39' : '#9CCC65',
+                                  opacity: m.pinned_at ? 1 : 0.7,
+                                }}
+                              >
+                                <PushPinIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          <Tooltip title="Report this message">
+                            <IconButton
+                              edge="end"
+                              size="small"
+                              onClick={() => {
+                                setReportingMessage(m);
+                                setReportDialogOpen(true);
+                              }}
+                              sx={{ color: '#9CCC65' }}
+                            >
+                              <FlagIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
                       }
                     >
                       {renderMessageAuthor(m)}

@@ -421,11 +421,30 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Helper functions for role-based pinning
+async function getProfileRole(userId) {
+  if (!userId || !supabaseAdmin) return 'consumer';
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) {
+    console.error('[groups] Failed to get profile role:', error.message);
+    return 'consumer';
+  }
+  return data?.role || 'consumer';
+}
+
+function canPinRole(role) {
+  return ['grower', 'dispensary', 'moderator', 'admin'].includes(role);
+}
+
 router.get('/:id/messages', async (req, res) => {
   try {
     const { data, error } = await readClient
       .from('messages')
-      .select('id, group_id, user_id, content, created_at')
+      .select('id, group_id, user_id, content, created_at, pinned_at, pinned_by')
       .eq('group_id', req.params.id)
       .order('created_at', { ascending: false })
       .limit(1000);
@@ -486,7 +505,12 @@ router.get('/:id/messages', async (req, res) => {
         };
       });
 
-    res.json(messages);
+    // Separate pinned messages
+    const pinnedMessages = messages
+      .filter(m => m.pinned_at)
+      .sort((a, b) => new Date(b.pinned_at) - new Date(a.pinned_at));
+
+    res.json({ messages, pinnedMessages });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -618,6 +642,66 @@ router.post('/:id/leave', async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /:groupId/messages/:messageId/pin - Pin a message
+router.post('/:groupId/messages/:messageId/pin', async (req, res) => {
+  try {
+    const { groupId, messageId } = req.params;
+    const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ error: 'user_id required' });
+
+    const role = await getProfileRole(user_id);
+    if (!canPinRole(role)) {
+      return res.status(403).json({ error: 'Not allowed to pin messages' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('messages')
+      .update({
+        pinned_at: new Date().toISOString(),
+        pinned_by: user_id
+      })
+      .eq('id', messageId)
+      .eq('group_id', groupId)
+      .select('*')
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ message: 'Pinned', data });
+  } catch (e) {
+    return res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /:groupId/messages/:messageId/unpin - Unpin a message
+router.post('/:groupId/messages/:messageId/unpin', async (req, res) => {
+  try {
+    const { groupId, messageId } = req.params;
+    const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ error: 'user_id required' });
+
+    const role = await getProfileRole(user_id);
+    if (!canPinRole(role)) {
+      return res.status(403).json({ error: 'Not allowed to unpin messages' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('messages')
+      .update({
+        pinned_at: null,
+        pinned_by: null
+      })
+      .eq('id', messageId)
+      .eq('group_id', groupId)
+      .select('*')
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ message: 'Unpinned', data });
+  } catch (e) {
+    return res.status(500).json({ error: String(e) });
   }
 });
 
