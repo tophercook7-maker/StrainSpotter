@@ -1157,6 +1157,8 @@ export default function ScanPage({ onBack, onNavigate }) {
                   ? 'Opening camera…' 
                   : !canScan
                   ? 'Upgrade to keep scanning'
+                  : multiAngleMode && capturedFrames.length > 0
+                  ? `Capture photo ${capturedFrames.length + 1}/${MAX_FRAMES}`
                   : 'Take or choose photo'}
               </Button>
 
@@ -1192,12 +1194,71 @@ export default function ScanPage({ onBack, onNavigate }) {
                 : 'Choose photo'}
               </Button>
 
+              {/* Multi-angle mode toggle */}
+              <Button
+                variant="text"
+                size="small"
+                onClick={toggleMultiAngleMode}
+                sx={{
+                  textTransform: 'none',
+                  color: multiAngleMode ? '#CDDC39' : 'rgba(224, 242, 241, 0.7)',
+                  fontSize: '0.75rem',
+                  py: 0.5,
+                }}
+              >
+                {multiAngleMode ? '✓ Multi-angle mode' : 'Multi-angle mode (3 photos)'}
+              </Button>
+              
+              {/* Multi-angle progress indicator */}
+              {multiAngleMode && capturedFrames.length > 0 && (
+                <Box
+                  sx={{
+                    mt: 1,
+                    p: 1.5,
+                    borderRadius: 1,
+                    backgroundColor: 'rgba(124, 179, 66, 0.15)',
+                    border: '1px solid rgba(124, 179, 66, 0.3)',
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{ color: 'rgba(224, 242, 241, 0.9)', mb: 0.5 }}
+                  >
+                    {capturedFrames.length}/{MAX_FRAMES} photos captured
+                  </Typography>
+                  {capturedFrames.length >= MAX_FRAMES ? (
+                    <Button
+                      variant="contained"
+                      fullWidth
+                      size="medium"
+                      onClick={handleStartMultiAngleScan}
+                      disabled={isUploading || isPolling || !canScan}
+                      sx={{
+                        textTransform: 'none',
+                        background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
+                        mt: 0.5,
+                      }}
+                    >
+                      Start multi-angle scan
+                    </Button>
+                  ) : (
+                    <Typography
+                      variant="caption"
+                      sx={{ color: 'rgba(224, 242, 241, 0.7)' }}
+                    >
+                      Capture {MAX_FRAMES - capturedFrames.length} more photo{MAX_FRAMES - capturedFrames.length > 1 ? 's' : ''}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
               <Typography
                 variant="caption"
                 sx={{ color: 'rgba(224, 242, 241, 0.8)' }}
               >
-                Clear, close-up photos of labels or flowers give the best
-                results.
+                {multiAngleMode 
+                  ? 'Capture the same product from different angles for better accuracy.'
+                  : 'Clear, close-up photos of labels or flowers give the best results.'}
               </Typography>
             </Stack>
 
