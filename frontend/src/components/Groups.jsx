@@ -52,6 +52,9 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   const [pinnedMessages, setPinnedMessages] = useState([]); // Pinned messages
   const [userRole, setUserRole] = useState('consumer'); // Current user's role
   const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const [replyTo, setReplyTo] = useState(null); // Message being replied to
   const [loading, setLoading] = useState(true);
 
   // Direct Messages state
@@ -801,25 +804,32 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   const sendMessage = async () => {
     const content = input.trim();
     if (!content || !selectedGroup) return;
+    if (sending) return; // Prevent double sends
+    
     if (!guidelinesAccepted) {
       setGuidelinesOpen(true);
       return;
     }
     if (!userId) {
-      alert('Please log in to send messages.');
+      setSendError('Please log in to send messages.');
       onNavigate && onNavigate('login');
       return;
     }
+
+    setSending(true);
+    setSendError('');
 
     // Get access token from Supabase session
     const { data: { session } } = await supabase.auth.getSession();
     const accessToken = session?.access_token;
 
     if (!accessToken) {
-      alert('Please log in to send messages.');
+      setSendError('Please log in to send messages.');
+      setSending(false);
       onNavigate && onNavigate('login');
       return;
     }
+
     const optimisticId = `temp-${Date.now()}`;
     const optimisticMessage = {
       id: optimisticId,
@@ -836,7 +846,10 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     };
 
     setMessages(prev => [...prev, optimisticMessage]);
+    const messageToSend = input; // Save before clearing
     setInput('');
+    const replyToId = replyTo?.id || null;
+    setReplyTo(null); // Clear reply after sending
 
     let timeoutId;
     try {
@@ -849,7 +862,13 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       console.log('🚀 Sending message to:', apiUrl);
       console.log('📝 Message content:', content);
       console.log('👤 User ID:', userId);
-      console.log('🔑 Has access token:', !!accessToken);
+
+      const payload = {
+        content: messageToSend.trim(),
+        user_id: userId,
+        // Include reply_to_id if backend supports it (will be ignored if not)
+        reply_to_id: replyToId
+      };
 
       const res = await fetch(apiUrl, {
         method: 'POST',
@@ -857,7 +876,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`
         },
-        body: JSON.stringify({ content, user_id: userId }),
+        body: JSON.stringify(payload),
         signal: controller.signal
       });
 
@@ -900,46 +919,49 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
 
         // Reload groups list to update last_message on button
         loadGroups();
-
-        setSnackbar({
-          open: true,
-          message: 'Message sent successfully!',
-          severity: 'success'
-        });
       } else {
-        const errorText = await res.text();
-        console.error('❌ Server error response:', errorText);
-        let err;
+        let body = null;
         try {
-          err = JSON.parse(errorText);
+          body = await res.json();
         } catch {
-          err = { error: errorText || 'Failed to send message' };
+          body = null;
         }
+        
+        const errorMsg = body?.error || body?.hint || `Send failed (${res.status})`;
+        console.error('❌ Server error response:', errorMsg);
+        
         setMessages(prev => prev.filter(m => m.id !== optimisticId));
-        setSnackbar({
-          open: true,
-          message: err.error || `Failed to send message (${res.status})`,
-          severity: 'error'
-        });
+        setSendError(errorMsg);
+        
+        // Restore input and reply if send failed
+        setInput(messageToSend);
+        if (replyToId) {
+          // Try to restore replyTo from messages
+          const originalReply = messages.find(m => m.id === replyToId);
+          if (originalReply) setReplyTo(originalReply);
+        }
       }
-    } catch (e) {
-      // Always remove the optimistic message on error
+    } catch (err) {
+      console.error('❌ Error sending message:', err);
       setMessages(prev => prev.filter(m => m.id !== optimisticId));
-      console.error('❌ Send message error:', e);
-      console.error('Error name:', e.name);
-      console.error('Error message:', e.message);
-
-      const errorMsg = e.name === 'AbortError'
-        ? 'Request timed out after 10 seconds'
-        : e.message;
-
-      setSnackbar({
-        open: true,
-        message: `Failed to send message: ${errorMsg}`,
-        severity: 'error'
-      });
+      
+      let errorMsg = 'Failed to send message. Please try again.';
+      if (err.name === 'AbortError') {
+        errorMsg = 'Request timed out. Please check your connection and try again.';
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      
+      setSendError(errorMsg);
+      
+      // Restore input and reply if send failed
+      setInput(messageToSend);
+      if (replyToId) {
+        const originalReply = messages.find(m => m.id === replyToId);
+        if (originalReply) setReplyTo(originalReply);
+      }
     } finally {
-      if (timeoutId) clearTimeout(timeoutId);
+      setSending(false);
     }
   };
 
@@ -1974,57 +1996,176 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
               </List>
             </Box>
 
-            {/* Message Input - Fixed at bottom */}
+            {/* Message Composer - Fixed at bottom */}
             {isMember ? (
-              <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  placeholder="Type a message..."
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                  multiline
-                  maxRows={3}
-                  sx={{
-                    '& .MuiInputBase-root': {
-                      bgcolor: 'rgba(255,255,255,0.05)',
-                      backdropFilter: 'blur(10px)',
-                      WebkitBackdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(124,179,66,0.4)',
-                      borderRadius: 2,
-                      '&:hover': {
-                        border: '1px solid rgba(124,179,66,0.6)'
-                      },
-                      '&.Mui-focused': {
-                        border: '1px solid rgba(205,220,57,0.8)',
-                        boxShadow: '0 0 8px rgba(124,179,66,0.4)'
+              <Box
+                data-message-composer
+                sx={{
+                  flexShrink: 0,
+                  p: '8px 12px',
+                  paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)',
+                  borderTop: '1px solid rgba(255,255,255,0.05)',
+                  backgroundColor: 'rgba(0,0,0,0.85)',
+                  backdropFilter: 'blur(10px)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0.75,
+                }}
+              >
+                {/* Reply preview */}
+                {replyTo && (
+                  <Box
+                    sx={{
+                      fontSize: '0.6875rem',
+                      p: '4px 8px',
+                      borderRadius: 1,
+                      backgroundColor: 'rgba(255,255,255,0.03)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      border: '1px solid rgba(124,179,66,0.2)',
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: '#9CCC65',
+                        fontSize: '0.6875rem',
+                        flex: 1,
+                      }}
+                    >
+                      Replying to <strong>{replyTo.users?.display_name || replyTo.users?.username || 'someone'}</strong>:{' '}
+                      <span style={{ opacity: 0.8 }}>
+                        {replyTo.content?.slice(0, 60) || ''}
+                        {replyTo.content?.length > 60 ? '…' : ''}
+                      </span>
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      onClick={() => setReplyTo(null)}
+                      sx={{
+                        color: '#9CCC65',
+                        p: 0.25,
+                        minWidth: 'auto',
+                        width: 20,
+                        height: 20,
+                      }}
+                    >
+                      ×
+                    </IconButton>
+                  </Box>
+                )}
+
+                {/* Input row */}
+                <Stack direction="row" spacing={1} alignItems="flex-end">
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Type a message…"
+                    value={input}
+                    onChange={(e) => {
+                      setInput(e.target.value);
+                      setSendError(''); // Clear error when user types
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
                       }
-                    },
-                    '& .MuiInputBase-input': { color: '#CDDC39' },
-                    '& .MuiInputBase-input::placeholder': { color: '#9CCC65', opacity: 0.7 }
-                  }}
-                />
-                <Button
-                  variant="contained"
-                  onClick={sendMessage}
-                  sx={{
-                    minWidth: '80px',
-                    bgcolor: 'rgba(124,179,66,0.9)',
-                    color: '#fff',
-                    fontWeight: 700,
-                    boxShadow: '0 4px 12px rgba(124,179,66,0.4)',
-                    '&:hover': {
-                      bgcolor: 'rgba(156,204,101,1)',
-                      boxShadow: '0 6px 16px rgba(124,179,66,0.6)'
-                    }
-                  }}
-                >
-                  Send
-                </Button>
-              </Stack>
+                    }}
+                    multiline
+                    maxRows={4}
+                    disabled={sending}
+                    error={!!sendError}
+                    sx={{
+                      '& .MuiInputBase-root': {
+                        bgcolor: 'rgba(5,12,8,0.95)',
+                        backdropFilter: 'blur(10px)',
+                        WebkitBackdropFilter: 'blur(10px)',
+                        border: sendError 
+                          ? '1px solid rgba(239,68,68,0.6)' 
+                          : '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '999px',
+                        '&:hover': {
+                          border: sendError
+                            ? '1px solid rgba(239,68,68,0.8)'
+                            : '1px solid rgba(124,179,66,0.4)'
+                        },
+                        '&.Mui-focused': {
+                          border: sendError
+                            ? '1px solid rgba(239,68,68,0.8)'
+                            : '1px solid rgba(205,220,57,0.8)',
+                          boxShadow: sendError
+                            ? '0 0 8px rgba(239,68,68,0.3)'
+                            : '0 0 8px rgba(124,179,66,0.4)'
+                        },
+                        '&.Mui-disabled': {
+                          opacity: 0.6,
+                        }
+                      },
+                      '& .MuiInputBase-input': {
+                        color: '#f5fff5',
+                        fontSize: '0.875rem',
+                        padding: '8px 12px',
+                        maxHeight: '100px',
+                        overflowY: 'auto',
+                      },
+                      '& .MuiInputBase-input::placeholder': {
+                        color: '#9CCC65',
+                        opacity: 0.7
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="contained"
+                    onClick={sendMessage}
+                    disabled={sending || !input.trim()}
+                    sx={{
+                      minWidth: '80px',
+                      borderRadius: '999px',
+                      bgcolor: input.trim()
+                        ? 'linear-gradient(135deg, #7CB342, #9CCC65)'
+                        : 'rgba(255,255,255,0.1)',
+                      color: input.trim() ? '#04140a' : '#888',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      boxShadow: input.trim()
+                        ? '0 4px 12px rgba(124,179,66,0.4)'
+                        : 'none',
+                      '&:hover': {
+                        bgcolor: input.trim()
+                          ? 'linear-gradient(135deg, #8BC34A, #AED581)'
+                          : 'rgba(255,255,255,0.1)',
+                        boxShadow: input.trim()
+                          ? '0 6px 16px rgba(124,179,66,0.6)'
+                          : 'none'
+                      },
+                      '&:disabled': {
+                        opacity: 0.5,
+                      }
+                    }}
+                  >
+                    {sending ? 'Sending…' : 'Send'}
+                  </Button>
+                </Stack>
+
+                {/* Error message */}
+                {sendError && (
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontSize: '0.6875rem',
+                      color: '#ff9b9b',
+                      ml: 1,
+                      mt: -0.5,
+                    }}
+                  >
+                    {sendError}
+                  </Typography>
+                )}
+              </Box>
             ) : (
-              <Typography variant="body2" sx={{ textAlign: 'center', flexShrink: 0, color: '#9CCC65' }}>
+              <Typography variant="body2" sx={{ textAlign: 'center', flexShrink: 0, color: '#9CCC65', p: 2 }}>
                 Join this group to send messages.
               </Typography>
             )}
