@@ -51,6 +51,7 @@ import creditsRoutes from './routes/credits.js';
 import directMessagesRoutes from './routes/direct-messages.js';
 import { matchStrainByVisuals } from './services/visualMatcher.js';
 import { generateLabelAISummary } from './services/aiLabelExplainer.js';
+import { generateScanAISummary, buildScanAISummary } from './services/aiSummaries.js';
 import { analyzePlantHealth } from './services/plantHealthAnalyzer.js';
 import {
   consumeScanCredits,
@@ -1328,10 +1329,11 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     let matchedStrainSlug = null;
     let topMatch = null;
     let otherMatches = [];
+    let matchResult = null;
     
     try {
       const strains = await loadStrainLibrary();
-      const matchResult = matchStrainByVisuals(result, strains);
+      matchResult = matchStrainByVisuals(result, strains);
       const matches = matchResult?.matches || [];
       labelInsights = matchResult?.labelInsights || null;
       topMatch = matchResult?.topMatch || matches[0] || null;
@@ -1366,6 +1368,38 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
         candidates: [],
         error: 'Matching failed'
       };
+    }
+
+    // Extract match data and apply label-based fallback
+    const {
+      matchedStrainSlug: visualSlugFinal,
+      matchedStrainName: visualNameFinal,
+      matchConfidence: visualConfidence,
+      matchQuality: visualQuality,
+    } = matchResult || {};
+
+    let finalStrainName = visualNameFinal || null;
+    let finalStrainSlug = visualSlugFinal || null;
+    let finalMatchQuality = visualQuality || 'none';
+    let finalMatchConfidence = visualConfidence || 0;
+
+    // labelInsights should already exist; we keep using it.
+    const labelStrainName =
+      labelInsights?.strainName ||
+      labelInsights?.strain_name ||
+      null;
+
+    // If visual match didn't find a name, but OCR/label did, use that.
+    if (!finalStrainName && labelStrainName) {
+      finalStrainName = labelStrainName;
+      finalStrainSlug = labelStrainName
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      finalMatchQuality = 'label-fallback';
+      finalMatchConfidence = Math.max(finalMatchConfidence, 0.4);
     }
 
     // Generate AI summary if we have label insights (for packaged products)
@@ -1475,22 +1509,92 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       // Don't fail the scan - continue without packaging insights
     }
 
+    // Generate AI summary for consumers, dispensaries, and growers
+    let scanAISummary = null;
+    try {
+      // Extract Vision data
+      const visionText = result.textAnnotations?.[0]?.description || result.fullTextAnnotation?.text || '';
+      const visionLabels = result.labelAnnotations || [];
+      
+      // Extract matched strain record
+      const matchedStrainRecord = topMatch?.strain || null;
+
+      scanAISummary = await generateScanAISummary({
+        visionText,
+        visionLabels,
+        strainRecord: matchedStrainRecord
+      });
+
+      if (scanAISummary) {
+        console.log('[scan-process] AI summary generated successfully', {
+          id,
+          hasSummary: !!scanAISummary.userFacingSummary,
+          effectsCount: scanAISummary.effectsAndUseCases?.length || 0,
+          warningsCount: scanAISummary.risksAndWarnings?.length || 0,
+        });
+      }
+    } catch (aiSummaryErr) {
+      console.error('[AI Summary] Error generating scan AI summary:', aiSummaryErr);
+      // Don't fail the scan - continue without AI summary
+      scanAISummary = null;
+    }
+
+    // Build comprehensive scan summary (rich structured data)
+    let scanSummary = null;
+    try {
+      const ocrText = result.textAnnotations?.[0]?.description || result.fullTextAnnotation?.text || '';
+      scanSummary = buildScanAISummary({
+        ocr: ocrText,
+        visionLabels: result.labelAnnotations || [],
+        bestMatch: topMatch || null,
+        labelInsights: labelInsights || null,
+      });
+
+      if (scanSummary) {
+        console.log('[scan-process] Scan summary built successfully', {
+          id,
+          isPackagedProduct: scanSummary.isPackagedProduct,
+          matchConfidence: scanSummary.matchConfidence,
+          matchedStrainName: scanSummary.matchedStrainName,
+        });
+      }
+    } catch (summaryErr) {
+      console.error('[Scan Summary] Error building scan summary:', summaryErr);
+      // Don't fail the scan - continue without summary
+      scanSummary = null;
+    }
+
     // Merge Vision result with visual matches and packaging insights
     const finalResult = {
       vision_raw: result,
       packagingInsights: packagingInsights || null,
       visualMatches,
-      labelInsights
+      labelInsights,
+      matched_strain_slug: finalStrainSlug,
+      matched_strain_name: finalStrainName,
+      match_confidence: finalMatchConfidence,
+      match_quality: finalMatchQuality,
     };
+
+    // Build update payload with AI summary if available
+    const updatePayload = {
+      result: finalResult,
+      status: 'done',
+      processed_at: new Date().toISOString(),
+      matched_strain_slug: finalStrainSlug,
+      matched_strain_name: finalStrainName,
+      match_confidence: finalMatchConfidence,
+      match_quality: finalMatchQuality,
+    };
+
+    // Add AI summary to database if available
+    if (scanAISummary) {
+      updatePayload.ai_summary = scanAISummary;
+    }
 
     const { error: upErr } = await writeClient
       .from('scans')
-      .update({ 
-        result: finalResult, 
-        status: 'done', 
-        processed_at: new Date().toISOString(),
-        matched_strain_slug: matchedStrainSlug
-      })
+      .update(updatePayload)
       .eq('id', id);
     if (upErr) return res.status(500).json({ error: upErr.message });
 
@@ -1499,12 +1603,21 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       status: 'done',
       hasVision: !!finalResult.vision_raw,
       hasPackagingInsights: !!finalResult.packagingInsights,
+      hasAISummary: !!scanAISummary,
     });
+
+    // Extract vision text and matched strain for response
+    const visionText = result.textAnnotations?.[0]?.description || result.fullTextAnnotation?.text || null;
+    const matchedStrain = topMatch?.strain || null;
 
     // Return debug info and plant health analysis in response
     res.json({
       ok: true,
       result: finalResult,
+      aiSummary: scanAISummary || null,
+      summary: scanSummary || null, // Rich structured summary for frontend
+      match: matchedStrain || null,
+      visionText: visionText || null,
       plantHealth,
       debug: {
         labelCount: result.labelAnnotations?.length || 0,

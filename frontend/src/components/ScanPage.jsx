@@ -311,6 +311,7 @@ export default function ScanPage({ onBack, onNavigate }) {
       
       // Extract AI summary, match, and visionText from response (could be at top level or in scan object)
       const aiSummary = data?.aiSummary || scan?.ai_summary || null;
+      const summary = data?.summary || null; // Rich structured summary from buildScanAISummary
       const match = data?.match || null; // Matched strain from backend
       const visionText = data?.visionText || null; // Vision OCR text from backend
 
@@ -389,6 +390,7 @@ export default function ScanPage({ onBack, onNavigate }) {
             result: processedResult,
             created_at: scan.created_at || new Date().toISOString(),
             ai_summary: aiSummary || scan.ai_summary || null,
+            summary: summary || null, // Rich structured summary
             matchedStrain: matchedStrain || null,
             visionText: extractedVisionText || null,
             matched_strain_slug: scan.matched_strain_slug || null,
@@ -664,7 +666,15 @@ export default function ScanPage({ onBack, onNavigate }) {
           />
 
           {/* AI Summary Panel */}
-          {completedScan?.ai_summary && (
+          {/* Rich structured summary panel */}
+          {completedScan?.summary && (
+            <Box sx={{ mt: 2 }}>
+              <ScanAISummaryPanel summary={completedScan.summary} />
+            </Box>
+          )}
+          
+          {/* Legacy AI summary panel (for backward compatibility) */}
+          {completedScan?.ai_summary && !completedScan?.summary && (
             <Box sx={{ mt: 2 }}>
               <ScanAISummaryPanel
                 aiSummary={completedScan.ai_summary}

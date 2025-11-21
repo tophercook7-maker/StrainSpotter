@@ -1469,6 +1469,45 @@ export function matchStrainByVisuals(visionResult, strains) {
       dbCandidates.push(name);
     }
   });
+
+  // Enhanced match data with quality and confidence
+  const bestMatch = topMatch || null;
+  let matchedStrainSlug = null;
+  let matchedStrainName = null;
+  let matchConfidence = 0;
+  let matchQuality = 'none';
+
+  if (bestMatch) {
+    matchedStrainName = bestMatch.strain?.name || bestMatch.strain?.strain_name || bestMatch.name || null;
+
+    if (matchedStrainName) {
+      matchedStrainSlug = matchedStrainName
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    }
+
+    // Normalize confidence
+    const rawConf = typeof bestMatch.confidence === 'number'
+      ? bestMatch.confidence
+      : typeof bestMatch.score === 'number'
+        ? Math.min(1, bestMatch.score / 1000)
+        : 0;
+
+    matchConfidence = rawConf;
+
+    if (rawConf >= 0.9) {
+      matchQuality = 'high';
+    } else if (rawConf >= 0.7) {
+      matchQuality = 'medium';
+    } else if (rawConf > 0) {
+      matchQuality = 'low';
+    } else {
+      matchQuality = 'none';
+    }
+  }
   
   return {
     matches: finalMatches,
@@ -1477,6 +1516,10 @@ export function matchStrainByVisuals(visionResult, strains) {
     labelInsights,
     isPackagedProduct: labelInsights?.isPackagedProduct || false,
     dbCandidates,
+    matchedStrainSlug,
+    matchedStrainName,
+    matchConfidence,
+    matchQuality,
   };
 }
 
