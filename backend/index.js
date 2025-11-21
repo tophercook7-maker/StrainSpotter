@@ -1731,7 +1731,7 @@ app.post('/api/scans/:id/match', async (req, res) => {
   }
 });
 
-// POST /api/visual-match - Match strain by Vision API results
+// POST /api/visual-match - Match strain by Vision API results + AI summary
 app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
   try {
     const { visionResult } = req.body;
@@ -1753,9 +1753,13 @@ app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
 
     console.log(`[VisualMatch] Found ${matches.length} matches, top score: ${matches[0]?.score || 0}`);
 
+    // Build AI summary
+    const aiSummary = buildScanAISummary({ visionResult, matches: matchResult });
+
     res.json({
       success: true,
       matchCount: matches.length,
+      aiSummary, // Include AI summary in response
       matches: matches.map(m => ({
         strain: {
           slug: m.strain.slug,
