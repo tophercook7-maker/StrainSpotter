@@ -82,6 +82,19 @@ export default function ScanPage({ onBack, onNavigate }) {
   const canScan = totalAvailableScans > 0;
   const [scanPhase, setScanPhase] = useState('camera-loading'); // 'camera-loading' | 'ready' | 'capturing' | 'uploading' | 'processing' | 'done' | 'error'
   const [statusMessage, setStatusMessage] = useState('Opening scanner…');
+  
+  // Structured scan status state
+  const [scanStatus, setScanStatus] = useState({
+    phase: 'idle',
+    message: '',
+    details: '',
+  });
+  
+  // Structured error state
+  const [scanError, setScanError] = useState(null); // { type, message, details, scanId }
+  
+  // Current scan ID for tracking
+  const [currentScanId, setCurrentScanId] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [lastPhotoUrl, setLastPhotoUrl] = useState(null);
   const [framePulsing, setFramePulsing] = useState(false);
@@ -151,8 +164,14 @@ export default function ScanPage({ onBack, onNavigate }) {
   // Reset scan state completely
   const resetScan = () => {
     setError(null);
+    setScanError(null);
     setScanPhase('ready');
     setStatusMessage('Take or choose a photo of the product or packaging.');
+    setScanStatus({
+      phase: 'idle',
+      message: 'Ready to scan.',
+      details: '',
+    });
     setSelectedFile(null);
     setPreviewUrl(null);
     setLastPhotoUrl(null);
@@ -162,11 +181,16 @@ export default function ScanPage({ onBack, onNavigate }) {
     setActiveView('scanner');
     setCompletedScan(null);
     setHasCompletedScan(false); // Reset completion flag
+    setCurrentScanId(null);
     hasCompletedScanRef.current = false; // Reset ref flag
     processedScanIdsRef.current.clear();
     // Reset multi-angle state
     setCapturedFrames([]);
     setMultiAngleMode(false);
+  };
+  
+  const handleRetry = () => {
+    resetScan();
   };
   
   // Handle multi-angle scan start
@@ -319,18 +343,35 @@ export default function ScanPage({ onBack, onNavigate }) {
 
     try {
       setError(null);
+      setScanError(null);
+      setCurrentScanId(null);
       setScanPhase('capturing');
       setStatusMessage('Preparing image…');
+      setScanStatus({
+        phase: 'preparing',
+        message: 'Preparing your scan...',
+        details: '',
+      });
 
       // Resize and compress image using the new utility
       setScanPhase('uploading');
       setStatusMessage('Resizing image for faster upload…');
+      setScanStatus({
+        phase: 'compressing',
+        message: 'Compressing photo for upload...',
+        details: 'Keeping image sharp while shrinking file size.',
+      });
       
       console.time('[Scanner] image-compression');
       const { base64, contentType } = await resizeImageToBase64(file, 1280, 0.7);
       console.timeEnd('[Scanner] image-compression');
 
       setStatusMessage('Uploading image…');
+      setScanStatus({
+        phase: 'uploading',
+        message: 'Uploading image securely...',
+        details: 'Sending your scan to StrainSpotter servers.',
+      });
       const payload = {
         filename: file.name || 'scan.jpg',
         contentType: contentType || 'image/jpeg',
@@ -377,8 +418,20 @@ export default function ScanPage({ onBack, onNavigate }) {
     const scanId = data.id || data.scan_id || data.scanId;
     if (!scanId) {
       setScanPhase('idle');
+      setScanStatus({
+        phase: 'error',
+        message: 'Server did not return scan ID.',
+        details: 'Please try again.',
+      });
       throw new Error('Did not receive a scan id from the server.');
     }
+    
+    setCurrentScanId(scanId);
+    setScanStatus({
+      phase: 'queued',
+      message: 'Scan received. Getting in line...',
+      details: 'Our AI is about to process your image.',
+    });
 
     // Trigger Vision processing (only once per scanId)
     if (!processedScanIdsRef.current.has(scanId)) {
@@ -430,6 +483,11 @@ export default function ScanPage({ onBack, onNavigate }) {
     setIsPolling(true);
     setScanPhase('processing');
     setStatusMessage('Processing image with Vision API…');
+    setScanStatus({
+      phase: 'processing',
+      message: 'Analyzing label & bud details...',
+      details: 'Running vision, OCR, and strain matching.',
+    });
     setHasCompletedScan(false); // Reset completion flag for new scan
     hasCompletedScanRef.current = false; // Reset ref flag for new scan
 
@@ -440,6 +498,17 @@ export default function ScanPage({ onBack, onNavigate }) {
       if (!hasCompletedScanRef.current) {
         setIsPolling(false);
         setScanPhase('error');
+        setScanError({
+          type: 'timeout',
+          message: 'Scan is taking longer than expected.',
+          details: 'Our servers didn\'t finish in time. This doesn\'t mean your scan is bad — just that it took too long to complete.',
+          scanId: currentScanId || undefined,
+        });
+        setScanStatus({
+          phase: 'error',
+          message: 'Scan took too long.',
+          details: 'You can try again now or later on a stronger connection.',
+        });
         setError('Our AI took longer than expected to finish this scan. Please try again in a moment.');
         setStatusMessage('Scan timed out. Please try again.');
       }
@@ -464,6 +533,7 @@ export default function ScanPage({ onBack, onNavigate }) {
       // Never show raw JS errors to users - sanitize all error messages
       const errorMsg = String(e?.message || e || '');
       let userMessage = 'We couldn\'t finish this scan. Please try again.';
+      let errorType = 'unknown';
       
       // Check for internal JS errors (ReferenceError, TypeError, etc.) and hide them
       const isInternalError = /ReferenceError|TypeError|SyntaxError|hasCompletedScanRef|Can't find variable|is not defined/i.test(errorMsg);
@@ -472,23 +542,41 @@ export default function ScanPage({ onBack, onNavigate }) {
         // Log internal errors but don't show them to users
         console.error('[Scanner] Internal error detected, showing generic message:', errorMsg);
         userMessage = 'We couldn\'t finish this scan. Please try again.';
+        errorType = 'client';
       } else {
         // Map common user-facing errors to friendly messages
         if (errorMsg.includes('413') || errorMsg.includes('too large') || errorMsg.includes('PayloadTooLargeError')) {
           userMessage = 'Image is too large. Try taking the photo a bit farther away or with lower resolution.';
+          errorType = 'client';
         } else if (errorMsg.includes('400') || errorMsg.includes('Bad Request')) {
           userMessage = 'Image problem (too large or wrong type). Try another photo.';
+          errorType = 'client';
         } else if (errorMsg.includes('Network') || errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch') || /NetworkError|network/i.test(errorMsg)) {
           userMessage = 'Network issue while scanning. Please check your connection and try again.';
+          errorType = 'network';
         } else if (errorMsg.includes('500') || errorMsg.includes('Internal Server Error')) {
           userMessage = 'Scan failed on the server. Try again in a moment.';
+          errorType = 'server';
         } else if (errorMsg.includes('403') || errorMsg.includes('Guest scan limit')) {
           userMessage = 'You\'ve reached the guest scan limit. Sign up or upgrade to continue scanning.';
+          errorType = 'server';
         } else if (!errorMsg || errorMsg === 'undefined' || errorMsg === 'null') {
           userMessage = 'Something went wrong. Please try again.';
+          errorType = 'unknown';
         }
       }
       
+      setScanError({
+        type: errorType,
+        message: errorType === 'network' ? 'Network issue during scan.' : errorType === 'server' ? 'Server couldn\'t finish your scan.' : errorType === 'client' ? 'App had trouble reading the scan result.' : 'We couldn\'t finish this scan.',
+        details: isInternalError ? 'Internal error (see console)' : errorMsg,
+        scanId: currentScanId || undefined,
+      });
+      setScanStatus({
+        phase: 'error',
+        message: errorType === 'network' ? 'Network issue.' : errorType === 'server' ? 'Server error.' : 'Display error.',
+        details: errorType === 'network' ? 'Check your connection and try again.' : errorType === 'server' ? 'Our AI had trouble finishing this scan.' : 'We\'ll fix this in an update.',
+      });
       setError(userMessage);
       setStatusMessage(userMessage);
     }
@@ -502,14 +590,39 @@ export default function ScanPage({ onBack, onNavigate }) {
       // Update status message based on attempt number to show progress
       if (attempt === 0) {
         setStatusMessage('Processing image with Vision API…');
+        setScanStatus({
+          phase: 'processing',
+          message: 'Analyzing label & bud details...',
+          details: 'Running vision, OCR, and strain matching.',
+        });
       } else if (attempt < 5) {
         setStatusMessage('Extracting text from label…');
+        setScanStatus({
+          phase: 'processing',
+          message: 'Extracting text from label...',
+          details: 'Reading product information and batch numbers.',
+        });
       } else if (attempt < 10) {
         setStatusMessage('Matching against strain database…');
+        setScanStatus({
+          phase: 'processing',
+          message: 'Matching against strain database...',
+          details: 'Comparing your image against 35,000+ strains.',
+        });
       } else if (attempt < 20) {
         setStatusMessage('Analyzing product details…');
+        setScanStatus({
+          phase: 'finalizing',
+          message: 'Building summary & insights...',
+          details: 'Summarizing effects, warnings, and packaging info.',
+        });
       } else {
         setStatusMessage('Finalizing results…');
+        setScanStatus({
+          phase: 'finalizing',
+          message: 'Finalizing results...',
+          details: 'Almost done!',
+        });
       }
 
       if (attempt === 0) {
@@ -579,6 +692,12 @@ export default function ScanPage({ onBack, onNavigate }) {
         setScanPhase('done');
         setStatusMessage('Scan complete!');
         setError(null); // Clear any previous errors
+        setScanError(null); // Clear any previous structured errors
+        setScanStatus({
+          phase: 'completed',
+          message: 'Scan complete.',
+          details: '',
+        });
         
         // Temporary debug log
         console.log('[pollScan] done', { status, hasResult, result: scan.result, attempts: attempt });
@@ -668,6 +787,17 @@ export default function ScanPage({ onBack, onNavigate }) {
         } else if (errorMessage.includes('storage') || errorMessage.includes('bucket')) {
           userMessage = 'Storage error. Please try again in a moment.';
         }
+        setScanError({
+          type: 'server',
+          message: 'Server couldn\'t finish your scan.',
+          details: errorMessage,
+          scanId: scanId || currentScanId || undefined,
+        });
+        setScanStatus({
+          phase: 'error',
+          message: 'Server error.',
+          details: 'Our AI had trouble finishing this scan.',
+        });
         setError(userMessage);
         setStatusMessage(userMessage);
         return;
@@ -705,6 +835,7 @@ export default function ScanPage({ onBack, onNavigate }) {
       // Never show raw JS errors to users - sanitize all error messages
       const errorMsg = String(e?.message || e || '');
       let userMessage = 'We couldn\'t finish this scan. Please try again.';
+      let errorType = 'unknown';
       
       // Check for internal JS errors (ReferenceError, TypeError, etc.) and hide them
       const isInternalError = /ReferenceError|TypeError|SyntaxError|hasCompletedScanRef|Can't find variable|is not defined/i.test(errorMsg);
@@ -713,17 +844,32 @@ export default function ScanPage({ onBack, onNavigate }) {
         // Log internal errors but don't show them to users
         console.error('[Scanner] Internal error detected, showing generic message:', errorMsg);
         userMessage = 'We couldn\'t finish this scan. Please try again.';
+        errorType = 'client';
       } else {
         // Provide user-friendly error messages
         if (errorMsg.includes('404') || errorMsg.includes('not found')) {
           userMessage = 'Scan not found. Please try scanning again.';
+          errorType = 'server';
         } else if (errorMsg.includes('500') || errorMsg.includes('Server error')) {
           userMessage = 'Server error while processing scan. Please try again in a moment.';
+          errorType = 'server';
         } else if (errorMsg.includes('Network') || errorMsg.includes('fetch') || /NetworkError|network/i.test(errorMsg)) {
           userMessage = 'Network issue while scanning. Please check your connection and try again.';
+          errorType = 'network';
         }
       }
       
+      setScanError({
+        type: errorType,
+        message: errorType === 'network' ? 'Network issue during scan.' : errorType === 'server' ? 'Server couldn\'t finish your scan.' : 'App had trouble reading the scan result.',
+        details: isInternalError ? 'Internal error (see console)' : errorMsg,
+        scanId: scanId || currentScanId || undefined,
+      });
+      setScanStatus({
+        phase: 'error',
+        message: errorType === 'network' ? 'Network issue.' : errorType === 'server' ? 'Server error.' : 'Display error.',
+        details: errorType === 'network' ? 'Check your connection and try again.' : errorType === 'server' ? 'Our AI had trouble finishing this scan.' : 'We\'ll fix this in an update.',
+      });
       setError(userMessage);
       setStatusMessage(userMessage);
     }
@@ -1145,6 +1291,55 @@ export default function ScanPage({ onBack, onNavigate }) {
         </Typography>
         <Box sx={{ width: 40 }} /> {/* Spacer for centering */}
       </Box>
+
+      {/* Status Strip */}
+      {scanStatus.phase !== 'idle' && (
+        <Box
+          sx={{
+            position: 'relative',
+            zIndex: 1,
+            px: 2,
+            pb: 1,
+          }}
+        >
+          <Box
+            sx={{
+              padding: '8px 12px',
+              borderRadius: '999px',
+              fontSize: 12,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              backgroundColor:
+                scanStatus.phase === 'error'
+                  ? 'rgba(220, 53, 69, 0.12)'
+                  : scanStatus.phase === 'completed'
+                  ? 'rgba(25, 135, 84, 0.14)'
+                  : 'rgba(15, 118, 110, 0.16)',
+              color: '#e5fbea',
+              border: scanStatus.phase === 'error' ? '1px solid rgba(220, 53, 69, 0.3)' : 'none',
+            }}
+          >
+            <span style={{ fontSize: 14 }}>
+              {scanStatus.phase === 'error'
+                ? '⚠️'
+                : scanStatus.phase === 'completed'
+                ? '✅'
+                : '🔍'}
+            </span>
+            <Box sx={{ flex: 1 }}>
+              <Box sx={{ fontWeight: 500, fontSize: 13 }}>
+                {scanStatus.message || 'Ready to scan.'}
+              </Box>
+              {scanStatus.details && (
+                <Box sx={{ fontSize: 11, opacity: 0.8, mt: 0.25 }}>
+                  {scanStatus.details}
+                </Box>
+              )}
+            </Box>
+          </Box>
+        </Box>
+      )}
 
       {/* Scrollable content area */}
       <Box
