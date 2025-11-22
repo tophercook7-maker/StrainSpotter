@@ -198,7 +198,7 @@ function ScanResultCard({ result, scan, isGuest }) {
           }}
         >
           {matchLabel}
-          {matchConf != null && ` • ${(matchConf * 100).toFixed(0)}%`}
+          {matchConfidence != null && ` • ${(matchConfidence * 100).toFixed(0)}%`}
         </Typography>
 
         <Typography

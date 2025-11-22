@@ -1538,6 +1538,19 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     const topMatch = matches[0] || null;
     const otherMatches = matches.slice(1, 5) || [];
     
+    // CRITICAL: Extract visual matches array EARLY (before packaging insights block)
+    // This prevents "Cannot access 'visualMatchesArray' before initialization" error
+    const visualMatchesArray = matches.map(m => {
+      const matchName = m.strain?.name || m.strain?.strain_name || m.strain?.slug || m.name || null;
+      const matchConf = typeof m.confidence === 'number' 
+        ? (m.confidence <= 1 ? m.confidence : m.confidence / 100) // Normalize to 0-1
+        : null;
+      return {
+        name: matchName,
+        confidence: matchConf,
+      };
+    }).filter(m => m.name);
+    
     // Debug log labelInsights.strainName if present
     if (labelInsights?.strainName) {
       console.log(`[process] Label strain name detected: "${labelInsights.strainName}"`);
