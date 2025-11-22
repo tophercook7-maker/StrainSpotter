@@ -1801,17 +1801,8 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
          labelInsights?.isPackagedProduct ||
          scanSummary?.isPackagedProduct);
     
-    // Extract visual matches array for canonical strain resolution
-    const visualMatchesArray = matches.map(m => {
-      const matchName = m.strain?.name || m.strain?.strain_name || m.strain?.slug || m.name || null;
-      const matchConf = typeof m.confidence === 'number' 
-        ? (m.confidence <= 1 ? m.confidence : m.confidence / 100) // Normalize to 0-1
-        : null;
-      return {
-        name: matchName,
-        confidence: matchConf,
-      };
-    }).filter(m => m.name);
+    // visualMatchesArray is already declared earlier (before packaging insights block)
+    // Reuse it here for canonical strain resolution
     
     const canonical = resolveCanonicalStrain({
       packagingInsights: packagingInsights || null,
