@@ -1070,8 +1070,32 @@ app.get('/api/scans', async (req, res, next) => {
       return res.json({ scans: data || [] });
     } else {
       // No user_id: return all scans (permissive for dev; tighten in prod) with joined strain data
-      const q = readClient.from('scans').select('*, strain:strains!matched_strain_slug(*)').order('created_at', { ascending: false }).limit(100);
-      const { data, error } = await q;
+      // CRITICAL: Do NOT use relationship queries - FK constraint was dropped
+      // Select only columns directly from scans table
+      const { data, error } = await readClient
+        .from('scans')
+        .select(
+          `
+            id,
+            created_at,
+            processed_at,
+            image_url,
+            status,
+            result,
+            packaging_insights,
+            label_insights,
+            ai_summary,
+            error,
+            match_confidence,
+            match_quality,
+            matched_strain_name,
+            matched_strain_slug,
+            plant_health,
+            plant_age
+          `
+        )
+        .order('created_at', { ascending: false })
+        .limit(100);
       if (error) return res.status(500).json({ error: error.message });
       res.json({ scans: data || [] });
     }
@@ -1186,20 +1210,63 @@ app.post('/api/scans/credits/grant', async (req, res) => {
 // When status='completed', result object contains: vision_raw, packagingInsights, visualMatches, labelInsights
 app.get('/api/scans/:id', async (req, res, next) => {
   try {
-    const id = req.params.id;
+    const scanId = req.params.id;
     // Validate UUID format (v4)
     const uuidV4Regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidV4Regex.test(id)) {
+    if (!uuidV4Regex.test(scanId)) {
       return res.status(400).json({ error: 'Invalid scan ID: must be a UUID v4.' });
     }
     // Use service role for reads if available to ensure visibility of all scans
     const readClient = supabaseAdmin ?? supabase;
-    const { data, error } = await readClient.from('scans').select('*, strain:strains!matched_strain_slug(*)').eq('id', id).maybeSingle();
-    if (error) return res.status(500).json({ error: error.message });
-    if (!data) return res.status(404).json({ error: 'scan not found' });
+    
+    // CRITICAL: Do NOT use relationship queries - FK constraint was dropped
+    // Select only columns directly from scans table
+    const { data: scan, error } = await readClient
+      .from('scans')
+      .select(
+        `
+          id,
+          created_at,
+          processed_at,
+          image_url,
+          status,
+          result,
+          packaging_insights,
+          label_insights,
+          ai_summary,
+          error,
+          match_confidence,
+          match_quality,
+          matched_strain_name,
+          matched_strain_slug,
+          plant_health,
+          plant_age
+        `
+      )
+      .eq('id', scanId)
+      .maybeSingle();
+    
+    // Handle Supabase errors
+    if (error) {
+      // PGRST116 = no rows found (PostgREST error code)
+      if (error.code === 'PGRST116' || error.message?.includes('Results contain 0 rows')) {
+        console.error('[GET /api/scans/:id] Not found', { scanId, error });
+        return res.status(404).json({ error: 'Scan not found' });
+      }
+      console.error('[GET /api/scans/:id] Supabase error', { scanId, error });
+      return res.status(500).json({ error: 'Failed to fetch scan' });
+    }
+    
+    // Handle case where no scan found but no error returned
+    if (!scan) {
+      console.error('[GET /api/scans/:id] No scan found, but no error from Supabase', { scanId });
+      return res.status(404).json({ error: 'Scan not found' });
+    }
+    
     // Return scan object directly (not wrapped) - frontend expects this shape
-    res.json(data);
+    return res.json(scan);
   } catch (e) {
+    console.error('[GET /api/scans/:id] Unexpected error', { scanId: req.params.id, error: e });
     next(e);
   }
 });
