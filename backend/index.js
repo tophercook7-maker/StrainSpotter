@@ -1799,9 +1799,10 @@ app.post('/api/scans/:id/match', async (req, res) => {
       .from('scans')
       .update({
         result: updatedResult,
-        status: 'done',
+        status: 'completed', // Standardized status
         matched_strain_slug: payload.match?.strain_slug || scan.matched_strain_slug || null,
-        processed_at: scan.processed_at || new Date().toISOString()
+        processed_at: scan.processed_at || new Date().toISOString(),
+        error: null, // Explicitly clear any error on success
       })
       .eq('id', id);
 
