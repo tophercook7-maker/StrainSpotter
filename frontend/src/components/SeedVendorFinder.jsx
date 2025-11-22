@@ -5,6 +5,7 @@ import {
   Select, MenuItem, Alert, Grid
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CloseIcon from '@mui/icons-material/Close';
 import StoreIcon from '@mui/icons-material/Store';
 import LanguageIcon from '@mui/icons-material/Language';
 import StarIcon from '@mui/icons-material/Star';
@@ -83,42 +84,82 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
   };
 
   return (
-    <Box sx={{
-      minHeight: '100vh',
-      pt: 'calc(env(safe-area-inset-top) + 32px)',
-      px: 2,
-      pb: 2,
-      background: 'none'
-    }}>
-      {/* Header */}
-      {onBack && (
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={onBack}
-          startIcon={<ArrowBackIcon />}
-          sx={{
-            color: '#fff',
-            borderColor: 'rgba(124, 179, 66, 0.6)',
-            fontSize: '0.875rem',
-            mb: 2,
-            '&:hover': {
-              borderColor: 'rgba(124, 179, 66, 1)',
-              bgcolor: 'rgba(124, 179, 66, 0.1)'
-            }
-          }}
-        >
-          Back
-        </Button>
-      )}
-      <Stack direction="row" alignItems="center" spacing={2} mb={2}>
-        <StoreIcon sx={{ fontSize: 32, color: '#7cb342' }} />
-        <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>
-          Seed Vendor Finder
-        </Typography>
-      </Stack>
+    <Box
+      sx={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        pointerEvents: 'auto',
+        backgroundColor: '#050705',
+        backgroundImage: 'url(/strainspotter-bg.jpg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        zIndex: 1000,
+      }}
+    >
+      {/* Fixed Header with Close Button */}
+      <Box
+        sx={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          backgroundColor: 'rgba(5, 7, 5, 0.95)',
+          backdropFilter: 'blur(10px)',
+          borderBottom: '1px solid rgba(124, 179, 66, 0.3)',
+          pt: 'calc(env(safe-area-inset-top) + 8px)',
+          pb: 1,
+          px: 2,
+        }}
+      >
+        <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+          {onBack && (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={onBack}
+              startIcon={<ArrowBackIcon />}
+              sx={{
+                color: '#fff',
+                borderColor: 'rgba(124, 179, 66, 0.6)',
+                fontSize: '0.875rem',
+                '&:hover': {
+                  borderColor: 'rgba(124, 179, 66, 1)',
+                  bgcolor: 'rgba(124, 179, 66, 0.1)'
+                }
+              }}
+            >
+              Back
+            </Button>
+          )}
+          <IconButton
+            onClick={onBack}
+            sx={{
+              color: '#fff',
+              ml: 'auto',
+              '&:hover': {
+                bgcolor: 'rgba(255, 255, 255, 0.1)'
+              }
+            }}
+            aria-label="Close"
+          >
+            <CloseIcon />
+          </IconButton>
+        </Stack>
+        <Stack direction="row" alignItems="center" spacing={2}>
+          <StoreIcon sx={{ fontSize: 32, color: '#7cb342' }} />
+          <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>
+            Seed Vendor Finder
+          </Typography>
+        </Stack>
+      </Box>
 
-      {/* Search Controls */}
+      {/* Scrollable Content */}
+      <Box sx={{ px: 2, pb: 2 }}>
+        {/* Search Controls */}
       <Paper sx={{ 
         p: 2, 
         mb: 2, 
@@ -379,6 +420,7 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
           </Grid>
         </Box>
       )}
+      </Box>
     </Box>
   );
 }
