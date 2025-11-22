@@ -3032,6 +3032,19 @@ app.post('/api/business/register', express.json(), async (req, res) => {
       result = data;
     }
 
+    // Ensure ZIP group membership (non-blocking)
+    if (result && result.postal_code) {
+      try {
+        await ensureZipGroupForBusinessProfile(result);
+      } catch (groupErr) {
+        // Log but don't fail the request
+        console.error('[business/register] Group creation failed (non-blocking)', {
+          profileId: result.id,
+          error: groupErr?.message || String(groupErr),
+        });
+      }
+    }
+
     return res.json({
       success: true,
       profile: result,
