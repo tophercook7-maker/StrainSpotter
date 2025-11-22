@@ -92,6 +92,8 @@ export default function ScanPage({ onBack, onNavigate }) {
   
   // Track processed scan IDs to avoid duplicate /process calls
   const processedScanIdsRef = useRef(new Set());
+  // Track if scan has completed to prevent timeout race condition
+  const hasCompletedScanRef = useRef(false);
 
   // On mount, simulate camera loading then become ready
   useEffect(() => {
@@ -451,28 +453,40 @@ export default function ScanPage({ onBack, onNavigate }) {
       clearTimeout(timeoutId);
     }
   } catch (e) {
-      console.error('startScan error', e);
+      console.error('[Scanner] startScan error', e);
       setIsUploading(false);
       setIsPolling(false);
+      setHasCompletedScan(true); // Mark as completed to prevent timeout race
+      hasCompletedScanRef.current = true; // Also set ref for immediate timeout check
       setScanPhase('error');
       
       // Improved error handling with specific messages
-      const errorMsg = String(e.message || e);
-      let userMessage = errorMsg;
+      // Never show raw JS errors to users - sanitize all error messages
+      const errorMsg = String(e?.message || e || '');
+      let userMessage = 'We couldn\'t finish this scan. Please try again.';
       
-      // Map common errors to user-friendly messages
-      if (errorMsg.includes('413') || errorMsg.includes('too large') || errorMsg.includes('PayloadTooLargeError')) {
-        userMessage = 'Image is too large. Try taking the photo a bit farther away or with lower resolution.';
-      } else if (errorMsg.includes('400') || errorMsg.includes('Bad Request')) {
-        userMessage = 'Image problem (too large or wrong type). Try another photo.';
-      } else if (errorMsg.includes('Network') || errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
-        userMessage = 'Network problem. Check your connection and try again.';
-      } else if (errorMsg.includes('500') || errorMsg.includes('Internal Server Error')) {
-        userMessage = 'Scan failed on the server. Try again in a moment.';
-      } else if (errorMsg.includes('403') || errorMsg.includes('Guest scan limit')) {
-        userMessage = 'You\'ve reached the guest scan limit. Sign up or upgrade to continue scanning.';
-      } else if (!errorMsg || errorMsg === 'undefined' || errorMsg === 'null') {
-        userMessage = 'Something went wrong. Please try again.';
+      // Check for internal JS errors (ReferenceError, TypeError, etc.) and hide them
+      const isInternalError = /ReferenceError|TypeError|SyntaxError|hasCompletedScanRef|Can't find variable|is not defined/i.test(errorMsg);
+      
+      if (isInternalError) {
+        // Log internal errors but don't show them to users
+        console.error('[Scanner] Internal error detected, showing generic message:', errorMsg);
+        userMessage = 'We couldn\'t finish this scan. Please try again.';
+      } else {
+        // Map common user-facing errors to friendly messages
+        if (errorMsg.includes('413') || errorMsg.includes('too large') || errorMsg.includes('PayloadTooLargeError')) {
+          userMessage = 'Image is too large. Try taking the photo a bit farther away or with lower resolution.';
+        } else if (errorMsg.includes('400') || errorMsg.includes('Bad Request')) {
+          userMessage = 'Image problem (too large or wrong type). Try another photo.';
+        } else if (errorMsg.includes('Network') || errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch') || /NetworkError|network/i.test(errorMsg)) {
+          userMessage = 'Network issue while scanning. Please check your connection and try again.';
+        } else if (errorMsg.includes('500') || errorMsg.includes('Internal Server Error')) {
+          userMessage = 'Scan failed on the server. Try again in a moment.';
+        } else if (errorMsg.includes('403') || errorMsg.includes('Guest scan limit')) {
+          userMessage = 'You\'ve reached the guest scan limit. Sign up or upgrade to continue scanning.';
+        } else if (!errorMsg || errorMsg === 'undefined' || errorMsg === 'null') {
+          userMessage = 'Something went wrong. Please try again.';
+        }
       }
       
       setError(userMessage);
@@ -682,21 +696,34 @@ export default function ScanPage({ onBack, onNavigate }) {
       }, delayMs);
     } catch (e) {
       if (timeoutRef) clearTimeout(timeoutRef);
-      console.error('pollScan error', e);
+      console.error('[Scanner] pollScan error', e);
       setIsPolling(false);
       setHasCompletedScan(true); // Mark as completed to prevent timeout race
       hasCompletedScanRef.current = true; // Also set ref for immediate timeout check
       setScanPhase('error');
-      const errorMsg = String(e.message || e);
-      // Provide user-friendly error messages
-      let userMessage = errorMsg;
-      if (errorMsg.includes('404') || errorMsg.includes('not found')) {
-        userMessage = 'Scan not found. Please try scanning again.';
-      } else if (errorMsg.includes('500') || errorMsg.includes('Server error')) {
-        userMessage = 'Server error while processing scan. Please try again in a moment.';
-      } else if (errorMsg.includes('Network') || errorMsg.includes('fetch')) {
-        userMessage = 'Network problem. Check your connection and try again.';
+      
+      // Never show raw JS errors to users - sanitize all error messages
+      const errorMsg = String(e?.message || e || '');
+      let userMessage = 'We couldn\'t finish this scan. Please try again.';
+      
+      // Check for internal JS errors (ReferenceError, TypeError, etc.) and hide them
+      const isInternalError = /ReferenceError|TypeError|SyntaxError|hasCompletedScanRef|Can't find variable|is not defined/i.test(errorMsg);
+      
+      if (isInternalError) {
+        // Log internal errors but don't show them to users
+        console.error('[Scanner] Internal error detected, showing generic message:', errorMsg);
+        userMessage = 'We couldn\'t finish this scan. Please try again.';
+      } else {
+        // Provide user-friendly error messages
+        if (errorMsg.includes('404') || errorMsg.includes('not found')) {
+          userMessage = 'Scan not found. Please try scanning again.';
+        } else if (errorMsg.includes('500') || errorMsg.includes('Server error')) {
+          userMessage = 'Server error while processing scan. Please try again in a moment.';
+        } else if (errorMsg.includes('Network') || errorMsg.includes('fetch') || /NetworkError|network/i.test(errorMsg)) {
+          userMessage = 'Network issue while scanning. Please check your connection and try again.';
+        }
       }
+      
       setError(userMessage);
       setStatusMessage(userMessage);
     }
