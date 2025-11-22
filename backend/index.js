@@ -1540,16 +1540,19 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     
     // CRITICAL: Extract visual matches array EARLY (before packaging insights block)
     // This prevents "Cannot access 'visualMatchesArray' before initialization" error
-    const visualMatchesArray = matches.map(m => {
-      const matchName = m.strain?.name || m.strain?.strain_name || m.strain?.slug || m.name || null;
-      const matchConf = typeof m.confidence === 'number' 
-        ? (m.confidence <= 1 ? m.confidence : m.confidence / 100) // Normalize to 0-1
-        : null;
-      return {
-        name: matchName,
-        confidence: matchConf,
-      };
-    }).filter(m => m.name);
+    // SINGLE DECLARATION: This is the ONLY place visualMatchesArray is declared
+    const visualMatchesArray = Array.isArray(matches) && matches.length > 0
+      ? matches.map(m => {
+          const matchName = m.strain?.name || m.strain?.strain_name || m.strain?.slug || m.name || null;
+          const matchConf = typeof m.confidence === 'number' 
+            ? (m.confidence <= 1 ? m.confidence : m.confidence / 100) // Normalize to 0-1
+            : null;
+          return {
+            name: matchName,
+            confidence: matchConf,
+          };
+        }).filter(m => m.name)
+      : [];
     
     // Debug log labelInsights.strainName if present
     if (labelInsights?.strainName) {
@@ -1806,8 +1809,8 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
          labelInsights?.isPackagedProduct ||
          scanSummary?.isPackagedProduct);
     
-    // visualMatchesArray is already declared earlier (before packaging insights block)
-    // Reuse it here for canonical strain resolution
+    // visualMatchesArray is declared earlier (line ~1543) before packaging insights block
+    // Reuse it here for canonical strain resolution - DO NOT redeclare
     
     const canonical = resolveCanonicalStrain({
       packagingInsights: packagingInsights || null,
