@@ -1196,7 +1196,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
 
     console.log('[scan-process] start', { id, imageUrl: scan.image_url, status: scan.status, isMultiFrame, numberOfFrames });
 
-    if (scan.status === 'done' && scan.result) {
+    if ((scan.status === 'done' || scan.status === 'completed') && scan.result) {
       const result = scan.result;
       return res.json({
         ok: true,
@@ -1658,12 +1658,13 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     // Build update payload with AI summary if available
     const updatePayload = {
       result: finalResult,
-      status: 'done',
+      status: 'completed', // Standardized status: pending | processing | completed | failed
       processed_at: new Date().toISOString(),
       matched_strain_slug: finalStrainSlug,
       matched_strain_name: finalStrainName,
       match_confidence: finalMatchConfidence,
       match_quality: finalMatchQuality,
+      error: null, // Explicitly clear any error on success
     };
 
     // Add AI summary to database if available
@@ -1677,12 +1678,15 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       .eq('id', id);
     if (upErr) return res.status(500).json({ error: upErr.message });
 
+    // Safety logging for scan completion
     console.log('[scan-process] done', {
       id,
-      status: 'done',
+      status: 'completed',
+      hasResult: !!finalResult,
       hasVision: !!finalResult.vision_raw,
       hasPackagingInsights: !!finalResult.packagingInsights,
       hasAISummary: !!scanAISummary,
+      error: null,
     });
     console.timeEnd(`[scan-process-total] ${id}`);
 

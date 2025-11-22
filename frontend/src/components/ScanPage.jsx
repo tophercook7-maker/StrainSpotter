@@ -628,8 +628,11 @@ export default function ScanPage({ onBack, onNavigate }) {
 
       if (attempt === 0) {
         console.time('[Scanner] polling');
+        console.log('[pollScan] Starting poll', { scanId, maxAttempts, timeoutMs: maxAttempts * delayMs });
       }
-      const res = await fetch(apiUrl(`/api/scans/${scanId}`));
+      const res = await fetch(apiUrl(`/api/scans/${scanId}`), {
+        credentials: 'include',
+      });
       const data = await safeJson(res);
 
       if (!res.ok) {
@@ -717,9 +720,12 @@ export default function ScanPage({ onBack, onNavigate }) {
         !!scan?.errorMessage;
 
       // If scan is complete OR has a result, stop polling and show results
-      // IMPORTANT: Backend sets status='done' when scan completes (backend/index.js line 1661)
+      // IMPORTANT: Backend sets status='completed' when scan completes (backend/index.js line 1661)
       // Also check for result object presence as a fallback
-      if (isComplete || hasResult) {
+      // If status is 'completed'/'done' OR result object exists, consider it complete
+      const shouldStopPolling = isComplete || hasResult || (status === 'completed' && result) || (status === 'done' && result);
+      
+      if (shouldStopPolling) {
         if (timeoutRef) clearTimeout(timeoutRef);
         console.timeEnd('[Scanner] polling');
         console.log('[pollScan] SCAN COMPLETE - stopping polling', {
