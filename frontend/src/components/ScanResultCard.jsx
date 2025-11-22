@@ -385,8 +385,12 @@ function PackagedProductCard({
   );
 }
 
-// Unknown Bud Card Component
-function UnknownBudCard({ 
+// Unknown Strain Card Component
+// Handles both packaged products and buds with unknown strains
+function UnknownStrainCard({ 
+  isPackagedProduct,
+  isPackagedKnown,
+  isBudUnknown,
   summary, 
   effects, 
   flavors, 
@@ -395,6 +399,35 @@ function UnknownBudCard({
   growerNotes, 
   warnings 
 }) {
+  // If packaged product AND we already know the strain (from packaging),
+  // do NOT render this card at all.
+  if (isPackagedProduct && isPackagedKnown) {
+    return null;
+  }
+
+  let title = 'Cannabis (strain unknown)';
+  let subtitle = 'STRAIN UNKNOWN • 0%';
+  let description = '';
+
+  if (isPackagedProduct && !isPackagedKnown) {
+    // Packaged product, but we couldn't extract a strain name
+    title = 'Packaged product (strain unknown)';
+    subtitle = 'STRAIN UNKNOWN • 0%';
+    description =
+      'This looks like a packaged product, but the strain name was not clearly detected from the label. THC, CBD, and other label details may still be available below.';
+  } else if (!isPackagedProduct && isBudUnknown) {
+    // Bud / live plant, unknown strain
+    title = 'Cannabis (strain unknown)';
+    subtitle = 'STRAIN UNKNOWN • 0%';
+    description =
+      'For live plants and buds, this is an estimated strain based on visual and label signals. Results may vary by grower and phenotype.';
+  } else {
+    // Fallback
+    subtitle = 'STRAIN UNKNOWN • 0%';
+    description =
+      'Strain information is not available for this scan. Other label or AI details may still be shown below.';
+  }
+
   return (
     <>
       <Card
@@ -416,24 +449,24 @@ function UnknownBudCard({
               mb: 0.5,
             }}
           >
-            Strain unknown
+            {subtitle}
           </Typography>
           <Typography
             variant="h6"
             sx={{ fontWeight: 700, color: '#E8F5E9', mb: 0.5 }}
           >
-            Cannabis (strain unknown)
+            {title}
           </Typography>
           <Typography
             variant="body2"
             sx={{ color: 'rgba(200, 230, 201, 0.85)' }}
           >
-            For live plants and buds, this is an estimated strain based on visual and label signals. Results may vary by grower and phenotype.
+            {description}
           </Typography>
         </CardContent>
       </Card>
 
-      {/* AI Details Panel - still show even for unknown buds */}
+      {/* AI Details Panel - still show even for unknown strains */}
       <AIStrainDetailsPanel
         intensity={intensity}
         effects={effects}
@@ -557,9 +590,13 @@ function ScanResultCard({ result, scan, isGuest }) {
     );
   }
 
-  if (transformed.isBudUnknown) {
+  // Unknown strain: either bud unknown OR packaged product without detected strain
+  if (transformed.isBudUnknown || (transformed.isPackagedProduct && !transformed.isPackagedKnown)) {
     return (
-      <UnknownBudCard
+      <UnknownStrainCard
+        isPackagedProduct={transformed.isPackagedProduct}
+        isPackagedKnown={transformed.isPackagedKnown}
+        isBudUnknown={transformed.isBudUnknown}
         summary={transformed.aiSummaryText}
         effects={transformed.effectsTags}
         flavors={transformed.flavorTags}
