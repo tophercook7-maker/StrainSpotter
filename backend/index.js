@@ -1264,8 +1264,19 @@ app.get('/api/scans/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Scan not found' });
     }
     
+    // Ensure canonicalStrain is included in response
+    const result = scan.result || {};
+    const canonicalStrain = result.canonicalStrain || {
+      name: scan.matched_strain_name || null,
+      source: scan.match_quality || null,
+      confidence: scan.match_confidence || null,
+    };
+    
     // Return scan object directly (not wrapped) - frontend expects this shape
-    return res.json(scan);
+    return res.json({
+      ...scan,
+      canonicalStrain,
+    });
   } catch (e) {
     console.error('[GET /api/scans/:id] Unexpected error', { scanId: req.params.id, error: e });
     next(e);
