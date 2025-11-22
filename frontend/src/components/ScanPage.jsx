@@ -828,11 +828,28 @@ export default function ScanPage({ onBack, onNavigate }) {
         let matchedStrain = null;
         if (displayStrain.primaryName) {
           // Create a matched strain object from OCR/packaging data
+          // CRITICAL: Prioritize effects/flavors from AI summary and label insights
+          const effects = displayStrain.effects || 
+            scan.ai_summary?.effects ||
+            scan.result?.effects ||
+            scan.label_insights?.effects ||
+            scan.packaging_insights?.effects ||
+            null;
+          
+          const flavors = displayStrain.flavors ||
+            scan.label_insights?.terpenes ||
+            scan.packaging_insights?.terpenes ||
+            scan.ai_summary?.terpenes ||
+            scan.ai_summary?.flavors ||
+            null;
+          
           matchedStrain = {
             name: displayStrain.primaryName,
             type: displayStrain.primaryType !== 'unknown' ? displayStrain.primaryType : null,
             thc: displayStrain.thcPercent,
             cbd: displayStrain.cbdPercent,
+            effects: effects, // Prioritize AI/label effects over strain DB
+            flavors: flavors, // Prioritize label terpenes over strain DB
             // Preserve visual matcher data as fallback metadata if available
             visualMatch: result?.visualMatches?.match || result?.matches?.[0] || null,
           };

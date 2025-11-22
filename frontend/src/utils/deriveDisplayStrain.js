@@ -134,6 +134,22 @@ export function deriveDisplayStrain(scan) {
     estimateLabel = 'Strain unknown';
   }
 
+  // Extract effects with priority order
+  const effects = 
+    summary?.effects ||
+    scan.result?.effects ||
+    label?.effects ||
+    packaging?.effects ||
+    null;
+
+  // Extract flavors/terpenes with priority order
+  const flavors = 
+    label?.terpenes ||
+    packaging?.terpenes ||
+    summary?.terpenes ||
+    summary?.flavors ||
+    null;
+
   return {
     primaryName,
     primaryType,
@@ -144,6 +160,8 @@ export function deriveDisplayStrain(scan) {
     cbdPercent,
     isPackagedProduct,
     isFlowerGuessOnly,
+    effects,
+    flavors,
   };
 }
 

@@ -7,8 +7,31 @@ export function StrainResultCard({ matchedStrain, scan }) {
   const type = normalizeType(matchedStrain.type);
   const thc = formatPercent(matchedStrain.thc);
   const cbd = formatPercent(matchedStrain.cbd);
-  const effects = toArray(matchedStrain.effects);
-  const flavors = toArray(matchedStrain.flavors);
+  
+  // CRITICAL: Prioritize effects/flavors from AI summary and label insights
+  // Priority order: matchedStrain.effects (from deriveDisplayStrain) > scan.ai_summary > scan.result > scan.label_insights > strain DB
+  const effects = toArray(
+    matchedStrain.effects ||
+    scan?.ai_summary?.effects ||
+    scan?.result?.effects ||
+    scan?.label_insights?.effects ||
+    scan?.packaging_insights?.effects ||
+    matchedStrain.visualMatch?.effects ||
+    matchedStrain.visualMatch?.strain?.effects ||
+    null
+  );
+  
+  const flavors = toArray(
+    matchedStrain.flavors ||
+    scan?.label_insights?.terpenes ||
+    scan?.packaging_insights?.terpenes ||
+    scan?.ai_summary?.terpenes ||
+    scan?.ai_summary?.flavors ||
+    matchedStrain.visualMatch?.flavors ||
+    matchedStrain.visualMatch?.strain?.flavors ||
+    null
+  );
+  
   const lineage = matchedStrain.lineage || '';
   const createdAt = scan?.created_at || scan?.createdAt || null;
 

@@ -22,14 +22,23 @@ function ScanResultCard({ result, scan, isGuest }) {
   const matchConf = effective.match_confidence ?? displayStrain.estimateConfidence ?? null;
 
   // Use primaryName from deriveDisplayStrain (prioritizes OCR/packaging)
-  let strainName = displayStrain.primaryName;
+  // CRITICAL: For packaged products, ALWAYS use packaging_insights.strainName if available
+  const packagingStrainName = packagingInsights?.strainName || 
+    effective.packaging_insights?.strainName || null;
+  
+  let strainName = packagingStrainName || displayStrain.primaryName;
 
   if (!strainName) {
-    // Absolute fallback when we truly have nothing
-    strainName =
-      matchQuality === 'none'
-        ? 'Cannabis (strain unknown)'
-        : 'Best guess strain';
+    // Only show "Cannabis (strain unknown)" if we truly have nothing AND it's not a packaged product
+    if (displayStrain.isPackagedProduct && packagingInsights) {
+      // For packaged products with packaging data, show "Packaged product" instead of "unknown"
+      strainName = 'Packaged product';
+    } else {
+      strainName =
+        matchQuality === 'none'
+          ? 'Cannabis (strain unknown)'
+          : 'Best guess strain';
+    }
   }
 
   // Use estimateLabel from deriveDisplayStrain
