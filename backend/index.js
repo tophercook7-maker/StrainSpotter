@@ -64,6 +64,7 @@ import {
 } from './services/scanCredits.js';
 import * as scanCreditsV2 from './services/scanCreditsV2.js';
 import { checkAccess, enforceTrialLimit } from './middleware/membershipCheck.js';
+import { schemaSync } from './services/schemaSync.js';
 
 // Load env from ../env/.env.local (works when launched from backend/)
 // In Vercel, environment variables are injected automatically
@@ -95,6 +96,17 @@ try {
 } catch (e) {
   console.warn('[boot] Google Vision client not initialized:', e.message);
 }
+
+// Schema sync on server start - ensure all required columns exist
+(async () => {
+  try {
+    await schemaSync(supabaseAdmin, supabase);
+    console.log('[SchemaSync] Completed');
+  } catch (err) {
+    console.error('[SchemaSync] Failed:', err);
+    // Don't block server startup - safe writes will handle missing columns
+  }
+})();
 
 // OpenAI client for GPT-5 nano packaging analysis
 const openai = new OpenAI({
@@ -1205,6 +1217,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
   
   console.time(`[scan-process-total] ${id}`);
   
+  // CRITICAL: Wrap entire processing in try/catch to handle schema errors gracefully
   try {
     const { frameImageUrls } = req.body || {}; // Optional: array of additional frame image URLs for multi-angle
     
