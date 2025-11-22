@@ -1855,6 +1855,10 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       matched_strain_name: finalStrainName,
       match_confidence: finalMatchConfidence,
       match_quality: finalMatchQuality,
+      // Save canonical strain to dedicated columns for analytics and frontend queries
+      canonical_strain_name: canonical.name || null,
+      canonical_strain_source: canonical.source || null,
+      canonical_match_confidence: canonical.confidence ?? null,
       error: null, // Explicitly clear any error on success
     };
 
