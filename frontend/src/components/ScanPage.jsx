@@ -736,14 +736,42 @@ export default function ScanPage({ onBack, onNavigate }) {
         refScanId: scanIdRef.current,
       });
       
-      const res = await fetch(apiUrl(`/api/scans/${currentScanId}`), {
+      // BACKEND CONTRACT: GET /api/scans/:id returns scan object directly
+      // URL must be: ${API_BASE}/api/scans/${scanId}
+      const url = apiUrl(`/api/scans/${currentScanId}`);
+      console.log('[POLL] Fetching scan', { scanId: currentScanId, url });
+      
+      const res = await fetch(url, {
         credentials: 'include',
       });
-      const data = await safeJson(res);
 
       if (!res.ok) {
+        // CRITICAL: Log full error details before throwing
+        let errorText = '';
+        try {
+          errorText = await res.text();
+        } catch (e) {
+          console.warn('[POLL] Failed to read error response body', e);
+        }
+        
+        console.error('[POLL] non-OK response', {
+          scanId: currentScanId,
+          status: res.status,
+          statusText: res.statusText,
+          url,
+          body: errorText,
+        });
+        
+        // Try to parse JSON error if available
+        let errorData = {};
+        try {
+          errorData = errorText ? JSON.parse(errorText) : {};
+        } catch (e) {
+          // Not JSON, use text as-is
+        }
+        
         // Improved error messages for polling failures
-        let errorMessage = data?.error || `Scan lookup failed (${res.status})`;
+        let errorMessage = errorData?.error || `Scan lookup failed (${res.status})`;
         if (res.status >= 500) {
           errorMessage = 'Server error while processing scan. Try again in a moment.';
         } else if (res.status === 404) {
@@ -751,6 +779,20 @@ export default function ScanPage({ onBack, onNavigate }) {
         }
         throw new Error(errorMessage);
       }
+
+      // Parse successful response
+      const data = await safeJson(res);
+      
+      // CRITICAL: Log raw response data to verify backend contract
+      console.log('[POLL] raw scan data', {
+        scanId: currentScanId,
+        attempt,
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : [],
+        status: data?.status,
+        hasResult: !!data?.result,
+        resultKeys: data?.result ? Object.keys(data.result).slice(0, 10) : [],
+      });
 
       // Backend GET /api/scans/:id returns the scan object directly (not wrapped)
       // Handle both wrapped { scan: {...} } and direct scan object for compatibility
@@ -1069,7 +1111,17 @@ export default function ScanPage({ onBack, onNavigate }) {
       }, delayMs);
     } catch (e) {
       if (timeoutRef) clearTimeout(timeoutRef);
-      console.error('[Scanner] pollScan error', e);
+      
+      // CRITICAL: Log full error details, not just empty object
+      console.error('[Scanner] pollScan error', {
+        scanId: currentScanId,
+        attempt,
+        message: e?.message || String(e),
+        name: e?.name || 'Error',
+        stack: e?.stack || null,
+        error: e,
+      });
+      
       setIsPolling(false);
       setHasCompletedScan(true); // Mark as completed to prevent timeout race
       hasCompletedScanRef.current = true; // Also set ref for immediate timeout check
