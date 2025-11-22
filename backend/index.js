@@ -1610,18 +1610,25 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
         numberOfFrames: totalFrames,
       });
 
-      if (scanSummary) {
-        console.log('[scan-process] Scan summary built successfully', {
+      if (scanSummary && scanSummary.hasSummary) {
+        console.log('[scan-process] AI summary generated successfully', {
           id,
+          hasSummary: true,
           isPackagedProduct: scanSummary.isPackagedProduct,
           matchConfidence: scanSummary.matchConfidence,
           matchedStrainName: scanSummary.matchedStrainName,
+        });
+      } else {
+        console.log('[scan-process] AI summary step completed without summary', {
+          id,
+          hasSummary: false,
+          error: scanSummary?.error || 'Unknown error',
         });
       }
     } catch (summaryErr) {
       console.error('[Scan Summary] Error building scan summary:', summaryErr);
       // Don't fail the scan - continue without summary
-      scanSummary = null;
+      scanSummary = { hasSummary: false, error: 'AI summary failed to generate' };
     }
 
     // Merge Vision result with visual matches and packaging insights
@@ -1883,10 +1890,23 @@ app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
         stabilityLabel,
         numberOfFrames,
       });
+      
+      if (aiSummary && aiSummary.hasSummary) {
+        console.log('[scan-process] AI summary generated successfully', {
+          hasSummary: true,
+          matchConfidence: aiSummary.matchConfidence,
+          matchedStrainName: aiSummary.matchedStrainName,
+        });
+      } else {
+        console.log('[scan-process] AI summary step completed without summary', {
+          hasSummary: false,
+          error: aiSummary?.error || 'Unknown error',
+        });
+      }
     } catch (summaryErr) {
       console.error('[Scan Summary] Error building scan summary:', summaryErr);
       // Don't fail the scan - continue without summary
-      aiSummary = null;
+      aiSummary = { hasSummary: false, error: 'AI summary failed to generate' };
     }
 
     res.json({

@@ -52,78 +52,87 @@ export function buildScanAISummary({
   stabilityLabel = 'single-frame', 
   numberOfFrames = 1 
 }) {
-  const textAnn = visionResult?.textAnnotations || [];
+  try {
+    const textAnn = visionResult?.textAnnotations || [];
 
-  const labelAnn = visionResult?.labelAnnotations || [];
+    const labelAnn = visionResult?.labelAnnotations || [];
 
-  const fullText = (textAnn[0]?.description || '').trim();
+    const fullText = (textAnn[0]?.description || '').trim();
 
-  const labels = (labelAnn || []).map((l) => (l.description || '').toLowerCase());
+    const labels = (labelAnn || []).map((l) => (l.description || '').toLowerCase());
 
-  const topMatch = Array.isArray(matches?.matches) && matches.matches.length > 0
-    ? matches.matches[0]
-    : null;
+    const topMatch = Array.isArray(matches?.matches) && matches.matches.length > 0
+      ? matches.matches[0]
+      : null;
 
-  const matchConfidence = normalizeMatchConfidence(topMatch);
-  const matchedStrainName = topMatch?.name || null;
-  const estimateConfidenceLabel = computeConfidenceLabel(matchConfidence);
+    const matchConfidence = normalizeMatchConfidence(topMatch);
+    const matchedStrainName = topMatch?.name || null;
+    const estimateConfidenceLabel = computeConfidenceLabel(matchConfidence);
 
-  const labelInfo = extractLabelInfo(fullText);
-  const isPackagedProduct = detectPackagedProduct({
-    fullText,
-    labels,
-    hasThc: labelInfo.thcPercent != null,
-    hasCbd: labelInfo.cbdPercent != null,
-  });
+    const labelInfo = extractLabelInfo(fullText);
+    const isPackagedProduct = detectPackagedProduct({
+      fullText,
+      labels,
+      hasThc: labelInfo.thcPercent != null,
+      hasCbd: labelInfo.cbdPercent != null,
+    });
 
-  // Classify scan type if not provided
-  const detectedScanType = scanType || classifyScanType(visionResult, fullText, labels, isPackagedProduct);
+    // Classify scan type if not provided
+    const detectedScanType = scanType || classifyScanType(visionResult, fullText, labels, isPackagedProduct);
 
-  const estimateType = computeEstimateType({
-    isPackagedProduct,
-    fullText,
-    labels,
-  });
+    const estimateType = computeEstimateType({
+      isPackagedProduct,
+      fullText,
+      labels,
+    });
 
-  const notes = buildNotes({
-    matchConfidence,
-    estimateConfidenceLabel,
-    isPackagedProduct,
-    topMatch,
-    labelInfo,
-    scanType: detectedScanType,
-    stabilityLabel,
-    numberOfFrames,
-  });
+    const notes = buildNotes({
+      matchConfidence,
+      estimateConfidenceLabel,
+      isPackagedProduct,
+      topMatch,
+      labelInfo,
+      scanType: detectedScanType,
+      stabilityLabel,
+      numberOfFrames,
+    });
 
-  return {
-    isPackagedProduct,
-    matchConfidence,
-    matchedStrainName,
-    estimateConfidenceLabel,
-    estimateType,
-    notes,
-    scanType: detectedScanType,
-    stabilityScore,
-    stabilityLabel,
-    numberOfFrames,
-    label: {
-      productName: labelInfo.productName,
-      brandName: labelInfo.brandName,
-      packageType: labelInfo.packageType,
-      packageSize: labelInfo.packageSize,
-      thcPercent: labelInfo.thcPercent,
-      cbdPercent: labelInfo.cbdPercent,
-      thcaPercent: labelInfo.thcaPercent,
-      batchId: labelInfo.batchId,
-      lotNumber: labelInfo.lotNumber,
-      harvestDate: labelInfo.harvestDate,
-      testDate: labelInfo.testDate,
-      labName: labelInfo.labName,
-      licenseNumber: labelInfo.licenseNumber,
-      originType: labelInfo.originType,
-    },
-  };
+    return {
+      hasSummary: true,
+      isPackagedProduct,
+      matchConfidence,
+      matchedStrainName,
+      estimateConfidenceLabel,
+      estimateType,
+      notes,
+      scanType: detectedScanType,
+      stabilityScore,
+      stabilityLabel,
+      numberOfFrames,
+      label: {
+        productName: labelInfo.productName,
+        brandName: labelInfo.brandName,
+        packageType: labelInfo.packageType,
+        packageSize: labelInfo.packageSize,
+        thcPercent: labelInfo.thcPercent,
+        cbdPercent: labelInfo.cbdPercent,
+        thcaPercent: labelInfo.thcaPercent,
+        batchId: labelInfo.batchId,
+        lotNumber: labelInfo.lotNumber,
+        harvestDate: labelInfo.harvestDate,
+        testDate: labelInfo.testDate,
+        labName: labelInfo.labName,
+        licenseNumber: labelInfo.licenseNumber,
+        originType: labelInfo.originType,
+      },
+    };
+  } catch (err) {
+    console.error('[Scan Summary] buildScanAISummary error', err);
+    return {
+      hasSummary: false,
+      error: 'AI summary failed to generate',
+    };
+  }
 }
 
 // normalizeMatchConfidenceForSummary removed - now using shared normalizeMatchConfidence from matchUtils.js
