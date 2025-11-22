@@ -1368,11 +1368,13 @@ export function matchStrainByVisuals(visionResult, strains) {
     }
   }
 
-  // Prefer matches whose name appears in OCR text (for packaged products)
-  const rawText = (labelInsights && labelInsights.rawText) || '';
-  const normalizedText = normalizeForMatch(rawText);
-
-  // Only apply this for packaged products where label text is meaningful
+  // CRITICAL: For packaged products, NEVER override packaging strain with visual guesses
+  // Check if we already have a packaging strain name from extractLabelInsights or packagingInsights
+  const hasPackagingStrain = 
+    labelInsights?.strainName && 
+    labelInsights.strainName.trim() !== '' &&
+    labelInsights.strainName.toLowerCase() !== 'dark horse';
+  
   const isPackagedProduct =
     labelInsights &&
     (labelInsights.isPackagedProduct ||
@@ -1382,54 +1384,72 @@ export function matchStrainByVisuals(visionResult, strains) {
   // Use the real matches array name used in this file
   let matchesArray = finalMatches || [];
 
-  let textBackedMatches = [];
-  if (isPackagedProduct && normalizedText && matchesArray.length > 0) {
-    textBackedMatches = matchesArray.filter((m) => {
-      // Extract name from match structure (matches have strain.name, not m.name)
-      const matchName = m.strain && (m.strain.name || m.strain.strain_name || m.strain.slug);
-      if (!matchName) return false;
-      
-      const n = normalizeForMatch(matchName);
-      if (!n) return false;
-      
-      // If the normalized match name appears inside the normalized label text,
-      // treat as text-backed. Handles things like:
-      // "COMMERCE\nCITY\nKUSH" vs "Commerce City Kush"
-      return normalizedText.includes(n);
-    });
+  // Only apply OCR-backed override for NON-packaged products OR if no packaging strain exists
+  if (!isPackagedProduct || !hasPackagingStrain) {
+    const rawText = (labelInsights && labelInsights.rawText) || '';
+    const normalizedText = normalizeForMatch(rawText);
 
-    if (textBackedMatches.length > 0) {
-      // Because matchesArray is already sorted by score, the first text-backed
-      // match in textBackedMatches is already a high-scoring candidate.
-      const bestTextBacked = textBackedMatches[0];
+    let textBackedMatches = [];
+    if (normalizedText && matchesArray.length > 0) {
+      textBackedMatches = matchesArray.filter((m) => {
+        // Extract name from match structure (matches have strain.name, not m.name)
+        const matchName = m.strain && (m.strain.name || m.strain.strain_name || m.strain.slug);
+        if (!matchName) return false;
+        
+        const n = normalizeForMatch(matchName);
+        if (!n) return false;
+        
+        // If the normalized match name appears inside the normalized label text,
+        // treat as text-backed. Handles things like:
+        // "COMMERCE\nCITY\nKUSH" vs "Commerce City Kush"
+        return normalizedText.includes(n);
+      });
 
-      // Rebuild matchesArray so OCR-backed match is first
-      matchesArray = [
-        bestTextBacked,
-        ...matchesArray.filter((m) => m !== bestTextBacked),
-      ];
+      if (textBackedMatches.length > 0) {
+        // Because matchesArray is already sorted by score, the first text-backed
+        // match in textBackedMatches is already a high-scoring candidate.
+        const bestTextBacked = textBackedMatches[0];
 
-      // Write back to finalMatches
-      finalMatches = matchesArray;
+        // Rebuild matchesArray so OCR-backed match is first
+        matchesArray = [
+          bestTextBacked,
+          ...matchesArray.filter((m) => m !== bestTextBacked),
+        ];
 
-      // Also override labelInsights.strainName so downstream logic
-      // (AI explainer + frontend naming) sees the correct strain name
-      if (labelInsights) {
-        const bestName = bestTextBacked.strain && (
-          bestTextBacked.strain.name || 
-          bestTextBacked.strain.strain_name || 
-          bestTextBacked.strain.slug
-        );
-        if (bestName) {
-          labelInsights.strainName = bestName;
+        // Write back to finalMatches
+        finalMatches = matchesArray;
+
+        // Only override labelInsights.strainName if:
+        // 1. NOT a packaged product, OR
+        // 2. No existing packaging strain name
+        if (labelInsights && (!isPackagedProduct || !hasPackagingStrain)) {
+          const bestName = bestTextBacked.strain && (
+            bestTextBacked.strain.name || 
+            bestTextBacked.strain.strain_name || 
+            bestTextBacked.strain.slug
+          );
+          if (bestName) {
+            labelInsights.strainName = bestName;
+            console.log(
+              '[VisualMatcher] OCR-backed strain override:',
+              bestName
+            );
+          }
+        } else {
+          console.log(
+            '[VisualMatcher] Skipping OCR override - packaging strain already exists:',
+            labelInsights?.strainName
+          );
         }
       }
-
-      console.log(
-        '[VisualMatcher] OCR-backed strain override:',
-        bestTextBacked.strain && (bestTextBacked.strain.name || bestTextBacked.strain.strain_name || bestTextBacked.strain.slug)
-      );
     }
+  } else {
+    // Packaged product with existing packaging strain - preserve it
+    console.log(
+      '[VisualMatcher] Preserving packaging strain name:',
+      labelInsights?.strainName,
+      '(visual guesses will not override)'
+    );
   }
 
   // Debug logging for top results before returning

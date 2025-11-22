@@ -50,6 +50,7 @@ import usersRoutes from './routes/users.js';
 import creditsRoutes from './routes/credits.js';
 import directMessagesRoutes from './routes/direct-messages.js';
 import { matchStrainByVisuals } from './services/visualMatcher.js';
+import { determineCanonicalStrain } from './services/scanUtils.js';
 import { generateLabelAISummary } from './services/aiLabelExplainer.js';
 import { generateScanAISummary, buildScanAISummary } from './services/aiSummaries.js';
 import { analyzePlantHealth } from './services/plantHealthAnalyzer.js';
@@ -1548,7 +1549,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       };
     }
 
-    // Extract match data and apply label-based fallback
+    // Extract match data
     const {
       matchedStrainSlug: visualSlugFinal,
       matchedStrainName: visualNameFinal,
@@ -1556,28 +1557,57 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       matchQuality: visualQuality,
     } = matchResult || {};
 
-    let finalStrainName = visualNameFinal || null;
+    // CRITICAL: Use canonical strain decision helper to determine final strain name
+    // This ensures packaging strain is NEVER overridden by visual guesses
+    const canonicalStrain = determineCanonicalStrain({
+      packagingInsights: packagingInsights || null, // Will be set later, but check if available
+      labelInsights: labelInsights || null,
+      visualMatch: topMatch || null,
+      visualConfidence: visualConfidence || null,
+    });
+
+    // Use canonical strain name (prioritizes packaging over visual guesses)
+    let finalStrainName = canonicalStrain.canonicalStrainName || null;
     let finalStrainSlug = visualSlugFinal || null;
     let finalMatchQuality = visualQuality || 'none';
-    let finalMatchConfidence = visualConfidence || 0;
+    let finalMatchConfidence = canonicalStrain.matchConfidence ?? visualConfidence ?? 0;
 
-    // labelInsights should already exist; we keep using it.
-    const labelStrainName =
-      labelInsights?.strainName ||
-      labelInsights?.strain_name ||
-      null;
-
-    // If visual match didn't find a name, but OCR/label did, use that.
-    if (!finalStrainName && labelStrainName) {
-      finalStrainName = labelStrainName;
-      finalStrainSlug = labelStrainName
+    // If canonical strain is from packaging, ensure we use it (even if visual match exists)
+    if (canonicalStrain.strainSource === 'packaging' && canonicalStrain.packagingStrain) {
+      finalStrainName = canonicalStrain.packagingStrain;
+      // Generate slug from packaging strain name
+      finalStrainSlug = canonicalStrain.packagingStrain
         .toString()
         .trim()
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
       finalMatchQuality = 'label-fallback';
-      finalMatchConfidence = Math.max(finalMatchConfidence, 0.4);
+      finalMatchConfidence = canonicalStrain.matchConfidence ?? 1.0;
+      
+      console.log('[process] Using canonical packaging strain:', {
+        strainName: finalStrainName,
+        source: canonicalStrain.strainSource,
+        confidence: finalMatchConfidence,
+      });
+    } else if (canonicalStrain.strainSource === 'visual' && canonicalStrain.visualStrain) {
+      // Visual match for raw bud (only if confidence >= 0.6)
+      finalStrainName = canonicalStrain.visualStrain;
+      finalStrainSlug = visualSlugFinal || null;
+      finalMatchQuality = visualQuality || 'none';
+      finalMatchConfidence = canonicalStrain.matchConfidence ?? visualConfidence ?? 0;
+      
+      console.log('[process] Using canonical visual strain:', {
+        strainName: finalStrainName,
+        source: canonicalStrain.strainSource,
+        confidence: finalMatchConfidence,
+      });
+    } else {
+      // Fallback: no valid strain found
+      finalStrainName = 'Cannabis (strain unknown)';
+      finalStrainSlug = null;
+      finalMatchQuality = 'none';
+      finalMatchConfidence = 0;
     }
 
     // Generate AI summary if we have label insights (for packaged products)
@@ -1683,9 +1713,39 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       console.log('[scan-process] packagingInsights computed', {
         id,
         hasInsights: !!packagingInsights,
-        strainName: packagingInsights?.basic?.strain_name || null,
-        overallConfidence: packagingInsights?.confidence?.overall ?? null,
+        strainName: packagingInsights?.strainName || packagingInsights?.basic?.strain_name || null,
+        overallConfidence: packagingInsights?.confidence?.overall ?? packagingInsights?.overallConfidence ?? null,
       });
+      
+      // CRITICAL: Re-determine canonical strain AFTER packaging insights are available
+      // This ensures packaging strain takes priority over visual guesses
+      if (packagingInsights) {
+        const updatedCanonicalStrain = determineCanonicalStrain({
+          packagingInsights: packagingInsights,
+          labelInsights: labelInsights || null,
+          visualMatch: topMatch || null,
+          visualConfidence: visualConfidence || null,
+        });
+        
+        // If packaging insights provide a strain name, use it as canonical
+        if (updatedCanonicalStrain.strainSource === 'packaging' && updatedCanonicalStrain.packagingStrain) {
+          finalStrainName = updatedCanonicalStrain.packagingStrain;
+          finalStrainSlug = updatedCanonicalStrain.packagingStrain
+            .toString()
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+          finalMatchQuality = 'label-fallback';
+          finalMatchConfidence = updatedCanonicalStrain.matchConfidence ?? 1.0;
+          
+          console.log('[process] Updated to packaging strain after packagingInsights:', {
+            strainName: finalStrainName,
+            source: updatedCanonicalStrain.strainSource,
+            confidence: finalMatchConfidence,
+          });
+        }
+      }
     } catch (packagingErr) {
       console.error('[packagingInsights] Error generating packaging insights:', packagingErr);
       // Don't fail the scan - continue without packaging insights
