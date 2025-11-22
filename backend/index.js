@@ -1727,11 +1727,11 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       // CRITICAL: Re-determine canonical strain AFTER packaging insights are available
       // This ensures packaging strain takes priority over visual guesses
       if (packagingInsights) {
-        const updatedCanonicalStrain = determineCanonicalStrain({
-          packagingInsights: packagingInsights,
+        const updatedCanonicalStrain = resolveCanonicalStrain({
           labelInsights: labelInsights || null,
-          visualMatch: topMatch || null,
-          visualConfidence: visualConfidence || null,
+          packagingInsights: packagingInsights,
+          visualMatches: visualMatchesArray,
+          matchConfidence: visualConfidence || null,
         });
         
         // If packaging insights provide a strain name, use it as canonical
