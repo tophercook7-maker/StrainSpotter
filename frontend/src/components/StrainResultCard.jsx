@@ -1,5 +1,43 @@
 import React from 'react';
 
+/**
+ * Normalizes tag data to strings, handling objects like { name, percent }
+ * @param {Array} raw - Raw tag data (strings or objects)
+ * @returns {string[]} Array of normalized string tags
+ */
+function normalizeTags(raw) {
+  if (!raw) return [];
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .map((item) => {
+      // Already a string, use as-is
+      if (typeof item === 'string') return item.trim();
+
+      // If object has name/percent, format nicely
+      if (item && typeof item === 'object') {
+        // Handle { name, percent }
+        if ('name' in item && 'percent' in item) {
+          const pct = typeof item.percent === 'number'
+            ? Math.round(item.percent)
+            : item.percent;
+          if (item.name && pct != null && pct !== '') {
+            return `${item.name} (${pct}%)`;
+          }
+          if (item.name) return String(item.name);
+        }
+
+        // Generic fallbacks:
+        if ('name' in item && item.name) return String(item.name);
+        if ('label' in item && item.label) return String(item.label);
+        if ('value' in item && item.value) return String(item.value);
+      }
+
+      return null;
+    })
+    .filter(Boolean);
+}
+
 export function StrainResultCard({ matchedStrain, scan }) {
   if (!matchedStrain) return null;
 
@@ -10,7 +48,7 @@ export function StrainResultCard({ matchedStrain, scan }) {
   
   // CRITICAL: Prioritize effects/flavors from AI summary and label insights
   // Priority order: matchedStrain.effects (from deriveDisplayStrain) > scan.ai_summary > scan.result > scan.label_insights > strain DB
-  const effects = toArray(
+  const rawEffects = 
     matchedStrain.effects ||
     scan?.ai_summary?.effects ||
     scan?.result?.effects ||
@@ -18,10 +56,9 @@ export function StrainResultCard({ matchedStrain, scan }) {
     scan?.packaging_insights?.effects ||
     matchedStrain.visualMatch?.effects ||
     matchedStrain.visualMatch?.strain?.effects ||
-    null
-  );
+    null;
   
-  const flavors = toArray(
+  const rawFlavors = 
     matchedStrain.flavors ||
     scan?.label_insights?.terpenes ||
     scan?.packaging_insights?.terpenes ||
@@ -29,8 +66,15 @@ export function StrainResultCard({ matchedStrain, scan }) {
     scan?.ai_summary?.flavors ||
     matchedStrain.visualMatch?.flavors ||
     matchedStrain.visualMatch?.strain?.flavors ||
-    null
-  );
+    null;
+  
+  // Normalize to arrays first, then normalize to strings
+  const effectsArray = toArray(rawEffects);
+  const flavorsArray = toArray(rawFlavors);
+  
+  // CRITICAL: Normalize to strings to prevent React error #31 (objects as children)
+  const effects = normalizeTags(effectsArray);
+  const flavors = normalizeTags(flavorsArray);
   
   const lineage = matchedStrain.lineage || '';
   const createdAt = scan?.created_at || scan?.createdAt || null;
@@ -205,7 +249,24 @@ function MiniStat({ label, value, highlight }) {
 }
 
 function TagSection({ title, items, tone }) {
-  if (!items || items.length === 0) return null;
+  // Runtime guard: ensure items is an array and normalize to strings
+  const safeItems = Array.isArray(items) ? items : [];
+  
+  // Filter to only strings (defensive - should already be normalized by caller)
+  const cleaned = safeItems
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      // If somehow an object got through, try to extract a string
+      if (item && typeof item === 'object') {
+        if ('name' in item) return String(item.name);
+        if ('label' in item) return String(item.label);
+        if ('value' in item) return String(item.value);
+      }
+      return null;
+    })
+    .filter(Boolean);
+  
+  if (cleaned.length === 0) return null;
 
   const palette =
     tone === 'flavors'
@@ -243,7 +304,7 @@ function TagSection({ title, items, tone }) {
           gap: '0.3rem',
         }}
       >
-        {items.map((item, idx) => (
+        {cleaned.map((item, idx) => (
           <div
             key={`${title}-${idx}`}
             style={{
