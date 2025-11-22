@@ -491,12 +491,68 @@ export default function ScanPage({ onBack, onNavigate }) {
           body: JSON.stringify({ frameImageUrls }),
         });
         console.timeEnd('[Scanner] process-trigger');
+        
         if (!processRes.ok) {
-          console.warn('[startScan] Process endpoint returned non-OK:', processRes.status);
+          let errorData = {};
+          try {
+            errorData = await processRes.json();
+          } catch (e) {
+            console.warn('[startScan] Failed to parse error response', e);
+          }
+          
+          console.error('[startScan] Process endpoint returned non-OK', {
+            status: processRes.status,
+            scanId,
+            error: errorData?.error || errorData?.error?.message || 'Unknown error',
+            errorCode: errorData?.error?.code || null,
+          });
+          
+          // CRITICAL: Do NOT start polling if process endpoint failed
+          setIsUploading(false);
+          setIsPolling(false);
+          setScanPhase('error');
+          
+          const errorMessage = errorData?.error?.message || errorData?.error || errorData?.message || `Server returned ${processRes.status}`;
+          setScanError({
+            type: 'server',
+            message: 'We couldn\'t start this scan.',
+            details: errorMessage + '. Please try again in a moment.',
+            scanId: scanId || undefined,
+          });
+          setScanStatus({
+            phase: 'error',
+            message: 'Scan start failed.',
+            details: 'Our AI couldn\'t begin processing your image.',
+          });
+          setError('We couldn\'t start this scan. Please try again in a moment.');
+          setStatusMessage('Scan start failed. Please try again.');
+          return; // Exit early - do not call pollScan
         }
       } catch (e) {
-        console.error('[startScan] Error triggering scan processing', e);
-        // Do not throw here; we'll let pollScan handle timeouts/errors
+        console.error('[startScan] Error triggering scan processing', {
+          error: e,
+          scanId,
+          message: e?.message || String(e),
+        });
+        
+        // CRITICAL: Do NOT start polling if process endpoint threw
+        setIsUploading(false);
+        setIsPolling(false);
+        setScanPhase('error');
+        setScanError({
+          type: 'server',
+          message: 'We couldn\'t start this scan.',
+          details: e?.message || 'Failed to start scan processing. Please try again.',
+          scanId: scanId || undefined,
+        });
+        setScanStatus({
+          phase: 'error',
+          message: 'Scan start failed.',
+          details: 'Our AI couldn\'t begin processing your image.',
+        });
+        setError('We couldn\'t start this scan. Please try again in a moment.');
+        setStatusMessage('Scan start failed. Please try again.');
+        return; // Exit early - do not call pollScan
       }
     }
 
