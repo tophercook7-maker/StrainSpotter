@@ -2846,6 +2846,34 @@ app.get('/api/barcode/lookup', async (req, res) => {
 // BUSINESS PROFILES: Register and lookup
 // ========================================
 
+// Helper: Get authenticated user from request
+async function getUserFromRequest(req) {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader) {
+      return null;
+    }
+
+    const token = authHeader.replace('Bearer ', '').trim();
+    
+    if (!token) {
+      return null;
+    }
+
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    
+    if (error || !user) {
+      return null;
+    }
+
+    return user;
+  } catch (e) {
+    console.error('[getUserFromRequest] Error', e);
+    return null;
+  }
+}
+
 // Helper: build zip group key
 function makeZipGroupKey(postalCode, country = 'US') {
   if (!postalCode) return null;
