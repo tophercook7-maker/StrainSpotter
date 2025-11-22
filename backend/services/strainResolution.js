@@ -3,7 +3,7 @@
  * 
  * Determines the canonical strain name for a scan based on strict priority rules:
  * 1. Packaged products: Packaging > Label > AI summary (NEVER visual guesses)
- * 2. Raw flower: Visual matches (confidence >= 0.6) > AI summary
+ * 2. Raw flower: Visual matches (confidence >= 0.8) > AI summary
  * 3. Otherwise: "Cannabis (strain unknown)"
  */
 
@@ -76,9 +76,9 @@ export function resolveCanonicalStrain({
     };
   }
 
-  // 2 — RAW FLOWER: use visual matches
+  // 2 — RAW FLOWER: use visual matches (only if confidence >= 0.8 for conservative guesses)
   const top = visualMatches?.[0];
-  if (top && top.confidence >= 0.6) {
+  if (top && top.confidence >= 0.8) {
     return {
       name: top.name,
       source: 'visual',

@@ -324,11 +324,23 @@ export function transformScanResult(scan) {
     matched_strain_name: canonical.name !== 'Cannabis (strain unknown)' ? canonical.name : scan.matched_strain_name,
   };
 
+  // For buds, only use visual strain if confidence >= 0.8 (conservative guesses)
+  let finalStrainName = canonical.name || 'Cannabis (strain unknown)';
+  let finalStrainSource = canonical.source || 'none';
+  let finalMatchConfidence = canonical.confidence ?? 0;
+  
+  if (!isPackagedProduct && canonical.source === 'visual' && canonical.confidence != null && canonical.confidence < 0.8) {
+    // Bud with low confidence visual match: show unknown instead of wrong guess
+    finalStrainName = 'Cannabis (strain unknown)';
+    finalStrainSource = 'visual-unknown';
+    finalMatchConfidence = 0;
+  }
+
   return {
     ...existingFields,
-    strainName: canonical.name || 'Cannabis (strain unknown)',
-    strainSource: canonical.source || 'none',
-    matchConfidence: canonical.confidence ?? 0,
+    strainName: finalStrainName,
+    strainSource: finalStrainSource,
+    matchConfidence: finalMatchConfidence,
     isPackagedProduct: isPackagedProduct,
     effectsTags: effectsTags,
     flavorTags: flavorTags,
