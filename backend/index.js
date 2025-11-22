@@ -65,6 +65,7 @@ import {
 import * as scanCreditsV2 from './services/scanCreditsV2.js';
 import { checkAccess, enforceTrialLimit } from './middleware/membershipCheck.js';
 import { schemaSync } from './services/schemaSync.js';
+import { safeUpdateScan, isSchemaError } from './services/safeWrites.js';
 
 // Load env from ../env/.env.local (works when launched from backend/)
 // In Vercel, environment variables are injected automatically
