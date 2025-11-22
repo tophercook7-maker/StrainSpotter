@@ -53,6 +53,7 @@ import { matchStrainByVisuals } from './services/visualMatcher.js';
 import { generateLabelAISummary } from './services/aiLabelExplainer.js';
 import { generateScanAISummary, buildScanAISummary } from './services/aiSummaries.js';
 import { analyzePlantHealth } from './services/plantHealthAnalyzer.js';
+import { normalizeMatchConfidence } from './services/matchUtils.js';
 import {
   consumeScanCredits,
   ensureMonthlyBundle,
@@ -2057,23 +2058,7 @@ function combineVisionResults(visionResults) {
   return combined;
 }
 
-/**
- * Normalize match confidence to 0-1 scale
- */
-function normalizeMatchConfidence(match) {
-  if (!match) return null;
-  if (typeof match.confidence === 'number') {
-    const c = match.confidence;
-    if (c <= 0) return 0;
-    if (c >= 1) return 1;
-    return c;
-  }
-  if (typeof match.score === 'number') {
-    const score = Math.max(0, Math.min(200, match.score));
-    return score / 200;
-  }
-  return null;
-}
+// normalizeMatchConfidence moved to backend/services/matchUtils.js - import if needed
 
 // --- Mount Route Modules ---
 // Apply general rate limiting to all /api routes

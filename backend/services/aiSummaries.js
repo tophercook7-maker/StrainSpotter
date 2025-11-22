@@ -1,4 +1,5 @@
 // Backend helper to build a rich AI summary object for scanner results.
+import { normalizeMatchConfidence } from './matchUtils.js';
 // It takes the Vision API result + the visual matching output and returns
 // a single `aiSummary` object that the frontend can render.
 //
@@ -63,7 +64,7 @@ export function buildScanAISummary({
     ? matches.matches[0]
     : null;
 
-  const matchConfidence = normalizeMatchConfidenceForSummary(topMatch);
+  const matchConfidence = normalizeMatchConfidence(topMatch);
   const matchedStrainName = topMatch?.name || null;
   const estimateConfidenceLabel = computeConfidenceLabel(matchConfidence);
 
@@ -125,22 +126,7 @@ export function buildScanAISummary({
   };
 }
 
-function normalizeMatchConfidenceForSummary(topMatch) {
-  if (!topMatch) return null;
-  if (typeof topMatch.confidence === 'number') {
-    // Assume 0–1; clamp just in case.
-    const c = topMatch.confidence;
-    if (c <= 0) return 0;
-    if (c >= 1) return 1;
-    return c;
-  }
-  if (typeof topMatch.score === 'number') {
-    // Score is 0–200 per docs; map to 0–1.
-    const score = Math.max(0, Math.min(200, topMatch.score));
-    return score / 200;
-  }
-  return null;
-}
+// normalizeMatchConfidenceForSummary removed - now using shared normalizeMatchConfidence from matchUtils.js
 
 function computeConfidenceLabel(matchConfidence) {
   if (matchConfidence == null) return 'Unknown';
