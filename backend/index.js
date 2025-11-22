@@ -3473,14 +3473,17 @@ app.post('/api/direct-messages/send', express.json(), async (req, res) => {
     // Get or create thread
     const thread = await getOrCreateThread(user.id, receiver_id);
 
-    // Insert message
+    // Insert message (support both old and new schema)
     const { data: newMessage, error: insertError } = await supabaseAdmin
       .from('direct_messages')
       .insert({
         sender: user.id,
         receiver: receiver_id,
+        sender_id: user.id, // Support legacy schema
+        receiver_id: receiver_id, // Support legacy schema
         thread_id: thread.id,
         message: message || null,
+        content: message || null, // Legacy field name
         image_url: image_url || null,
         image_width: image_width || null,
         image_height: image_height || null,
