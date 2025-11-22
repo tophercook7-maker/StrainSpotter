@@ -11,4 +11,3 @@ DROP CONSTRAINT IF EXISTS scans_matched_strain_slug_fkey;
 -- FROM information_schema.table_constraints 
 -- WHERE table_name = 'scans' 
 -- AND constraint_name = 'scans_matched_strain_slug_fkey';
-

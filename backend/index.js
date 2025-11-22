@@ -3364,6 +3364,315 @@ app.post('/api/business/register', express.json(), async (req, res) => {
   }
 });
 
+// ========================================
+// DIRECT MESSAGING SYSTEM
+// ========================================
+
+// Helper: Get or create thread between two users
+async function getOrCreateThread(userA, userB) {
+  // Ensure consistent ordering (smaller UUID first)
+  const [a, b] = [userA, userB].sort();
+  
+  const { data: existing, error: fetchError } = await supabaseAdmin
+    .from('direct_threads')
+    .select('*')
+    .or(`and(user_a.eq.${a},user_b.eq.${b}),and(user_a.eq.${b},user_b.eq.${a})`)
+    .maybeSingle();
+
+  if (fetchError && fetchError.code !== 'PGRST116') {
+    throw fetchError;
+  }
+
+  if (existing) {
+    return existing;
+  }
+
+  // Create new thread
+  const { data: created, error: createError } = await supabaseAdmin
+    .from('direct_threads')
+    .insert({
+      user_a: a,
+      user_b: b,
+    })
+    .select()
+    .single();
+
+  if (createError) {
+    throw createError;
+  }
+
+  return created;
+}
+
+// Helper: Check if user can message receiver
+async function canUserMessage(senderId, receiverId) {
+  // Check receiver's public message setting
+  const { data: receiverProfile } = await supabaseAdmin
+    .from('profiles')
+    .select('allow_public_messages')
+    .eq('user_id', receiverId)
+    .maybeSingle();
+
+  const { data: receiverBusiness } = await supabaseAdmin
+    .from('business_profiles')
+    .select('allow_public_messages')
+    .eq('user_id', receiverId)
+    .maybeSingle();
+
+  const allowPublic = receiverProfile?.allow_public_messages ?? receiverBusiness?.allow_public_messages ?? true;
+
+  if (allowPublic) {
+    return { allowed: true, reason: null };
+  }
+
+  // If not public, check if they have an existing thread (accepted contact)
+  const thread = await getOrCreateThread(senderId, receiverId).catch(() => null);
+  if (thread) {
+    // Check if thread has messages (indicates accepted contact)
+    const { data: messages } = await supabaseAdmin
+      .from('direct_messages')
+      .select('id')
+      .eq('thread_id', thread.id)
+      .limit(1);
+
+    if (messages && messages.length > 0) {
+      return { allowed: true, reason: 'existing_thread' };
+    }
+  }
+
+  return { allowed: false, reason: 'private_profile' };
+}
+
+// POST /api/direct-messages/send - Send a direct message
+app.post('/api/direct-messages/send', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { receiver_id, message, image_url, image_width, image_height } = req.body || {};
+
+    if (!receiver_id) {
+      return res.status(400).json({ error: 'receiver_id is required' });
+    }
+
+    if (!message && !image_url) {
+      return res.status(400).json({ error: 'message or image_url is required' });
+    }
+
+    // Check if user can message receiver
+    const canMessage = await canUserMessage(user.id, receiver_id);
+    if (!canMessage.allowed) {
+      return res.status(403).json({ 
+        error: 'Cannot send message',
+        reason: canMessage.reason 
+      });
+    }
+
+    // Get or create thread
+    const thread = await getOrCreateThread(user.id, receiver_id);
+
+    // Insert message
+    const { data: newMessage, error: insertError } = await supabaseAdmin
+      .from('direct_messages')
+      .insert({
+        sender: user.id,
+        receiver: receiver_id,
+        thread_id: thread.id,
+        message: message || null,
+        image_url: image_url || null,
+        image_width: image_width || null,
+        image_height: image_height || null,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('[dm/send] Insert error', insertError);
+      return res.status(500).json({ error: 'Failed to send message' });
+    }
+
+    // Update thread's last_message_at
+    await supabaseAdmin
+      .from('direct_threads')
+      .update({ last_message_at: new Date().toISOString() })
+      .eq('id', thread.id);
+
+    return res.json({ message: newMessage, thread });
+  } catch (err) {
+    console.error('[dm/send] Error', err);
+    return res.status(500).json({ error: 'Unexpected error sending message' });
+  }
+});
+
+// GET /api/direct-messages/threads - List user's message threads
+app.get('/api/direct-messages/threads', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Get all threads where user is user_a or user_b
+    const { data: threads, error } = await supabaseAdmin
+      .from('direct_threads')
+      .select('*')
+      .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
+      .order('last_message_at', { ascending: false, nullsFirst: false })
+      .limit(100);
+
+    if (error) {
+      console.error('[dm/threads] Error', error);
+      return res.status(500).json({ error: 'Failed to fetch threads' });
+    }
+
+    // For each thread, get the other user's info and last message
+    const enrichedThreads = await Promise.all(
+      (threads || []).map(async (thread) => {
+        const otherUserId = thread.user_a === user.id ? thread.user_b : thread.user_a;
+        
+        // Get other user's profile
+        const { data: profile } = await supabaseAdmin
+          .from('profiles')
+          .select('username, avatar_url')
+          .eq('user_id', otherUserId)
+          .maybeSingle();
+
+        const { data: businessProfile } = await supabaseAdmin
+          .from('business_profiles')
+          .select('name, business_type')
+          .eq('user_id', otherUserId)
+          .maybeSingle();
+
+        // Get last message
+        const { data: messages } = await supabaseAdmin
+          .from('direct_messages')
+          .select('id, message, image_url, created_at, read_at')
+          .eq('thread_id', thread.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        const lastMessage = messages && messages[0] ? messages[0] : null;
+        const unreadCount = lastMessage && !lastMessage.read_at && lastMessage.receiver === user.id ? 1 : 0;
+
+        return {
+          ...thread,
+          other_user_id: otherUserId,
+          other_user_name: businessProfile?.name || profile?.username || 'Unknown',
+          other_user_avatar: profile?.avatar_url || null,
+          other_user_type: businessProfile?.business_type || 'user',
+          last_message: lastMessage,
+          unread_count: unreadCount,
+        };
+      })
+    );
+
+    return res.json({ threads: enrichedThreads });
+  } catch (err) {
+    console.error('[dm/threads] Error', err);
+    return res.status(500).json({ error: 'Unexpected error fetching threads' });
+  }
+});
+
+// GET /api/direct-messages/thread/:threadId - Get messages in a thread
+app.get('/api/direct-messages/thread/:threadId', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { threadId } = req.params;
+
+    // Verify user is part of this thread
+    const { data: thread, error: threadError } = await supabaseAdmin
+      .from('direct_threads')
+      .select('*')
+      .eq('id', threadId)
+      .maybeSingle();
+
+    if (threadError || !thread) {
+      return res.status(404).json({ error: 'Thread not found' });
+    }
+
+    if (thread.user_a !== user.id && thread.user_b !== user.id) {
+      return res.status(403).json({ error: 'Not authorized to view this thread' });
+    }
+
+    // Get messages
+    const { data: messages, error: messagesError } = await supabaseAdmin
+      .from('direct_messages')
+      .select('*')
+      .eq('thread_id', threadId)
+      .order('created_at', { ascending: true })
+      .limit(200);
+
+    if (messagesError) {
+      console.error('[dm/thread] Error fetching messages', messagesError);
+      return res.status(500).json({ error: 'Failed to fetch messages' });
+    }
+
+    // Mark messages as read
+    await supabaseAdmin
+      .from('direct_messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('thread_id', threadId)
+      .eq('receiver', user.id)
+      .is('read_at', null);
+
+    return res.json({ thread, messages: messages || [] });
+  } catch (err) {
+    console.error('[dm/thread] Error', err);
+    return res.status(500).json({ error: 'Unexpected error fetching thread' });
+  }
+});
+
+// POST /api/direct-messages/mark-read - Mark messages as read
+app.post('/api/direct-messages/mark-read', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { thread_id } = req.body || {};
+
+    if (!thread_id) {
+      return res.status(400).json({ error: 'thread_id is required' });
+    }
+
+    // Verify user is part of thread
+    const { data: thread } = await supabaseAdmin
+      .from('direct_threads')
+      .select('*')
+      .eq('id', thread_id)
+      .maybeSingle();
+
+    if (!thread || (thread.user_a !== user.id && thread.user_b !== user.id)) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    // Mark all unread messages as read
+    const { error: updateError } = await supabaseAdmin
+      .from('direct_messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('thread_id', thread_id)
+      .eq('receiver', user.id)
+      .is('read_at', null);
+
+    if (updateError) {
+      console.error('[dm/mark-read] Error', updateError);
+      return res.status(500).json({ error: 'Failed to mark as read' });
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[dm/mark-read] Error', err);
+    return res.status(500).json({ error: 'Unexpected error' });
+  }
+});
+
 // GET /api/business/:code - Lookup grower/dispensary by code
 app.get('/api/business/:code', async (req, res) => {
   try {
