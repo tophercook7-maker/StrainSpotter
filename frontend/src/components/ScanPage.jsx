@@ -827,10 +827,11 @@ export default function ScanPage({ onBack, onNavigate }) {
         // Build matchedStrain object for StrainResultCard ONLY if we have a valid strain name
         // CRITICAL: For packaged products, transformScanResult already handles the priority logic
         let matchedStrain = null;
+        let displayStrain = null; // Declare outside if block to avoid reference error
         
         if (transformed && transformed.strainName && transformed.strainName !== 'Cannabis (strain unknown)') {
           // Use deriveDisplayStrain for effects/flavors (already filtered appropriately)
-          const displayStrain = deriveDisplayStrain(scan);
+          displayStrain = deriveDisplayStrain(scan);
           
           matchedStrain = {
             name: transformed.strainName, // CRITICAL: Use strainName from transformScanResult
@@ -866,8 +867,8 @@ export default function ScanPage({ onBack, onNavigate }) {
           matchedStrain: matchedStrain || null,
           visionText: extractedVisionText || null,
           matched_strain_slug: scan.matched_strain_slug || null,
-          // Store display strain info for ScanResultCard
-          displayStrain,
+          // Store display strain info for ScanResultCard (only if available)
+          displayStrain: displayStrain || null,
         });
         setActiveView('result');
         
@@ -986,7 +987,8 @@ export default function ScanPage({ onBack, onNavigate }) {
       setScanPhase('error');
       
       // Never show raw JS errors to users - sanitize all error messages
-      const errorMsg = String(err?.message || err || '');
+      // CRITICAL: Use 'e' (the catch parameter), not 'err' which doesn't exist
+      const errorMsg = String(e?.message || e || '');
       let userMessage = 'We couldn\'t finish this scan. Please try again.';
       let errorType = 'unknown';
       
