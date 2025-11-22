@@ -1138,24 +1138,25 @@ export default function ScanPage({ onBack, onNavigate }) {
   // RESULT MODE
   if (activeView === 'result' && completedScan) {
     return (
-      <Box
+      <Stack
+        direction="column"
         sx={{
           height: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
+          overflow: 'hidden',
           backgroundColor: '#050705',
           paddingTop: 'calc(env(safe-area-inset-top) + 20px)',
           paddingBottom: 'env(safe-area-inset-bottom)',
-          overflow: 'hidden', // Prevent body scroll
         }}
       >
         {/* Fixed header section */}
-        <Container
-          maxWidth="md"
+        <Box
           sx={{
             flexShrink: 0,
             px: 2,
             pb: 1,
+            maxWidth: 'md',
+            mx: 'auto',
+            width: '100%',
           }}
         >
           {/* Back button */}
@@ -1191,24 +1192,26 @@ export default function ScanPage({ onBack, onNavigate }) {
               Scan result
             </Typography>
           </Box>
-        </Container>
+        </Box>
 
         {/* Results area (scrollable) - SINGLE SCROLL CONTAINER */}
         <Box
           sx={{
             flex: 1,
+            minHeight: 0,
             overflowY: 'auto',
             overflowX: 'hidden',
             WebkitOverflowScrolling: 'touch',
             position: 'relative',
-            minHeight: 0, // Critical for flex scrolling
           }}
         >
-          <Container
-            maxWidth="md"
+          <Box
             sx={{
               px: 2,
-              pb: 12, // Space for sticky buttons
+              pb: 2,
+              maxWidth: 'md',
+              mx: 'auto',
+              width: '100%',
             }}
           >
           {/* Strain Result Card - shows matched strain if present */}
@@ -1304,23 +1307,22 @@ export default function ScanPage({ onBack, onNavigate }) {
               <ScanAISummaryPanel summary={completedScan.aiSummary} />
             </Box>
           )}
-          </Container>
+          </Box>
         </Box>
 
-        {/* Fixed bottom action bar - outside scroll container */}
+        {/* Fixed bottom action bar - OUTSIDE scroll container */}
         <Box
           sx={{
             flexShrink: 0,
-            px: 2,
-            pb: 1.5,
-            pt: 1,
-            background:
-              'linear-gradient(to top, rgba(5, 7, 5, 0.96), rgba(5, 7, 5, 0.2))',
-            backdropFilter: 'blur(6px)',
-            borderTop: '1px solid rgba(124, 179, 66, 0.2)',
+            p: 2,
+            borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+            background: 'rgba(0, 0, 0, 0.3)',
+            backdropFilter: 'blur(12px)',
+            maxWidth: 'md',
+            mx: 'auto',
+            width: '100%',
           }}
         >
-          <Container maxWidth="md" sx={{ px: 0 }}>
           <Stack direction="row" spacing={1.5}>
             <Button
               variant="outlined"
@@ -1356,9 +1358,8 @@ export default function ScanPage({ onBack, onNavigate }) {
               Scan again
             </Button>
           </Stack>
-          </Container>
         </Box>
-      </Box>
+      </Stack>
     );
   }
 
