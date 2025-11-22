@@ -41,10 +41,12 @@ export function deriveDisplayStrain(scan) {
   const summary = scan.ai_summary || scan.result?.aiSummary || null;
   const visual = scan.result?.visualMatches || scan.result?.topMatches || scan.result?.matches || [];
 
-  // Determine if this is a packaged product
-  const isPackagedFromSummary = summary?.isPackagedProduct === true;
-  const isPackagedFromPackaging = !!packaging;
-  const isPackagedProduct = isPackagedFromSummary || isPackagedFromPackaging;
+  // CRITICAL: Determine if this is a packaged product
+  // Check multiple sources to be absolutely sure
+  const isPackagedFromSummary = summary?.isPackagedProduct === true || summary?.is_packaged_product === true;
+  const isPackagedFromPackaging = !!packaging || packaging?.isPackagedProduct === true || packaging?.is_packaged_product === true;
+  const isPackagedFromLabel = label?.isPackagedProduct === true || label?.is_packaged_product === true;
+  const isPackagedProduct = isPackagedFromSummary || isPackagedFromPackaging || isPackagedFromLabel;
 
   // Extract strain names from different sources
   // CRITICAL: For packaged products, ONLY use label_insights.strainName
@@ -200,21 +202,45 @@ export function deriveDisplayStrain(scan) {
   }
 
   // Extract effects/flavors - ONLY show if we have a real library strain match
-  // CRITICAL: Don't show library effects/flavors for packaged products without strain name
+  // CRITICAL: For packaged products, NEVER use library effects/flavors unless library strain exactly matches packaging strain
+  const libraryMatchesPackaging = 
+    isPackagedProduct &&
+    hasPackagedStrain &&
+    libraryStrainName &&
+    normalizeName(libraryStrainName) === normalizeName(packagedStrainName);
+  
   const canUseLibraryTags = 
     !!libraryStrainName &&
+    !isPackagedProduct && // NEVER use library tags for packaged products (unless exact match)
     !isUnknownPackaged &&
     (estimateConfidence == null || estimateConfidence >= 0.8);
 
-  // For packaged products, prefer AI/label effects over library effects
-  // For non-packaged, use library effects if confidence is high enough
-  const effects = canUseLibraryTags && !isPackagedProduct
-    ? (summary?.effects || scan.result?.effects || null)
-    : (summary?.effects || scan.result?.effects || label?.effects || packaging?.effects || null);
-
-  const flavors = canUseLibraryTags && !isPackagedProduct
-    ? (label?.terpenes || summary?.terpenes || summary?.flavors || null)
-    : (label?.terpenes || packaging?.terpenes || summary?.terpenes || summary?.flavors || null);
+  // For packaged products: use AI/label effects, NEVER library effects (unless exact match)
+  // For non-packaged: use library effects if confidence is high enough
+  let effects = null;
+  let flavors = null;
+  
+  if (isPackagedProduct) {
+    // Packaged products: ONLY use AI/label effects, never library effects
+    // Exception: if library strain exactly matches packaging strain, we can use library effects
+    if (libraryMatchesPackaging) {
+      effects = summary?.effects || scan.result?.effects || label?.effects || packaging?.effects || null;
+      flavors = label?.terpenes || packaging?.terpenes || summary?.terpenes || summary?.flavors || null;
+    } else {
+      // For packaged products, prefer AI/label effects over library effects
+      effects = summary?.effects || scan.result?.effects || label?.effects || packaging?.effects || null;
+      flavors = label?.terpenes || packaging?.terpenes || summary?.terpenes || summary?.flavors || null;
+    }
+  } else {
+    // Non-packaged: use library effects if confidence is high enough
+    if (canUseLibraryTags) {
+      effects = summary?.effects || scan.result?.effects || null;
+      flavors = label?.terpenes || summary?.terpenes || summary?.flavors || null;
+    } else {
+      effects = summary?.effects || scan.result?.effects || label?.effects || null;
+      flavors = label?.terpenes || summary?.terpenes || summary?.flavors || null;
+    }
+  }
 
   return {
     primaryName,

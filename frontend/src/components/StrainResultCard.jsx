@@ -46,27 +46,11 @@ export function StrainResultCard({ matchedStrain, scan }) {
   const thc = formatPercent(matchedStrain.thc);
   const cbd = formatPercent(matchedStrain.cbd);
   
-  // CRITICAL: Prioritize effects/flavors from AI summary and label insights
-  // Priority order: matchedStrain.effects (from deriveDisplayStrain) > scan.ai_summary > scan.result > scan.label_insights > strain DB
-  const rawEffects = 
-    matchedStrain.effects ||
-    scan?.ai_summary?.effects ||
-    scan?.result?.effects ||
-    scan?.label_insights?.effects ||
-    scan?.packaging_insights?.effects ||
-    matchedStrain.visualMatch?.effects ||
-    matchedStrain.visualMatch?.strain?.effects ||
-    null;
-  
-  const rawFlavors = 
-    matchedStrain.flavors ||
-    scan?.label_insights?.terpenes ||
-    scan?.packaging_insights?.terpenes ||
-    scan?.ai_summary?.terpenes ||
-    scan?.ai_summary?.flavors ||
-    matchedStrain.visualMatch?.flavors ||
-    matchedStrain.visualMatch?.strain?.flavors ||
-    null;
+  // CRITICAL: Use effects/flavors from matchedStrain (already filtered by deriveDisplayStrain)
+  // deriveDisplayStrain ensures library effects/flavors are NEVER used for packaged products
+  // unless library strain exactly matches packaging strain
+  const rawEffects = matchedStrain.effects || null;
+  const rawFlavors = matchedStrain.flavors || null;
   
   // Normalize to arrays first, then normalize to strings
   const effectsArray = toArray(rawEffects);
