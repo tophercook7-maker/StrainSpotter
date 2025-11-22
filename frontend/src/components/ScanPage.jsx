@@ -826,12 +826,13 @@ export default function ScanPage({ onBack, onNavigate }) {
         
         // Build matchedStrain object for StrainResultCard ONLY if we have a valid strain name
         // CRITICAL: For packaged products, transformScanResult already handles the priority logic
+        // Use ONLY transformScanResult output - it is the single source of truth
         let matchedStrain = null;
-        let displayStrain = null; // Declare outside if block to avoid reference error
         
         if (transformed && transformed.strainName && transformed.strainName !== 'Cannabis (strain unknown)') {
-          // Use deriveDisplayStrain for effects/flavors (already filtered appropriately)
-          displayStrain = deriveDisplayStrain(scan);
+          // Use deriveDisplayStrain ONLY for additional metadata (lineage, type, thc, cbd)
+          // But strain name, effects, and flavors MUST come from transformScanResult
+          const displayStrain = deriveDisplayStrain(scan);
           
           matchedStrain = {
             name: transformed.strainName, // CRITICAL: Use strainName from transformScanResult
@@ -839,12 +840,9 @@ export default function ScanPage({ onBack, onNavigate }) {
             type: displayStrain.primaryType !== 'unknown' ? displayStrain.primaryType : null,
             thc: displayStrain.thcPercent,
             cbd: displayStrain.cbdPercent,
-            effects: transformed.effectsTags && transformed.effectsTags.length > 0 
-              ? transformed.effectsTags 
-              : displayStrain.effects, // Fallback to deriveDisplayStrain if transformScanResult has empty tags
-            flavors: transformed.flavorTags && transformed.flavorTags.length > 0 
-              ? transformed.flavorTags 
-              : displayStrain.flavors, // Fallback to deriveDisplayStrain if transformScanResult has empty tags
+            // CRITICAL: Use effects/flavors from transformScanResult (single source of truth)
+            effects: transformed.effectsTags || null,
+            flavors: transformed.flavorTags || null,
           };
         }
         // If no valid strain name from transformScanResult, matchedStrain stays null
@@ -867,8 +865,8 @@ export default function ScanPage({ onBack, onNavigate }) {
           matchedStrain: matchedStrain || null,
           visionText: extractedVisionText || null,
           matched_strain_slug: scan.matched_strain_slug || null,
-          // Store display strain info for ScanResultCard (only if available)
-          displayStrain: displayStrain || null,
+          // Store transformed result for ScanResultCard (single source of truth)
+          transformed: transformed || null,
         });
         setActiveView('result');
         
@@ -1029,7 +1027,8 @@ export default function ScanPage({ onBack, onNavigate }) {
       setStatusMessage(userMessage);
       
       // Re-throw the error so caller can handle it
-      throw err;
+      // CRITICAL: Use 'e' (the catch parameter), not 'err' which doesn't exist
+      throw e;
     }
   }
 
