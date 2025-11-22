@@ -9,7 +9,7 @@
  * @param {Error|Object} error - Error object
  * @returns {boolean}
  */
-function isSchemaError(error) {
+export function isSchemaError(error) {
   if (!error) return false;
   const message = error.message || String(error) || '';
   const lowerMessage = message.toLowerCase();
@@ -24,7 +24,8 @@ function isSchemaError(error) {
     lowerMessage.includes('error column') ||
     lowerMessage.includes('packaging_insights') ||
     lowerMessage.includes('label_insights') ||
-    lowerMessage.includes('plant_health')
+    lowerMessage.includes('plant_health') ||
+    lowerMessage.includes('cache')
   );
 }
 
@@ -104,5 +105,4 @@ export async function safeUpdateScan(writeClient, scanId, updateData, context = 
   }
 }
 
-export { isSchemaError };
 
