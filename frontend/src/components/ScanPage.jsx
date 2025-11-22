@@ -442,7 +442,7 @@ export default function ScanPage({ onBack, onNavigate }) {
     } finally {
       clearTimeout(timeoutId);
     }
-    } catch (e) {
+  } catch (e) {
       console.error('startScan error', e);
       setIsUploading(false);
       setIsPolling(false);
