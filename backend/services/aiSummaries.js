@@ -63,7 +63,7 @@ export function buildScanAISummary({
     ? matches.matches[0]
     : null;
 
-  const matchConfidence = normalizeMatchConfidence(topMatch);
+  const matchConfidence = normalizeMatchConfidenceForSummary(topMatch);
   const matchedStrainName = topMatch?.name || null;
   const estimateConfidenceLabel = computeConfidenceLabel(matchConfidence);
 

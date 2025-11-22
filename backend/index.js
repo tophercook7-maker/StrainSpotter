@@ -1873,13 +1873,20 @@ app.post('/api/visual-match', writeLimiter, async (req, res, next) => {
     console.log(`[VisualMatch] Found ${matches.length} matches, top score: ${matches[0]?.score || 0}`);
 
     // Build AI summary with stability and scan type info
-    const aiSummary = buildScanAISummary({ 
-      visionResult: combinedVisionResult, 
-      matches: aggregatedMatchResult,
-      stabilityScore,
-      stabilityLabel,
-      numberOfFrames,
-    });
+    let aiSummary = null;
+    try {
+      aiSummary = buildScanAISummary({ 
+        visionResult: combinedVisionResult, 
+        matches: aggregatedMatchResult,
+        stabilityScore,
+        stabilityLabel,
+        numberOfFrames,
+      });
+    } catch (summaryErr) {
+      console.error('[Scan Summary] Error building scan summary:', summaryErr);
+      // Don't fail the scan - continue without summary
+      aiSummary = null;
+    }
 
     res.json({
       success: true,
