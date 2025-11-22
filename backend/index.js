@@ -50,7 +50,7 @@ import usersRoutes from './routes/users.js';
 import creditsRoutes from './routes/credits.js';
 import directMessagesRoutes from './routes/direct-messages.js';
 import { matchStrainByVisuals } from './services/visualMatcher.js';
-import { resolveCanonicalStrain } from './services/scanUtils.js';
+import { resolveCanonicalStrain } from './services/strainResolution.js';
 import { generateLabelAISummary } from './services/aiLabelExplainer.js';
 import { generateScanAISummary, buildScanAISummary } from './services/aiSummaries.js';
 import { analyzePlantHealth } from './services/plantHealthAnalyzer.js';
@@ -1822,6 +1822,43 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       scanSummary = { hasSummary: false, error: 'AI summary failed to generate' };
     }
 
+    // ---------------------------------------------
+    // CANONICAL STRAIN: Packaging > Label > Visual
+    // ---------------------------------------------
+    // Determine isPackagedProduct flag
+    const isPackagedProductFlag = 
+      !!(packagingInsights?.isPackagedProduct ||
+         labelInsights?.isPackagedProduct ||
+         scanSummary?.isPackagedProduct);
+    
+    // Extract visual matches array for canonical strain resolution
+    const visualMatchesArray = matches.map(m => {
+      const matchName = m.strain?.name || m.strain?.strain_name || m.strain?.slug || m.name || null;
+      const matchConf = typeof m.confidence === 'number' 
+        ? (m.confidence <= 1 ? m.confidence : m.confidence / 100) // Normalize to 0-1
+        : null;
+      return {
+        name: matchName,
+        confidence: matchConf,
+      };
+    }).filter(m => m.name);
+    
+    const canonical = resolveCanonicalStrain({
+      packagingInsights: packagingInsights || null,
+      labelInsights: labelInsights || null,
+      visualMatches: visualMatchesArray,
+      aiSummary: scanSummary || null,
+      isPackagedProduct: isPackagedProductFlag,
+    });
+    
+    console.log('[canonical-strain]', {
+      id,
+      canonical: canonical,
+      packaging: packagingInsights?.strainName || packagingInsights?.basic?.strain_name || null,
+      label: labelInsights?.strainName || null,
+      visual: visualMatchesArray[0] || null,
+    });
+    
     // Merge Vision result with visual matches and packaging insights
     const finalResult = {
       vision_raw: result,
@@ -1829,9 +1866,15 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       visualMatches,
       labelInsights,
       matched_strain_slug: finalStrainSlug,
-      matched_strain_name: finalStrainName,
-      match_confidence: finalMatchConfidence,
-      match_quality: finalMatchQuality,
+      matched_strain_name: canonical.name !== 'Cannabis (strain unknown)' ? canonical.name : finalStrainName,
+      match_confidence: canonical.confidence ?? finalMatchConfidence,
+      match_quality: canonical.source || finalMatchQuality,
+      // Attach canonical strain to the final result object
+      canonicalStrain: {
+        name: canonical.name,
+        source: canonical.source,
+        confidence: canonical.confidence,
+      },
     };
 
     // Build update payload with AI summary if available

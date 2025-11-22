@@ -235,10 +235,10 @@ export function getPrimaryNameForResult(result) {
 }
 
 /**
- * Transform scan result with strict priority logic for strain name determination.
- * CRITICAL: Packaged products ALWAYS use label strain, NEVER visual/library guesses.
+ * Transform scan result using canonical strain from backend.
+ * CRITICAL: Frontend now consumes canonicalStrain as single source of truth.
  * 
- * @param {Object} scan - Backend scan object
+ * @param {Object} scan - Backend scan object (should include canonicalStrain)
  * @returns {Object} Transformed result with strainName, strainSource, effectsTags, flavorTags
  */
 export function transformScanResult(scan) {
@@ -248,32 +248,22 @@ export function transformScanResult(scan) {
   const packagingInsights = scan.packaging_insights || result.packagingInsights || null;
   const labelInsights = scan.label_insights || result.labelInsights || null;
   
+  // CRITICAL: Use canonicalStrain as single source of truth
+  // Backend sets canonicalStrain with strict priority: Packaging > Label > Visual
+  const canonical = scan.canonicalStrain || result.canonicalStrain || {
+    name: scan.matched_strain_name || null,
+    source: scan.match_quality || null,
+    confidence: scan.match_confidence || null,
+  };
+  
   // Determine if this is a packaged product
   const isPackagedProduct =
     packagingInsights?.isPackagedProduct === true ||
     labelInsights?.isPackagedProduct === true ||
     scan.ai_summary?.isPackagedProduct === true ||
+    canonical.source === 'packaging' ||
+    canonical.source === 'packaged-unknown' ||
     false;
-
-  // Extract label strain name (for packaged products)
-  const labelStrain =
-    (labelInsights?.strainName || labelInsights?.strain_name || '').trim() ||
-    (packagingInsights?.strainName || packagingInsights?.strain_name || '').trim() ||
-    null;
-
-  // Extract visual top match (for non-packaged products only)
-  const visualTop =
-    result.visualMatches?.match ||
-    result.visualMatches?.[0] ||
-    result.matches?.[0] ||
-    null;
-
-  // Extract match confidence
-  const matchConfidence =
-    scan.match_confidence ??
-    visualTop?.confidence ??
-    visualTop?.score ??
-    null;
 
   // Preserve existing fields for backward compatibility
   const existingFields = {
@@ -287,72 +277,23 @@ export function transformScanResult(scan) {
     label_insights: labelInsights,
     ai_summary: scan.ai_summary,
     matched_strain_slug: scan.matched_strain_slug,
-    match_confidence: matchConfidence,
-    match_quality: scan.match_quality,
-    matched_strain_name: scan.matched_strain_name,
+    match_confidence: canonical.confidence ?? scan.match_confidence,
+    match_quality: canonical.source || scan.match_quality,
+    matched_strain_name: canonical.name !== 'Cannabis (strain unknown)' ? canonical.name : scan.matched_strain_name,
   };
 
-  // ======================================================
-  // 1. PACKAGED PRODUCT — ALWAYS TRUST THE LABEL
-  // ======================================================
-  if (isPackagedProduct) {
-    let finalStrainName;
-    if (labelStrain) {
-      finalStrainName = labelStrain;
-    } else {
-      finalStrainName = "Cannabis (strain unknown)";
-    }
+  // Extract effects and flavors (empty for now, can be populated from AI summary if needed)
+  const effectsTags = [];
+  const flavorTags = [];
 
-    return {
-      ...existingFields,
-      strainName: finalStrainName,
-      strainSource: "packaging",
-      isPackagedProduct: true,
-      matchConfidence: 1.0,
-      effectsTags: [],
-      flavorTags: [],
-    };
-  }
-
-  // ======================================================
-  // 2. RAW BUD (UNPACKAGED) — use visual top match
-  // ======================================================
-  if (visualTop) {
-    if (matchConfidence < 0.6) {
-      return {
-        ...existingFields,
-        strainName: "Cannabis (strain unknown)",
-        strainSource: "visual-low-confidence",
-        isPackagedProduct: false,
-        matchConfidence: matchConfidence || 0,
-        effectsTags: [],
-        flavorTags: [],
-      };
-    }
-
-    return {
-      ...existingFields,
-      strainName: visualTop.name || visualTop.strain?.name || "Cannabis (strain unknown)",
-      strainSource: "visual",
-      isPackagedProduct: false,
-      matchConfidence: matchConfidence || 0,
-      // tags will be set later by deriveDisplayStrain
-      effectsTags: [],
-      flavorTags: [],
-    };
-  }
-
-  // ======================================================
-  // 3. NO STRAIN FOUND AT ALL
-  // ======================================================
   return {
     ...existingFields,
-    strainName: "Cannabis (strain unknown)",
-    strainSource: "none",
-    isPackagedProduct: false,
-    matchConfidence: 0,
-    effectsTags: [],
-    flavorTags: [],
+    strainName: canonical.name || 'Cannabis (strain unknown)',
+    strainSource: canonical.source || 'none',
+    matchConfidence: canonical.confidence ?? 0,
+    isPackagedProduct: isPackagedProduct,
+    effectsTags: effectsTags,
+    flavorTags: flavorTags,
   };
 }
 
