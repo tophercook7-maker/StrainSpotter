@@ -306,16 +306,44 @@ export function transformScanResult(scan) {
     ? ai.risksAndWarnings 
     : (Array.isArray(ai.warnings) ? ai.warnings : []);
 
+  // Determine effects/flavors based on product type
+  // CRITICAL: Packaged products ALWAYS use AI effects/flavors, NEVER library tags
+  let effectsTags = [];
+  let flavorTags = [];
+  const visualConfidence = visual?.confidence || scan.match_confidence || 0;
+
+  if (isPackaged) {
+    // Packaged product → always use AI effects
+    effectsTags = aiEffects || [];
+    flavorTags = aiFlavors || [];
+  } else {
+    // Bud logic: only use AI effects if visual confidence is high enough
+    if (visualConfidence >= 0.8) {
+      effectsTags = aiEffects || [];
+      flavorTags = aiFlavors || [];
+    } else {
+      // Low confidence bud: no effects/flavors (but still show AI details like intensity, notes, warnings)
+      effectsTags = [];
+      flavorTags = [];
+    }
+  }
+
   return {
     strainName: finalStrain || 'Cannabis (strain unknown)',
     isPackagedProduct: isPackaged,
     isPackagedKnown,
     isBudUnknown,
-    matchConfidence: visual?.confidence || scan.match_confidence || 0,
+    matchConfidence: visualConfidence,
     thc,
     cbd,
-    effectsTags: aiEffects,
-    flavorTags: aiFlavors,
+    effectsTags,
+    flavorTags,
+    intensity: aiIntensity,
+    dispensaryNotes: aiDispensaryNotes,
+    growerNotes: aiGrowerNotes,
+    warnings: aiWarnings,
+    summary: aiSummaryText,
+    // Keep old field names for backward compatibility
     aiIntensity,
     aiSummaryText,
     aiDispensaryNotes,

@@ -7,7 +7,6 @@ import {
   Chip,
 } from '@mui/material';
 import { transformScanResult } from '../utils/scanResultUtils';
-import { deriveDisplayStrain } from '../utils/deriveDisplayStrain';
 
 // AI Strain Details Panel Component
 function AIStrainDetailsPanel({ 
@@ -265,13 +264,11 @@ function PackagedProductCard({
   result,
   scan,
 }) {
-  // Get display strain info for lineage and additional metadata
-  const displayStrain = deriveDisplayStrain(result || scan);
-  const lineage = displayStrain.displaySubline || null;
-
-  // Get packaging insights for display
+  // Get packaging insights for display (lineage and brand info)
   const packagingInsights = result?.packaging_insights || scan?.packaging_insights || null;
   const labelInsights = result?.label_insights || scan?.label_insights || null;
+  // Lineage can come from packaging insights or be null
+  const lineage = packagingInsights?.lineage || labelInsights?.lineage || null;
   const basic = packagingInsights?.basic || {};
   const details = packagingInsights?.package_details || {};
   const brandName = 
@@ -577,13 +574,13 @@ function ScanResultCard({ result, scan, isGuest }) {
         strainName={transformed.strainName}
         thc={transformed.thc}
         cbd={transformed.cbd}
-        summary={transformed.aiSummaryText}
+        summary={transformed.summary}
         effects={transformed.effectsTags}
         flavors={transformed.flavorTags}
-        intensity={transformed.aiIntensity}
-        dispensaryNotes={transformed.aiDispensaryNotes}
-        growerNotes={transformed.aiGrowerNotes}
-        warnings={transformed.aiWarnings}
+        intensity={transformed.intensity}
+        dispensaryNotes={transformed.dispensaryNotes}
+        growerNotes={transformed.growerNotes}
+        warnings={transformed.warnings}
         result={result}
         scan={scan}
       />
@@ -597,13 +594,13 @@ function ScanResultCard({ result, scan, isGuest }) {
         isPackagedProduct={transformed.isPackagedProduct}
         isPackagedKnown={transformed.isPackagedKnown}
         isBudUnknown={transformed.isBudUnknown}
-        summary={transformed.aiSummaryText}
+        summary={transformed.summary}
         effects={transformed.effectsTags}
         flavors={transformed.flavorTags}
-        intensity={transformed.aiIntensity}
-        dispensaryNotes={transformed.aiDispensaryNotes}
-        growerNotes={transformed.aiGrowerNotes}
-        warnings={transformed.aiWarnings}
+        intensity={transformed.intensity}
+        dispensaryNotes={transformed.dispensaryNotes}
+        growerNotes={transformed.growerNotes}
+        warnings={transformed.warnings}
       />
     );
   }
