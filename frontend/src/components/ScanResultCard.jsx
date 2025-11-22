@@ -10,19 +10,15 @@ import { transformScanResult } from '../utils/scanResultUtils';
 import { deriveDisplayStrain } from '../utils/deriveDisplayStrain';
 
 // AI Strain Details Panel Component
-function AIStrainDetailsPanel({ transformed, scan }) {
-  if (!transformed && !scan) return null;
-
-  const aiSummary = transformed?.ai_summary || scan?.ai_summary || null;
-  
-  // Extract data from AI summary
-  const intensity = aiSummary?.intensity ?? null;
-  const effects = aiSummary?.effectsAndUseCases || transformed?.effectsTags || [];
-  const flavors = aiSummary?.flavors || transformed?.flavorTags || [];
-  const dispensaryNotes = aiSummary?.dispensaryNotes || null;
-  const growerNotes = aiSummary?.growerNotes || null;
-  const warnings = aiSummary?.risksAndWarnings || [];
-  const summary = aiSummary?.userFacingSummary || null;
+function AIStrainDetailsPanel({ 
+  intensity, 
+  effects, 
+  flavors, 
+  dispensaryNotes, 
+  growerNotes, 
+  warnings, 
+  summary 
+}) {
 
   // Only show if we have meaningful AI data
   if (
@@ -270,6 +266,11 @@ function ScanResultCard({ result, scan, isGuest }) {
     matchConfidence,
     effectsTags,
     flavorTags,
+    aiIntensity,
+    aiDispensaryNotes,
+    aiGrowerNotes,
+    aiWarnings,
+    aiSummaryText,
   } = transformed;
 
   // Get display strain info for lineage and additional metadata
@@ -401,7 +402,15 @@ function ScanResultCard({ result, scan, isGuest }) {
         </Card>
 
         {/* AI Details Panel */}
-        <AIStrainDetailsPanel transformed={transformed} scan={scan || result} />
+        <AIStrainDetailsPanel
+          intensity={aiIntensity}
+          effects={effectsTags}
+          flavors={flavorTags}
+          dispensaryNotes={aiDispensaryNotes}
+          growerNotes={aiGrowerNotes}
+          warnings={aiWarnings}
+          summary={aiSummaryText}
+        />
       </>
     );
   }
@@ -445,18 +454,28 @@ function ScanResultCard({ result, scan, isGuest }) {
                 Lineage: {lineage}
               </Typography>
             )}
-            <Typography
-              variant="body2"
-              sx={{ color: 'rgba(200, 230, 201, 0.85)' }}
-            >
-              For live plants and buds, this is an estimated strain based on visual
-              and label signals. Results may vary by grower and phenotype.
-            </Typography>
+            {!isPackagedProduct && (
+              <Typography
+                variant="body2"
+                sx={{ color: 'rgba(200, 230, 201, 0.85)' }}
+              >
+                For live plants and buds, this is an estimated strain based on visual
+                and label signals. Results may vary by grower and phenotype.
+              </Typography>
+            )}
           </CardContent>
         </Card>
 
         {/* AI Details Panel */}
-        <AIStrainDetailsPanel transformed={transformed} scan={scan || result} />
+        <AIStrainDetailsPanel
+          intensity={aiIntensity}
+          effects={effectsTags}
+          flavors={flavorTags}
+          dispensaryNotes={aiDispensaryNotes}
+          growerNotes={aiGrowerNotes}
+          warnings={aiWarnings}
+          summary={aiSummaryText}
+        />
       </>
     );
   }
@@ -506,7 +525,15 @@ function ScanResultCard({ result, scan, isGuest }) {
       </Card>
 
       {/* AI Details Panel */}
-      <AIStrainDetailsPanel transformed={transformed} scan={scan || result} />
+      <AIStrainDetailsPanel
+        intensity={aiIntensity}
+        effects={effectsTags}
+        flavors={flavorTags}
+        dispensaryNotes={aiDispensaryNotes}
+        growerNotes={aiGrowerNotes}
+        warnings={aiWarnings}
+        summary={aiSummaryText}
+      />
     </>
   );
 }

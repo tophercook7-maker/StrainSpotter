@@ -265,6 +265,48 @@ export function transformScanResult(scan) {
     canonical.source === 'packaged-unknown' ||
     false;
 
+  // Extract AI summary data
+  const aiSummary = scan.ai_summary || result.aiSummary || null;
+  
+  // Extract effects and flavors from AI summary or library strain
+  const aiEffects = Array.isArray(aiSummary?.effectsAndUseCases) 
+    ? aiSummary.effectsAndUseCases 
+    : [];
+  const aiFlavors = Array.isArray(aiSummary?.flavors) 
+    ? aiSummary.flavors 
+    : [];
+  
+  // Extract other AI fields
+  const aiIntensity = typeof aiSummary?.intensity === 'number' 
+    ? aiSummary.intensity 
+    : (typeof aiSummary?.potency_score === 'number' ? aiSummary.potency_score : null);
+  const aiDispensaryNotes = Array.isArray(aiSummary?.dispensaryNotes) 
+    ? aiSummary.dispensaryNotes 
+    : (typeof aiSummary?.dispensaryNotes === 'string' && aiSummary.dispensaryNotes.trim() 
+      ? [aiSummary.dispensaryNotes.trim()] 
+      : []);
+  const aiGrowerNotes = Array.isArray(aiSummary?.growerNotes) 
+    ? aiSummary.growerNotes 
+    : (typeof aiSummary?.growerNotes === 'string' && aiSummary.growerNotes.trim() 
+      ? [aiSummary.growerNotes.trim()] 
+      : []);
+  const aiWarnings = Array.isArray(aiSummary?.risksAndWarnings) 
+    ? aiSummary.risksAndWarnings 
+    : [];
+  const aiSummaryText = typeof aiSummary?.userFacingSummary === 'string' 
+    ? aiSummary.userFacingSummary 
+    : null;
+
+  // Determine when to use library tags vs AI tags
+  const canTrustVisual = canonical.source === 'visual' && canonical.confidence != null && canonical.confidence >= 0.8;
+  const isPackagedUnknown = canonical.source === 'packaged-unknown';
+  const canUseLibraryTags = !isPackagedUnknown && (canonical.source === 'packaging' || canTrustVisual);
+  
+  // For now, prefer AI effects/flavors when available, fall back to library tags if needed
+  // TODO: Add library strain lookup if needed
+  const effectsTags = aiEffects.length > 0 ? aiEffects : [];
+  const flavorTags = aiFlavors.length > 0 ? aiFlavors : [];
+
   // Preserve existing fields for backward compatibility
   const existingFields = {
     id: scan.id,
@@ -282,10 +324,6 @@ export function transformScanResult(scan) {
     matched_strain_name: canonical.name !== 'Cannabis (strain unknown)' ? canonical.name : scan.matched_strain_name,
   };
 
-  // Extract effects and flavors (empty for now, can be populated from AI summary if needed)
-  const effectsTags = [];
-  const flavorTags = [];
-
   return {
     ...existingFields,
     strainName: canonical.name || 'Cannabis (strain unknown)',
@@ -294,6 +332,11 @@ export function transformScanResult(scan) {
     isPackagedProduct: isPackagedProduct,
     effectsTags: effectsTags,
     flavorTags: flavorTags,
+    aiIntensity: aiIntensity,
+    aiDispensaryNotes: aiDispensaryNotes,
+    aiGrowerNotes: aiGrowerNotes,
+    aiWarnings: aiWarnings,
+    aiSummaryText: aiSummaryText,
   };
 }
 
