@@ -676,12 +676,15 @@ export default function ScanPage({ onBack, onNavigate }) {
       const result = scan?.result;
 
       // Check if scan has a result (matches or visualMatches or labelInsights)
+      // Backend result structure includes: vision_raw, packagingInsights, visualMatches, labelInsights
       const hasResult = !!(
         result && (
           (result.visualMatches && (result.visualMatches.match || result.visualMatches.candidates?.length > 0)) ||
           (Array.isArray(result.matches) && result.matches.length > 0) ||
           result.match ||
-          result.labelInsights
+          result.labelInsights ||
+          result.vision_raw || // Vision API result indicates processing completed
+          result.packagingInsights // Packaging insights indicate processing completed
         )
       );
 
