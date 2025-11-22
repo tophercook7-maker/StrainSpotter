@@ -1180,6 +1180,10 @@ app.post('/api/scans/credits/grant', async (req, res) => {
 });
 
 // GET /api/scans/:id - single
+// BACKEND CONTRACT: Returns scan object directly (not wrapped)
+// Response shape: { id, status, result, ai_summary, matched_strain_slug, matched_strain_name, match_confidence, match_quality, processed_at, ... }
+// Status values: 'pending' | 'processing' | 'completed' | 'failed'
+// When status='completed', result object contains: vision_raw, packagingInsights, visualMatches, labelInsights
 app.get('/api/scans/:id', async (req, res, next) => {
   try {
     const id = req.params.id;
@@ -1193,6 +1197,7 @@ app.get('/api/scans/:id', async (req, res, next) => {
     const { data, error } = await readClient.from('scans').select('*, strain:strains!matched_strain_slug(*)').eq('id', id).maybeSingle();
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'scan not found' });
+    // Return scan object directly (not wrapped) - frontend expects this shape
     res.json(data);
   } catch (e) {
     next(e);

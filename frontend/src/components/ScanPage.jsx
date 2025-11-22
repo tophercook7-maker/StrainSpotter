@@ -769,6 +769,10 @@ export default function ScanPage({ onBack, onNavigate }) {
         throw new Error(`Scan ID mismatch: expected ${currentScanId}, got ${returnedId}`);
       }
       
+      // BACKEND CONTRACT: GET /api/scans/:id returns the scan object directly (not wrapped)
+      // Response shape: { id, status, result, ai_summary, matched_strain_slug, ... }
+      // The scan object is returned directly as JSON, not wrapped in { scan: {...} }
+      
       // Debug logging to understand response structure
       if (attempt === 0 || attempt % 10 === 0) {
         console.log('[POLL] response structure', {
@@ -776,11 +780,15 @@ export default function ScanPage({ onBack, onNavigate }) {
           scanId: currentScanId,
           returnedId,
           hasData: !!data,
-          hasScan: !!data?.scan,
+          isDirectScan: !!data?.id && !!data?.status, // Direct scan object
+          isWrapped: !!data?.scan, // Wrapped in { scan: {...} }
           scanStatus: scan?.status,
           scanState: scan?.state,
           hasResult: !!scan?.result,
+          resultType: scan?.result ? typeof scan.result : 'null',
           resultKeys: scan?.result ? Object.keys(scan.result) : [],
+          hasAISummary: !!scan?.ai_summary,
+          hasPackagingInsights: !!scan?.result?.packagingInsights,
         });
       }
       
@@ -794,13 +802,28 @@ export default function ScanPage({ onBack, onNavigate }) {
         throw new Error('Invalid scan response from server');
       }
 
-      // Backend sets status to 'done' when scan completes (backend/index.js line 1661)
+      // BACKEND CONTRACT: Status values are: 'pending' | 'processing' | 'completed' | 'failed'
+      // Backend sets status='completed' when scan finishes successfully (backend/index.js line 1701)
       const status = scan?.status || scan?.state || 'unknown';
       const result = scan?.result;
 
-      // Check if scan has a result (matches or visualMatches or labelInsights)
-      // Backend result structure includes: vision_raw, packagingInsights, visualMatches, labelInsights
+      // BACKEND CONTRACT: Result object structure includes:
+      // - vision_raw: Vision API response
+      // - packagingInsights: Packaging analysis from AI
+      // - visualMatches: Visual strain matching results
+      // - labelInsights: Label text analysis
+      // - matched_strain_slug, matched_strain_name, match_confidence, match_quality
+      
+      // Check if scan has a result - ANY result object indicates processing completed
+      // Even if no matches found, result.vision_raw or result.packagingInsights means backend finished
       const hasResult = !!(
+        result && 
+        typeof result === 'object' && 
+        Object.keys(result).length > 0
+      );
+      
+      // Additional check: if result has meaningful data (matches, insights, etc.)
+      const hasResultData = !!(
         result && (
           (result.visualMatches && (result.visualMatches.match || result.visualMatches.candidates?.length > 0)) ||
           (Array.isArray(result.matches) && result.matches.length > 0) ||
