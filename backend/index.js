@@ -1298,7 +1298,8 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       console.log('[scan/process] Processing guest scan (no user_id)');
     }
 
-    await writeClient.from('scans').update({ status: 'processing' }).eq('id', id);
+    // CRITICAL: Use safe write for status update
+    await safeUpdateScan(writeClient, id, { status: 'processing' }, 'scan-process-start');
 
     // Process single frame or multiple frames (multi-angle)
     // Use the frameUrls already declared above
@@ -1710,11 +1711,20 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       updatePayload.ai_summary = scanAISummary;
     }
 
-    const { error: upErr } = await writeClient
-      .from('scans')
-      .update(updatePayload)
-      .eq('id', id);
-    if (upErr) return res.status(500).json({ error: upErr.message });
+    // CRITICAL: Use safe write to handle missing columns gracefully
+    const updateResult = await safeUpdateScan(writeClient, id, updatePayload, 'scan-process');
+    if (!updateResult.success && updateResult.error && !isSchemaError(updateResult.error)) {
+      // Only return 500 for non-schema errors
+      return res.status(500).json({ error: updateResult.error.message });
+    }
+    
+    // Log skipped fields if any
+    if (updateResult.skippedFields && updateResult.skippedFields.length > 0) {
+      console.warn('[scan-process] Some fields skipped due to missing columns', {
+        id,
+        skippedFields: updateResult.skippedFields,
+      });
+    }
 
     // Safety logging for scan completion
     console.log('[scan-process] done', {
