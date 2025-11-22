@@ -69,6 +69,7 @@ export default function ScanPage({ onBack, onNavigate }) {
   const [isChoosingFile, setIsChoosingFile] = useState(false);
   const [scanResult, setScanResult] = useState(null);
   const [error, setError] = useState(null);
+  const [hasCompletedScan, setHasCompletedScan] = useState(false); // Flag to prevent timeout race condition
   const [guestScansUsed, setGuestScansUsedState] = useState(() => getGuestScansUsed());
   const [showPlans, setShowPlans] = useState(false);
   
@@ -158,6 +159,8 @@ export default function ScanPage({ onBack, onNavigate }) {
     setIsPolling(false);
     setActiveView('scanner');
     setCompletedScan(null);
+    setHasCompletedScan(false); // Reset completion flag
+    hasCompletedScanRef.current = false; // Reset ref flag
     processedScanIdsRef.current.clear();
     // Reset multi-angle state
     setCapturedFrames([]);
@@ -425,14 +428,19 @@ export default function ScanPage({ onBack, onNavigate }) {
     setIsPolling(true);
     setScanPhase('processing');
     setStatusMessage('Processing image with Vision API…');
+    setHasCompletedScan(false); // Reset completion flag for new scan
+    hasCompletedScanRef.current = false; // Reset ref flag for new scan
 
     // Removed hard timeout - let the server complete processing
     // Increased to 90 seconds as a safety net (only triggers on genuine network issues)
     const timeoutId = setTimeout(() => {
-      setIsPolling(false);
-      setScanPhase('error');
-      setError('Our AI took longer than expected to finish this scan. Please try again in a moment.');
-      setStatusMessage('Scan timed out. Please try again.');
+      // Only fire timeout if scan hasn't completed yet (check ref for immediate updates)
+      if (!hasCompletedScanRef.current) {
+        setIsPolling(false);
+        setScanPhase('error');
+        setError('Our AI took longer than expected to finish this scan. Please try again in a moment.');
+        setStatusMessage('Scan timed out. Please try again.');
+      }
     }, 90000); // 90 seconds safety timeout (increased from 35s)
 
     try {
@@ -552,63 +560,77 @@ export default function ScanPage({ onBack, onNavigate }) {
         if (timeoutRef) clearTimeout(timeoutRef);
         console.timeEnd('[Scanner] polling');
         setIsPolling(false);
+        setHasCompletedScan(true); // Mark as completed to prevent timeout race
+        hasCompletedScanRef.current = true; // Also set ref for immediate timeout check
         setScanPhase('done');
         setStatusMessage('Scan complete!');
+        setError(null); // Clear any previous errors
         
         // Temporary debug log
         console.log('[pollScan] done', { status, hasResult, result: scan.result, attempts: attempt });
         
         const normalized = normalizeScanResult(scan);
-        if (!normalized) {
-          setError('We couldn\'t read enough from that photo. Try again closer to the text on the label.');
-          setScanResult(null);
-          setScanPhase('error');
-          setStatusMessage('Scan failed. Tap to try again.');
-        } else {
+        
+        // Even if normalizeScanResult returns null (no matches), we still have a valid scan
+        // Show the result with available data (label insights, vision text, etc.)
+        if (normalized) {
           setScanResult(normalized);
-
-          // Store the completed scan locally for the result view
-          const processedResult = scan.result || normalized;
-          
-          // Extract matched strain from multiple sources (prioritize backend match, then fallback to result)
-          // Note: serializeMatch flattens the structure, so match already has strain fields at top level
-          const matchedStrain = 
-            match || // From backend response (already serialized)
-            result?.visualMatches?.match || // Already serialized (flattened structure)
-            result?.matches?.[0] || // Array of matches
-            normalized?.top_match || // Normalized result
-            null;
-          
-          // Extract vision text (prioritize backend response, then fallback to result)
-          const extractedVisionText =
-            visionText || // From backend response
-            result?.vision_raw?.textAnnotations?.[0]?.description ||
-            result?.vision_raw?.fullTextAnnotation?.text ||
-            result?.visionRaw?.textAnnotations?.[0]?.description ||
-            result?.visionRaw?.fullTextAnnotation?.text ||
-            null;
-          
-          setCompletedScan({
-            id: scan.id,
-            result: processedResult,
-            created_at: scan.created_at || new Date().toISOString(),
-            ai_summary: aiSummary || scan.ai_summary || null,
-            summary: summary || null, // Rich structured summary
-            matchedStrain: matchedStrain || null,
-            visionText: extractedVisionText || null,
-            matched_strain_slug: scan.matched_strain_slug || null,
+        } else {
+          // No matches found, but scan completed - create a minimal result
+          setScanResult({
+            topMatch: null,
+            otherMatches: [],
+            matches: [],
+            matched_strain_slug: null,
+            labelInsights: result?.labelInsights || null,
+            aiSummary: result?.labelInsights?.aiSummary || null,
+            isPackagedProduct: result?.labelInsights?.isPackagedProduct || false,
+            packagingInsights: result?.packagingInsights || null,
+            visionRaw: result?.vision_raw || null,
           });
-          setActiveView('result');
+        }
 
-          // Count successful scans (only for non-members)
-          if (!isMember) {
-            registerScanConsumed();
-            // Also maintain legacy guest scan tracking for backward compatibility
-            if (isGuest) {
-              const used = guestScansUsed + 1;
-              setGuestScansUsedState(used);
-              setGuestScansUsed(used);
-            }
+        // Store the completed scan locally for the result view
+        const processedResult = scan.result || normalized;
+        
+        // Extract matched strain from multiple sources (prioritize backend match, then fallback to result)
+        // Note: serializeMatch flattens the structure, so match already has strain fields at top level
+        const matchedStrain = 
+          match || // From backend response (already serialized)
+          result?.visualMatches?.match || // Already serialized (flattened structure)
+          result?.matches?.[0] || // Array of matches
+          normalized?.top_match || // Normalized result
+          null;
+        
+        // Extract vision text (prioritize backend response, then fallback to result)
+        const extractedVisionText =
+          visionText || // From backend response
+          result?.vision_raw?.textAnnotations?.[0]?.description ||
+          result?.vision_raw?.fullTextAnnotation?.text ||
+          result?.visionRaw?.textAnnotations?.[0]?.description ||
+          result?.visionRaw?.fullTextAnnotation?.text ||
+          null;
+        
+        setCompletedScan({
+          id: scan.id,
+          result: processedResult,
+          created_at: scan.created_at || new Date().toISOString(),
+          ai_summary: aiSummary || scan.ai_summary || null,
+          summary: summary || null, // Rich structured summary
+          matchedStrain: matchedStrain || null,
+          visionText: extractedVisionText || null,
+          matched_strain_slug: scan.matched_strain_slug || null,
+        });
+        setActiveView('result');
+
+        // Count successful scans (only for non-members)
+        if (!isMember) {
+          registerScanConsumed();
+          // Also maintain legacy guest scan tracking for backward compatibility
+          if (isGuest) {
+            const used = guestScansUsed + 1;
+            setGuestScansUsedState(used);
+            setGuestScansUsed(used);
           }
         }
         return;
@@ -618,6 +640,8 @@ export default function ScanPage({ onBack, onNavigate }) {
       if (isError) {
         if (timeoutRef) clearTimeout(timeoutRef);
         setIsPolling(false);
+        setHasCompletedScan(true); // Mark as completed to prevent timeout race
+        hasCompletedScanRef.current = true; // Also set ref for immediate timeout check
         setScanPhase('error');
         setFramePulsing(false);
         const errorMessage = scan?.error || scan?.errorMessage || 'Scan failed on the server.';
@@ -639,11 +663,16 @@ export default function ScanPage({ onBack, onNavigate }) {
       if (attempt >= 90) {
         if (timeoutRef) clearTimeout(timeoutRef);
         setIsPolling(false);
+        setHasCompletedScan(true); // Mark as completed to prevent duplicate errors
+        hasCompletedScanRef.current = true; // Also set ref for immediate timeout check
         setScanPhase('error');
         setFramePulsing(false);
-        const timeoutError = 'Our AI took longer than expected to finish this scan. Please try again in a moment.';
-        setError(timeoutError);
-        setStatusMessage(timeoutError);
+        // Only set error if we haven't already completed
+        if (!hasCompletedScanRef.current) {
+          const timeoutError = 'Our AI took longer than expected to finish this scan. Please try again in a moment.';
+          setError(timeoutError);
+          setStatusMessage(timeoutError);
+        }
         return;
       }
 
@@ -655,6 +684,8 @@ export default function ScanPage({ onBack, onNavigate }) {
       if (timeoutRef) clearTimeout(timeoutRef);
       console.error('pollScan error', e);
       setIsPolling(false);
+      setHasCompletedScan(true); // Mark as completed to prevent timeout race
+      hasCompletedScanRef.current = true; // Also set ref for immediate timeout check
       setScanPhase('error');
       const errorMsg = String(e.message || e);
       // Provide user-friendly error messages
@@ -1600,54 +1631,8 @@ export default function ScanPage({ onBack, onNavigate }) {
             </Typography>
           )}
 
-          {/* Debug error area - always show errors clearly */}
-          {error && (
-            <Paper
-              elevation={4}
-              sx={{
-                mt: 2,
-                p: 2,
-                borderRadius: 2,
-                backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                border: '2px solid rgba(239, 68, 68, 0.5)',
-              }}
-            >
-              <Typography
-                variant="subtitle2"
-                sx={{
-                  color: '#fecaca',
-                  fontWeight: 700,
-                  mb: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                }}
-              >
-                <span>⚠</span> Scanner Error
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  color: '#fee2e2',
-                  mb: 1.5,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {error}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: 'rgba(254, 226, 226, 0.7)',
-                  display: 'block',
-                  mt: 1,
-                }}
-              >
-                Phase: {scanPhase} | Status: {statusMessage || 'N/A'}
-              </Typography>
-            </Paper>
-          )}
+          {/* Error display - consolidated to single location (Alert above handles it) */}
+          {/* Removed duplicate error display to prevent duplicate error cards */}
         </Container>
       </Box>
 
