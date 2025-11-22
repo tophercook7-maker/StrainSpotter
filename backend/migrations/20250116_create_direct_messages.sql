@@ -1,5 +1,6 @@
--- Migration: Create direct messaging system tables
+-- Migration: Create direct messaging system tables (thread-based)
 -- Enables user-to-user, grower-to-user, and dispensary-to-user messaging
+-- Extends existing direct_messages table with thread support
 
 -- Direct message threads (one per user pair)
 CREATE TABLE IF NOT EXISTS public.direct_threads (
@@ -11,26 +12,8 @@ CREATE TABLE IF NOT EXISTS public.direct_threads (
     UNIQUE (user_a, user_b)
 );
 
--- Direct messages
--- Note: If table already exists with sender_id/receiver_id, we'll add thread_id and new columns
-CREATE TABLE IF NOT EXISTS public.direct_messages (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    sender uuid REFERENCES auth.users(id) ON DELETE CASCADE,
-    receiver uuid REFERENCES auth.users(id) ON DELETE CASCADE,
-    -- Support both old schema (sender_id/receiver_id) and new schema (sender/receiver)
-    sender_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
-    receiver_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
-    thread_id uuid REFERENCES public.direct_threads(id) ON DELETE SET NULL,
-    message text,
-    content text, -- Legacy field name
-    image_url text,
-    image_width integer,
-    image_height integer,
-    created_at timestamptz DEFAULT now(),
-    read_at timestamptz
-);
-
--- Add thread_id column if table exists without it
+-- Add thread support to existing direct_messages table
+-- The table already exists with sender_id/receiver_id/content columns
 DO $$
 BEGIN
     IF EXISTS (
@@ -38,11 +21,17 @@ BEGIN
         WHERE table_schema = 'public' 
         AND table_name = 'direct_messages'
     ) THEN
+        -- Add thread_id and image support columns
         ALTER TABLE public.direct_messages
         ADD COLUMN IF NOT EXISTS thread_id uuid REFERENCES public.direct_threads(id) ON DELETE SET NULL,
         ADD COLUMN IF NOT EXISTS image_url text,
         ADD COLUMN IF NOT EXISTS image_width integer,
-        ADD COLUMN IF NOT EXISTS image_height integer;
+        ADD COLUMN IF NOT EXISTS image_height integer,
+        ADD COLUMN IF NOT EXISTS message text; -- Alias for content
+        
+        -- Create index for thread lookups
+        CREATE INDEX IF NOT EXISTS idx_direct_messages_thread
+        ON public.direct_messages (thread_id, created_at DESC);
     END IF;
 END $$;
 

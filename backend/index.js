@@ -3473,17 +3473,15 @@ app.post('/api/direct-messages/send', express.json(), async (req, res) => {
     // Get or create thread
     const thread = await getOrCreateThread(user.id, receiver_id);
 
-    // Insert message (support both old and new schema)
+    // Insert message (use existing schema: sender_id/receiver_id/content)
     const { data: newMessage, error: insertError } = await supabaseAdmin
       .from('direct_messages')
       .insert({
-        sender: user.id,
-        receiver: receiver_id,
-        sender_id: user.id, // Support legacy schema
-        receiver_id: receiver_id, // Support legacy schema
+        sender_id: user.id,
+        receiver_id: receiver_id,
         thread_id: thread.id,
-        message: message || null,
-        content: message || null, // Legacy field name
+        content: message || null,
+        message: message || null, // Also set message field if it exists
         image_url: image_url || null,
         image_width: image_width || null,
         image_height: image_height || null,
@@ -3551,13 +3549,16 @@ app.get('/api/direct-messages/threads', async (req, res) => {
         // Get last message
         const { data: messages } = await supabaseAdmin
           .from('direct_messages')
-          .select('id, message, image_url, created_at, read_at')
+          .select('id, content, message, image_url, created_at, read_at, receiver_id')
           .eq('thread_id', thread.id)
           .order('created_at', { ascending: false })
           .limit(1);
 
-        const lastMessage = messages && messages[0] ? messages[0] : null;
-        const unreadCount = lastMessage && !lastMessage.read_at && lastMessage.receiver === user.id ? 1 : 0;
+        const lastMessage = messages && messages[0] ? {
+          ...messages[0],
+          message: messages[0].message || messages[0].content || null,
+        } : null;
+        const unreadCount = lastMessage && !lastMessage.read_at && lastMessage.receiver_id === user.id ? 1 : 0;
 
         return {
           ...thread,
@@ -3616,12 +3617,18 @@ app.get('/api/direct-messages/thread/:threadId', async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch messages' });
     }
 
+    // Normalize messages (map content to message field)
+    const normalizedMessages = (messages || []).map(msg => ({
+      ...msg,
+      message: msg.message || msg.content || null,
+    }));
+
     // Mark messages as read
     await supabaseAdmin
       .from('direct_messages')
       .update({ read_at: new Date().toISOString() })
       .eq('thread_id', threadId)
-      .eq('receiver', user.id)
+      .eq('receiver_id', user.id)
       .is('read_at', null);
 
     return res.json({ thread, messages: messages || [] });
@@ -3661,7 +3668,7 @@ app.post('/api/direct-messages/mark-read', express.json(), async (req, res) => {
       .from('direct_messages')
       .update({ read_at: new Date().toISOString() })
       .eq('thread_id', thread_id)
-      .eq('receiver', user.id)
+      .eq('receiver_id', user.id)
       .is('read_at', null);
 
     if (updateError) {
