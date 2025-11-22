@@ -28,6 +28,7 @@ import { useMembership } from '../membership/MembershipContext';
 import { API_BASE } from '../config';
 import { normalizeScanResult } from '../utils/scanResultUtils';
 import { resizeImageToBase64 } from '../utils/resizeImageToBase64';
+import { deriveDisplayStrain } from '../utils/deriveDisplayStrain';
 
 const GUEST_LIMIT = 20;
 
@@ -818,12 +819,33 @@ export default function ScanPage({ onBack, onNavigate }) {
         
         // Store completed scan for result view
         const processedResult = scan.result || normalized;
-        const matchedStrain = 
-          scan.match ||
-          result?.visualMatches?.match ||
-          result?.matches?.[0] ||
-          normalized?.top_match ||
-          null;
+        
+        // CRITICAL: Use deriveDisplayStrain to prioritize OCR/packaging strain over visual matcher
+        const displayStrain = deriveDisplayStrain(scan);
+        
+        // Build matchedStrain object for StrainResultCard
+        // Use OCR/packaging strain if available, otherwise fall back to visual matcher
+        let matchedStrain = null;
+        if (displayStrain.primaryName) {
+          // Create a matched strain object from OCR/packaging data
+          matchedStrain = {
+            name: displayStrain.primaryName,
+            type: displayStrain.primaryType !== 'unknown' ? displayStrain.primaryType : null,
+            thc: displayStrain.thcPercent,
+            cbd: displayStrain.cbdPercent,
+            // Preserve visual matcher data as fallback metadata if available
+            visualMatch: result?.visualMatches?.match || result?.matches?.[0] || null,
+          };
+        } else {
+          // Fallback to visual matcher only if no OCR/packaging strain found
+          matchedStrain = 
+            scan.match ||
+            result?.visualMatches?.match ||
+            result?.matches?.[0] ||
+            normalized?.top_match ||
+            null;
+        }
+        
         const extractedVisionText =
           scan.visionText ||
           result?.vision_raw?.textAnnotations?.[0]?.description ||
@@ -841,6 +863,8 @@ export default function ScanPage({ onBack, onNavigate }) {
           matchedStrain: matchedStrain || null,
           visionText: extractedVisionText || null,
           matched_strain_slug: scan.matched_strain_slug || null,
+          // Store display strain info for ScanResultCard
+          displayStrain,
         });
         setActiveView('result');
         

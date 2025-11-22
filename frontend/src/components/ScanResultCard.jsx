@@ -5,23 +5,24 @@ import {
   Typography,
   Box,
 } from '@mui/material';
+import { deriveDisplayStrain } from '../utils/deriveDisplayStrain';
 
 function ScanResultCard({ result, scan, isGuest }) {
   if (!result && !scan) return null;
 
   const effective = result || scan || {};
+  
+  // CRITICAL: Use deriveDisplayStrain to prioritize OCR/packaging strain
+  const displayStrain = deriveDisplayStrain(effective);
 
   const packagingInsights =
     effective.packagingInsights || effective.packaging_insights || null;
 
   const matchQuality = effective.match_quality || 'none';
-  const matchConf = effective.match_confidence ?? null;
+  const matchConf = effective.match_confidence ?? displayStrain.estimateConfidence ?? null;
 
-  let strainName =
-    effective.matched_strain_name ||
-    effective.strain_name ||
-    effective.top_match?.name ||
-    null;
+  // Use primaryName from deriveDisplayStrain (prioritizes OCR/packaging)
+  let strainName = displayStrain.primaryName;
 
   if (!strainName) {
     // Absolute fallback when we truly have nothing
@@ -31,7 +32,8 @@ function ScanResultCard({ result, scan, isGuest }) {
         : 'Best guess strain';
   }
 
-  const matchLabel = (() => {
+  // Use estimateLabel from deriveDisplayStrain
+  const matchLabel = displayStrain.estimateLabel || (() => {
     if (matchQuality === 'high') return 'High confidence match';
     if (matchQuality === 'medium') return 'Likely match';
     if (matchQuality === 'low') return 'Best guess match';
@@ -43,33 +45,34 @@ function ScanResultCard({ result, scan, isGuest }) {
   // To keep things fast and avoid freezes, use a lightweight header +
   // simple body instead of rendering massive raw payloads.
 
-  if (packagingInsights) {
-    const basic = packagingInsights.basic || {};
-    const potency = packagingInsights.potency || {};
-    const details = packagingInsights.package_details || {};
-    const confidence = packagingInsights.confidence || {};
+  if (packagingInsights || displayStrain.isPackagedProduct) {
+    const basic = packagingInsights?.basic || {};
+    const potency = packagingInsights?.potency || {};
+    const details = packagingInsights?.package_details || {};
+    const confidence = packagingInsights?.confidence || {};
 
-    const pkgStrainName =
-      basic.strain_name ||
-      packagingInsights.strain_name ||
-      strainName;
+    // Use displayStrain values (prioritizes OCR/packaging strain)
+    const pkgStrainName = displayStrain.primaryName || strainName;
 
-    const brandName =
+    const brandName = displayStrain.brandName || 
       basic.brand_name ||
       details.brand ||
       'Unknown brand';
 
-    const thc =
+    // Use displayStrain THC/CBD (from packaging or label_insights)
+    const thc = displayStrain.thcPercent ??
       potency.thc_percent ??
       potency.thc_total_percent ??
       null;
 
-    const cbd =
+    const cbd = displayStrain.cbdPercent ??
       potency.cbd_percent ??
       potency.cbd_total_percent ??
       null;
 
-    const overallConf = confidence.overall ?? matchConf;
+    const overallConf = displayStrain.estimateConfidence ?? 
+      confidence.overall ?? 
+      matchConf;
 
     return (
       <Card
