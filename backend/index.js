@@ -55,6 +55,9 @@ import { generateLabelAISummary } from './services/aiLabelExplainer.js';
 import { generateScanAISummary, buildScanAISummary } from './services/aiSummaries.js';
 import { analyzePlantHealth } from './services/plantHealthAnalyzer.js';
 import { normalizeMatchConfidence } from './services/matchUtils.js';
+import { findSeedBankEntry } from './services/seedBank.js';
+import { buildGrowProfile } from './services/buildGrowProfile.js';
+import { generateBusinessCode } from './services/businessCode.js';
 import {
   consumeScanCredits,
   ensureMonthlyBundle,
@@ -67,6 +70,7 @@ import * as scanCreditsV2 from './services/scanCreditsV2.js';
 import { checkAccess, enforceTrialLimit } from './middleware/membershipCheck.js';
 import { schemaSync } from './services/schemaSync.js';
 import { safeUpdateScan, isSchemaError } from './services/safeWrites.js';
+import { resolveProRoleForCode, getProRoleFromRequest } from './config/proMode.js';
 
 // Load env from ../env/.env.local (works when launched from backend/)
 // In Vercel, environment variables are injected automatically
@@ -1054,52 +1058,99 @@ app.post('/api/uploads/complete', writeLimiter, async (req, res) => {
 // GET /api/scans - list recent
 app.get('/api/scans', async (req, res, next) => {
   try {
-    const { user_id } = req.query; // Optional: filter to user's own + friends' scans
+    const { 
+      user_id, 
+      role,           // 'dispensary' | 'grower'
+      type,           // 'packaged' | 'bud'
+      strain,         // strain name filter
+      date_start,     // ISO date string
+      date_end,       // ISO date string
+      limit = 200
+    } = req.query;
+    
     // Use service role for reads if available to ensure visibility of all scans
     const readClient = supabaseAdmin ?? supabase;
 
-    if (user_id) {
-      // Fetch user's own scans only with joined strain data
-      const { data, error } = await readClient
-        .from('scans')
-        .select('*, strain:strains!matched_strain_slug(*)')
-        .eq('user_id', user_id)
-        .order('created_at', { ascending: false })
-        .limit(100);
+    // Build query
+    let query = readClient
+      .from('scans')
+      .select(
+        `
+          id,
+          user_id,
+          created_at,
+          processed_at,
+          image_url,
+          status,
+          result,
+          packaging_insights,
+          label_insights,
+          ai_summary,
+          error,
+          match_confidence,
+          match_quality,
+          matched_strain_name,
+          matched_strain_slug,
+          canonical_strain_name,
+          canonical_strain_source,
+          canonical_match_confidence,
+          pro_role,
+          plant_health,
+          plant_age
+        `
+      );
 
-      if (error) return res.status(500).json({ error: error.message });
-      return res.json({ scans: data || [] });
-    } else {
-      // No user_id: return all scans (permissive for dev; tighten in prod) with joined strain data
-      // CRITICAL: Do NOT use relationship queries - FK constraint was dropped
-      // Select only columns directly from scans table
-      const { data, error } = await readClient
-        .from('scans')
-        .select(
-          `
-            id,
-            created_at,
-            processed_at,
-            image_url,
-            status,
-            result,
-            packaging_insights,
-            label_insights,
-            ai_summary,
-            error,
-            match_confidence,
-            match_quality,
-            matched_strain_name,
-            matched_strain_slug,
-            plant_health,
-            plant_age
-          `
-        )
-        .order('created_at', { ascending: false })
-        .limit(100);
-      if (error) return res.status(500).json({ error: error.message });
-      res.json({ scans: data || [] });
+    // Apply filters
+    if (user_id) {
+      query = query.eq('user_id', user_id);
     }
+
+    if (role === 'dispensary' || role === 'grower') {
+      query = query.eq('pro_role', role);
+    }
+
+    if (strain) {
+      // Search in canonical_strain_name or matched_strain_name
+      // PostgREST or() syntax: column1.ilike.value1,column2.ilike.value2
+      const strainPattern = `%${strain}%`;
+      query = query.or(`canonical_strain_name.ilike.${strainPattern},matched_strain_name.ilike.${strainPattern}`);
+    }
+
+    if (date_start) {
+      query = query.gte('created_at', date_start);
+    }
+
+    if (date_end) {
+      query = query.lte('created_at', date_end);
+    }
+
+    // Apply type filter (packaged vs bud)
+    // This requires checking packaging_insights or label_insights
+    // We'll filter in memory after fetching since JSONB filtering is complex
+    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .limit(parseInt(limit, 10) || 200);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    let filteredScans = data || [];
+
+    // Apply type filter in memory (packaged vs bud)
+    if (type === 'packaged' || type === 'bud') {
+      filteredScans = filteredScans.filter(scan => {
+        const pkg = scan.packaging_insights || scan.label_insights || {};
+        const hasPackagingStrain = !!(pkg.strainName || pkg.basic?.strain_name);
+        const isPackaged = hasPackagingStrain;
+        
+        if (type === 'packaged') {
+          return isPackaged;
+        } else {
+          return !isPackaged;
+        }
+      });
+    }
+
+    return res.json({ scans: filteredScans });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -1240,6 +1291,10 @@ app.get('/api/scans/:id', async (req, res, next) => {
           match_quality,
           matched_strain_name,
           matched_strain_slug,
+          canonical_strain_name,
+          canonical_strain_source,
+          canonical_match_confidence,
+          pro_role,
           plant_health,
           plant_age
         `
@@ -1280,10 +1335,30 @@ app.get('/api/scans/:id', async (req, res, next) => {
             confidence: scan.match_confidence || null,
           });
     
+    // Add business profile if user is a business
+    let businessProfile = null;
+    if (scan.user_id) {
+      try {
+        const { data: business, error: businessError } = await supabaseAdmin
+          .from('business_profiles')
+          .select('*')
+          .eq('user_id', scan.user_id)
+          .maybeSingle();
+
+        if (!businessError && business) {
+          businessProfile = business;
+        }
+      } catch (err) {
+        // Don't fail the request if business profile lookup fails
+        console.warn('[GET /api/scans/:id] Business profile lookup error', err);
+      }
+    }
+
     // Return scan object directly (not wrapped) - frontend expects this shape
     return res.json({
       ...scan,
       canonicalStrain,
+      business_profile: businessProfile,
     });
   } catch (e) {
     console.error('[GET /api/scans/:id] Unexpected error', { scanId: req.params.id, error: e });
@@ -1858,6 +1933,61 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       visual: visualMatchesArray[0] || null,
     });
     
+    // ---------------------------------------------
+    // SEED BANK LOOKUP: Fetch genetics data for confident canonical strains
+    // ---------------------------------------------
+    let seedBank = null;
+    let growProfile = null;
+    
+    const isPackaged = Boolean(isPackagedProductFlag);
+    const hasCanonical =
+      canonical &&
+      canonical.name &&
+      typeof canonical.name === 'string' &&
+      canonical.name !== 'Cannabis (strain unknown)' &&
+      canonical.confidence != null &&
+      canonical.confidence >= 0.8;
+    
+    if (hasCanonical) {
+      // Fetch seed bank data
+      try {
+        seedBank = await findSeedBankEntry({ canonicalName: canonical.name });
+        if (seedBank) {
+          console.log('[seed-bank] attached', {
+            id,
+            canonicalName: canonical.name,
+            breeder: seedBank.breeder,
+            type: seedBank.type,
+          });
+        }
+      } catch (err) {
+        console.error('[seed-bank] lookup error', {
+          id,
+          canonicalName: canonical.name,
+          message: err?.message || String(err),
+        });
+      }
+
+      // Generate grow profile
+      try {
+        growProfile = await buildGrowProfile(canonical);
+        if (growProfile && growProfile.strain !== 'unknown') {
+          console.log('[grow-profile] generated', {
+            id,
+            canonicalName: canonical.name,
+            vigor: growProfile.vigor,
+            harvestWeeks: growProfile.harvest?.estWeeks,
+          });
+        }
+      } catch (err) {
+        console.error('[grow-profile] generation error', {
+          id,
+          canonicalName: canonical.name,
+          message: err?.message || String(err),
+        });
+      }
+    }
+    
     // Merge Vision result with visual matches and packaging insights
     const finalResult = {
       vision_raw: result,
@@ -1874,7 +2004,14 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
         source: canonical.source,
         confidence: canonical.confidence,
       },
+      // Attach seed bank data if found
+      seedBank: seedBank || null,
+      // Attach grow profile if generated
+      growProfile: growProfile || null,
     };
+
+    // Get pro role from request (if provided via header)
+    const proRole = getProRoleFromRequest(req);
 
     // Build update payload with AI summary if available
     const updatePayload = {
@@ -1889,6 +2026,8 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       canonical_strain_name: canonical.name || null,
       canonical_strain_source: canonical.source || null,
       canonical_match_confidence: canonical.confidence ?? null,
+      // Tag scan with pro role if provided
+      pro_role: proRole || null,
       error: null, // Explicitly clear any error on success
     };
 
@@ -2700,6 +2839,301 @@ app.get('/api/barcode/lookup', async (req, res) => {
   } catch (e) {
     console.error('[barcode] unexpected error', e);
     res.status(500).json({ error: String(e) });
+  }
+});
+
+// ========================================
+// BUSINESS PROFILES: Register and lookup
+// ========================================
+
+// Helper: build zip group key
+function makeZipGroupKey(postalCode, country = 'US') {
+  if (!postalCode) return null;
+  const trimmedPostal = String(postalCode).trim();
+  if (!trimmedPostal) return null;
+  const normalizedCountry = (country || 'US').toUpperCase();
+  return `${trimmedPostal}:${normalizedCountry}`;
+}
+
+// Helper: ensure there is a zip group and membership for a given business_profile row
+async function ensureZipGroupForBusinessProfile(profile) {
+  try {
+    const { id, postal_code, city, state, country } = profile;
+    const key = makeZipGroupKey(postal_code, country || 'US');
+    if (!key) {
+      console.warn('[business-groups] No postal code for profile, skipping group creation', { profileId: id });
+      return null;
+    }
+
+    // 1) Find or create the group
+    const groupName = `${postal_code} Local Cannabis Network`;
+    const { data: existingGroups, error: groupFetchError } = await supabaseAdmin
+      .from('business_groups')
+      .select('*')
+      .eq('type', 'zip')
+      .eq('key', key)
+      .limit(1);
+
+    if (groupFetchError) {
+      console.error('[business-groups] Error fetching group', { error: groupFetchError, profileId: id, key });
+      throw groupFetchError;
+    }
+
+    let group = existingGroups && existingGroups[0];
+    if (!group) {
+      const { data: insertedGroups, error: insertError } = await supabaseAdmin
+        .from('business_groups')
+        .insert({
+          type: 'zip',
+          key,
+          name: groupName,
+          city: city || null,
+          state: state || null,
+          country: (country || 'US').toUpperCase(),
+        })
+        .select()
+        .limit(1);
+
+      if (insertError) {
+        console.error('[business-groups] Error creating group', { error: insertError, profileId: id, key });
+        throw insertError;
+      }
+
+      group = insertedGroups && insertedGroups[0];
+      console.log('[business-groups] Created new zip group', { profileId: id, groupId: group.id, key });
+    }
+
+    if (!group) {
+      console.warn('[business-groups] Could not resolve or create group', { profileId: id, key });
+      return null;
+    }
+
+    // 2) Ensure membership
+    const { error: membershipError } = await supabaseAdmin
+      .from('business_group_memberships')
+      .upsert(
+        {
+          business_profile_id: id,
+          group_id: group.id,
+          role: 'owner', // the auth user who owns this profile is effectively the "owner"
+        },
+        {
+          onConflict: 'business_profile_id,group_id',
+        }
+      );
+
+    if (membershipError) {
+      console.error('[business-groups] Error upserting membership', { error: membershipError, profileId: id, groupId: group.id });
+      throw membershipError;
+    }
+
+    console.log('[business-groups] Ensured membership', { profileId: id, groupId: group.id, key });
+    return group;
+  } catch (err) {
+    console.error('[business-groups] ensureZipGroupForBusinessProfile error', {
+      message: err?.message,
+      name: err?.name,
+      stack: err?.stack,
+    });
+    return null;
+  }
+}
+
+// POST /api/business/register - Create or update grower/dispensary profile
+app.post('/api/business/register', express.json(), async (req, res) => {
+  try {
+    const { user_id, name, business_type, city, state, country, phone, website, postal_code } = req.body || {};
+
+    // 1. Validate business type
+    if (!business_type || !['grower', 'dispensary'].includes(business_type)) {
+      return res.status(400).json({ error: 'Invalid business_type. Must be "grower" or "dispensary".' });
+    }
+
+    if (!user_id) {
+      return res.status(400).json({ error: 'user_id is required' });
+    }
+
+    // 2. Check if a record already exists
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from('business_profiles')
+      .select('*')
+      .eq('user_id', user_id)
+      .maybeSingle();
+
+    if (existingError && existingError.code !== 'PGRST116') {
+      console.error('[business/register] Error checking existing profile', existingError);
+      return res.status(500).json({ error: 'Failed to check existing profile' });
+    }
+
+    // 3. Generate or keep business_code
+    let code = existing?.business_code;
+    if (!code) {
+      // Generate new code and ensure uniqueness
+      let attempts = 0;
+      let isUnique = false;
+      while (!isUnique && attempts < 10) {
+        code = generateBusinessCode();
+        const { data: checkExisting } = await supabaseAdmin
+          .from('business_profiles')
+          .select('business_code')
+          .eq('business_code', code)
+          .maybeSingle();
+        if (!checkExisting) {
+          isUnique = true;
+        }
+        attempts++;
+      }
+      if (!isUnique) {
+        return res.status(500).json({ error: 'Failed to generate unique business code' });
+      }
+    }
+
+    const payload = {
+      user_id,
+      name: name || null,
+      business_type,
+      business_code: code,
+      city: city || null,
+      state: state || null,
+      country: country || null,
+      postal_code: postal_code || null,
+      phone: phone || null,
+      website: website || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    let result;
+    if (existing) {
+      // Update existing profile
+      const { data, error } = await supabaseAdmin
+        .from('business_profiles')
+        .update(payload)
+        .eq('user_id', user_id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[business/register] Update error', error);
+        return res.status(500).json({ error: 'Failed to update business profile' });
+      }
+      result = data;
+    } else {
+      // Insert new profile
+      const { data, error } = await supabaseAdmin
+        .from('business_profiles')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[business/register] Insert error', error);
+        return res.status(500).json({ error: 'Failed to create business profile' });
+      }
+      result = data;
+    }
+
+    return res.json({
+      success: true,
+      profile: result,
+      business_code: result.business_code,
+    });
+  } catch (err) {
+    console.error('[business/register] Unexpected error', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/business/:code - Lookup grower/dispensary by code
+app.get('/api/business/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ error: 'Invalid business code' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('business_profiles')
+      .select('*')
+      .eq('business_code', code.toUpperCase())
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('[business/get] Database error', error);
+      return res.status(500).json({ error: 'Failed to lookup business' });
+    }
+
+    if (!data) {
+      return res.status(404).json({ error: 'Business not found' });
+    }
+
+    return res.json({ success: true, profile: data });
+  } catch (err) {
+    console.error('[business/get] Unexpected error', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// ========================================
+// PRO MODE: Access code validation
+// ========================================
+app.post('/api/pro/validate-code', express.json(), async (req, res) => {
+  try {
+    const { code } = req.body || {};
+
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ error: 'Missing code' });
+    }
+
+    const role = resolveProRoleForCode(code);
+
+    if (!role) {
+      return res.status(401).json({ error: 'Invalid code' });
+    }
+
+    // Optionally tie to authenticated user via Supabase access token / user_id
+    // For now, we'll just return the role without persisting to profile
+    // Frontend will store this in localStorage
+    let profileUpdate = null;
+
+    // If you have user_id in request, optionally update profile
+    const userId = req.body?.user_id || req.query?.user_id || null;
+    if (userId && supabaseAdmin) {
+      try {
+        const { data: profile, error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .update({
+            pro_role: role,
+            pro_enabled: true
+          })
+          .eq('id', userId)
+          .select('*')
+          .single();
+
+        if (profileError) {
+          console.error('[pro/validate-code] Failed to update profile', profileError);
+        } else {
+          profileUpdate = profile;
+        }
+      } catch (profileErr) {
+        console.error('[pro/validate-code] Profile update error', profileErr);
+        // Don't fail the request if profile update fails
+      }
+    }
+
+    return res.json({
+      ok: true,
+      role,
+      proEnabled: true,
+      profile: profileUpdate ? {
+        id: profileUpdate.id,
+        pro_role: profileUpdate.pro_role,
+        pro_enabled: profileUpdate.pro_enabled
+      } : null
+    });
+  } catch (err) {
+    console.error('[pro/validate-code] Error', err);
+    return res.status(500).json({ error: 'Internal error' });
   }
 });
 
