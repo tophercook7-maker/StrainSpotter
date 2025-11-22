@@ -842,11 +842,32 @@ export default function ScanPage({ onBack, onNavigate }) {
         !!scan?.errorMessage;
 
       // CRITICAL: If scan is complete OR has a result, stop polling and show results
-      // IMPORTANT: Backend sets status='completed' when scan completes (backend/index.js line 1661)
+      // IMPORTANT: Backend sets status='completed' when scan completes (backend/index.js line 1698)
       // Stop polling if:
-      // 1. Status is 'completed'/'done'/'complete'/'success'
-      // 2. Result object exists (indicates backend finished processing)
-      const shouldStopPolling = isComplete || hasResult || (status === 'completed' && result) || (status === 'done' && result);
+      // 1. Status is 'completed'/'done'/'complete'/'success' (highest priority)
+      // 2. Result object exists AND has content (indicates backend finished processing)
+      // 3. Status is 'completed'/'done' AND result exists (explicit completion check)
+      const shouldStopPolling = 
+        isComplete || // Status is completed/done/complete/success
+        (hasResult && hasResultData) || // Result exists and has meaningful data
+        (status === 'completed' && hasResult) || // Explicit: completed status + result
+        (status === 'done' && hasResult); // Explicit: done status + result (backward compat)
+      
+      // Enhanced logging for completion detection
+      if (shouldStopPolling) {
+        console.log('[POLL] SCAN COMPLETE - stopping polling', {
+          scanId: currentScanId,
+          attempt,
+          status,
+          isComplete,
+          hasScan,
+          hasResult,
+          hasResultData,
+          shouldStopPolling,
+          resultPresent: !!result,
+          resultKeys: result ? Object.keys(result).slice(0, 10) : [],
+        });
+      }
       
       if (shouldStopPolling) {
         if (timeoutRef) clearTimeout(timeoutRef);
