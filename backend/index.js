@@ -1744,18 +1744,36 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       // Don't fail the scan - continue without packaging insights
     }
 
-    // Generate AI summary for consumers, dispensaries, and growers
+    // Generate rich AI summary for dispensaries and growers
     let scanAISummary = null;
     try {
       console.time(`[scan-process-summary] ${id}`);
-      // Extract Vision data
+      // Extract Vision data (fallback if not available from other sources)
       const visionText = result.textAnnotations?.[0]?.description || result.fullTextAnnotation?.text || '';
       const visionLabels = result.labelAnnotations || [];
       
       // Extract matched strain record
       const matchedStrainRecord = topMatch?.strain || null;
 
+      // Generate canonical strain first (needed for AI summary)
+      const isPackagedProductFlag = 
+        !!(packagingInsights?.isPackagedProduct ||
+           labelInsights?.isPackagedProduct);
+      
+      const canonicalForAI = resolveCanonicalStrain({
+        packagingInsights: packagingInsights || null,
+        labelInsights: labelInsights || null,
+        visualMatches: visualMatchesArray,
+        aiSummary: null, // Not available yet
+        isPackagedProduct: isPackagedProductFlag,
+      });
+
       scanAISummary = await generateScanAISummary({
+        packagingInsights: packagingInsights || null,
+        labelInsights: labelInsights || null,
+        visualMatches: visualMatchesArray,
+        plantHealth: plantHealth || null,
+        canonical: canonicalForAI,
         visionText,
         visionLabels,
         strainRecord: matchedStrainRecord
@@ -1765,9 +1783,13 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       if (scanAISummary) {
         console.log('[scan-process] AI summary generated successfully', {
           id,
-          hasSummary: !!scanAISummary.userFacingSummary,
-          effectsCount: scanAISummary.effectsAndUseCases?.length || 0,
-          warningsCount: scanAISummary.risksAndWarnings?.length || 0,
+          hasSummary: !!scanAISummary.summary,
+          intensity: scanAISummary.intensity,
+          effectsCount: scanAISummary.effects?.length || 0,
+          flavorsCount: scanAISummary.flavors?.length || 0,
+          dispensaryNotesCount: scanAISummary.dispensaryNotes?.length || 0,
+          growerNotesCount: scanAISummary.growerNotes?.length || 0,
+          warningsCount: scanAISummary.warnings?.length || 0,
         });
       }
     } catch (aiSummaryErr) {

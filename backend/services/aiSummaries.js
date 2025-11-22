@@ -445,100 +445,81 @@ const client = openaiApiKey
   : null;
 
 /**
- * Generate an AI summary for a completed scan.
- *
+ * Generate rich AI summary for dispensaries and growers using OpenAI GPT.
+ * 
  * Input fields:
- * - visionText: string (raw OCR text from Google Vision)
- * - visionLabels: array (labels/objects from Vision, optional)
- * - strainRecord: object|null (matched strain row from DB, if any)
+ * - packagingInsights: object|null (packaging analysis results)
+ * - labelInsights: object|null (label extraction results)
+ * - visualMatches: array (visual matching results)
+ * - plantHealth: object|null (plant health analysis)
+ * - canonical: object (canonical strain resolution result)
+ * - visionText: string (raw OCR text, optional fallback)
+ * - visionLabels: array (labels from Vision, optional fallback)
+ * - strainRecord: object|null (matched strain row from DB, optional)
  *
- * Returns a structured object or null on failure:
+ * Returns a structured object matching canonical ai_summary shape or null on failure:
  * {
- *   userFacingSummary: string,
- *   effectsAndUseCases: string[],
- *   risksAndWarnings: string[],
- *   dispensaryNotes: string,
- *   growerNotes: string,
- *   confidenceNote: string
+ *   intensity: "LOW" | "MEDIUM" | "HIGH",
+ *   effects: string[],
+ *   flavors: string[],
+ *   aromas: string[],
+ *   dispensaryNotes: string[],
+ *   growerNotes: string[],
+ *   warnings: string[],
+ *   summary: string,
+ *   audience: "dispensary-and-grower"
  * }
  */
-export async function generateScanAISummary({ visionText, visionLabels, strainRecord }) {
+export async function generateScanAISummary({ 
+  packagingInsights, 
+  labelInsights, 
+  visualMatches, 
+  plantHealth, 
+  canonical,
+  visionText,
+  visionLabels,
+  strainRecord 
+}) {
   if (!client || !openaiApiKey) {
     console.warn('[AI] OPENAI_API_KEY missing; skipping AI summary.');
     return null;
   }
 
   try {
-    const cleanVisionText = (visionText || '').slice(0, 6000);
-
-    const labelsSnippet = Array.isArray(visionLabels)
-      ? visionLabels
-          .map(l => {
-            const name = l.description || l.name || '';
-            const score = typeof l.score === 'number' ? ` (${(l.score * 100).toFixed(0)}%)` : '';
-            return name ? `${name}${score}` : '';
-          })
-          .filter(Boolean)
-          .join(', ')
-          .slice(0, 1000)
-      : '';
-
-    const strainContext = strainRecord
-      ? {
-          name: strainRecord.name,
-          type: strainRecord.type,
-          thc: strainRecord.thc,
-          cbd: strainRecord.cbd,
-          effects: strainRecord.effects,
-          flavors: strainRecord.flavors,
-          lineage: strainRecord.lineage,
-          growGuide: strainRecord.grow_guide,
-        }
-      : null;
-
-    const systemPrompt = `
-You are an assistant for a cannabis scanning app called StrainSpotter.
-You receive OCR text and labels from Google Vision plus optional structured strain data.
-Your job is to summarize conservatively and helpfully for three audiences:
-- a regular consumer/patient,
-- a dispensary budtender,
-- a grower/cultivator.
-
-You must:
-1) Be conservative about medical claims. Use "may" / "can" instead of promising effects.
-2) Clearly indicate uncertainty when information is weak or conflicting.
-3) Prefer using the strain record when available, and fall back to OCR/labels otherwise.
-4) Avoid inventing specific lab values or terpene percentages when not provided.
-`.trim();
-
-    const userPrompt = `
-OCR TEXT FROM LABEL:
-${cleanVisionText || '(none)'}
-
-VISION LABELS:
-${labelsSnippet || '(none)'}
-
-OPTIONAL STRAIN RECORD (from database):
-${strainContext ? JSON.stringify(strainContext, null, 2) : '(no structured strain matched)'}
-
-Return a concise JSON object with EXACTLY these keys:
-- userFacingSummary: string
-- effectsAndUseCases: string[] (3–7 short bullet-style entries)
-- risksAndWarnings: string[] (2–6 short, cautious bullet-style entries)
-- dispensaryNotes: string (1–2 paragraphs max)
-- growerNotes: string (0.5–1 paragraph; if data is weak, say that)
-- confidenceNote: string (short explanation of how confident you are and why)
-`.trim();
+    // Build prompt with rich context
+    const prompt = buildRichPrompt({ 
+      packagingInsights, 
+      labelInsights, 
+      visualMatches, 
+      plantHealth, 
+      canonical,
+      visionText,
+      visionLabels,
+      strainRecord 
+    });
 
     const response = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
+        { 
+          role: 'system', 
+          content: `You are an expert cannabis product analyst writing for TWO audiences:
+1) DISPENSARIES (budtenders, managers, buyers).
+2) GROWERS (cultivators, head growers, breeders).
+
+You will output STRICT JSON ONLY, with NO extra text, following the schema you have been given.
+
+IMPORTANT:
+- If the exact strain is unclear or unknown, DO NOT fabricate specific lineage; speak in general terms like "indica-leaning hybrid".
+- You may infer a reasonable profile from known strain names like "White Widow" or "Scott's OG", BUT DO NOT invent impossible facts.
+- Use clear, professional, non-medical language. Do NOT claim to diagnose, treat, or cure any condition.
+- Be conservative about medical claims. Use "may" / "can" instead of promising effects.`
+        },
+        { role: 'user', content: prompt },
       ],
       temperature: 0.4,
-      max_tokens: 600,
+      max_tokens: 1200, // Increased for richer output
     });
 
     const content = response.choices?.[0]?.message?.content;
@@ -555,16 +536,185 @@ Return a concise JSON object with EXACTLY these keys:
       return null;
     }
 
+    // Normalize and validate the response to match canonical shape
+    const intensity = ['LOW', 'MEDIUM', 'HIGH'].includes(parsed.intensity) 
+      ? parsed.intensity 
+      : (parsed.intensity?.toUpperCase() === 'HIGH' ? 'HIGH' : 
+         parsed.intensity?.toUpperCase() === 'LOW' ? 'LOW' : 'MEDIUM');
+
     return {
-      userFacingSummary: parsed.userFacingSummary || '',
-      effectsAndUseCases: Array.isArray(parsed.effectsAndUseCases) ? parsed.effectsAndUseCases : [],
-      risksAndWarnings: Array.isArray(parsed.risksAndWarnings) ? parsed.risksAndWarnings : [],
-      dispensaryNotes: parsed.dispensaryNotes || '',
-      growerNotes: parsed.growerNotes || '',
-      confidenceNote: parsed.confidenceNote || '',
+      intensity,
+      effects: Array.isArray(parsed.effects) ? parsed.effects : [],
+      flavors: Array.isArray(parsed.flavors) ? parsed.flavors : [],
+      aromas: Array.isArray(parsed.aromas) ? parsed.aromas : [],
+      dispensaryNotes: Array.isArray(parsed.dispensaryNotes) 
+        ? parsed.dispensaryNotes 
+        : (typeof parsed.dispensaryNotes === 'string' && parsed.dispensaryNotes.trim() 
+          ? [parsed.dispensaryNotes.trim()] 
+          : []),
+      growerNotes: Array.isArray(parsed.growerNotes) 
+        ? parsed.growerNotes 
+        : (typeof parsed.growerNotes === 'string' && parsed.growerNotes.trim() 
+          ? [parsed.growerNotes.trim()] 
+          : []),
+      warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
+      summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+      audience: parsed.audience || 'dispensary-and-grower',
+      // Backward compatibility fields
+      userFacingSummary: parsed.summary || parsed.userFacingSummary || '',
+      effectsAndUseCases: Array.isArray(parsed.effects) ? parsed.effects : (Array.isArray(parsed.effectsAndUseCases) ? parsed.effectsAndUseCases : []),
+      risksAndWarnings: Array.isArray(parsed.warnings) ? parsed.warnings : (Array.isArray(parsed.risksAndWarnings) ? parsed.risksAndWarnings : []),
     };
   } catch (err) {
     console.error('[AI] Error generating AI summary:', err);
     return null;
   }
+}
+
+function buildRichPrompt({ 
+  packagingInsights, 
+  labelInsights, 
+  visualMatches, 
+  plantHealth, 
+  canonical,
+  visionText,
+  visionLabels,
+  strainRecord 
+}) {
+  const strainName = canonical?.name || labelInsights?.strainName || packagingInsights?.strainName || null;
+  const isPackagedProduct = !!packagingInsights?.isPackagedProduct || !!canonical?.source?.includes('packaging');
+
+  const packagingName = packagingInsights?.strainName || null;
+  const labelName = labelInsights?.strainName || null;
+  const visualName = visualMatches?.[0]?.name || null;
+
+  const names = [strainName, packagingName, labelName, visualName].filter(Boolean);
+  const bestName = names[0] || 'this cannabis product';
+
+  const contextLines = [];
+
+  if (isPackagedProduct) {
+    contextLines.push(`This is a PACKAGED product. Treat label text and lab results as the source of truth.`);
+  } else {
+    contextLines.push(`This is a LIVE PLANT / BUD photo. Any strain name is an estimate, not guaranteed.`);
+  }
+
+  if (plantHealth?.stage || plantHealth?.healthLabel) {
+    contextLines.push(`Plant health: stage=${plantHealth.stage || 'unknown'}, health=${plantHealth.healthLabel || 'unknown'}.`);
+  }
+
+  if (packagingInsights?.labels?.length) {
+    contextLines.push(`Packaging labels: ${packagingInsights.labels.join(', ')}.`);
+  }
+
+  if (labelInsights?.thc || labelInsights?.cbd) {
+    contextLines.push(`Label potency: THC=${labelInsights.thc || 'unknown'}%, CBD=${labelInsights.cbd || 'unknown'}%.`);
+  }
+
+  const cleanVisionText = (visionText || '').slice(0, 4000);
+  const labelsSnippet = Array.isArray(visionLabels)
+    ? visionLabels
+        .map(l => {
+          const name = l.description || l.name || '';
+          const score = typeof l.score === 'number' ? ` (${(l.score * 100).toFixed(0)}%)` : '';
+          return name ? `${name}${score}` : '';
+        })
+        .filter(Boolean)
+        .join(', ')
+        .slice(0, 800)
+    : '';
+
+  const strainContext = strainRecord
+    ? {
+        name: strainRecord.name,
+        type: strainRecord.type,
+        thc: strainRecord.thc,
+        cbd: strainRecord.cbd,
+        effects: strainRecord.effects,
+        flavors: strainRecord.flavors,
+        lineage: strainRecord.lineage,
+      }
+    : null;
+
+  const context = contextLines.join('\n');
+
+  return `
+FOCUS PRODUCT:
+- Name (best guess): ${bestName}
+- Is packaged product: ${isPackagedProduct ? 'YES' : 'NO'}
+
+CONTEXT:
+${context}
+
+${cleanVisionText ? `OCR TEXT FROM LABEL:\n${cleanVisionText}\n` : ''}
+${labelsSnippet ? `VISION LABELS:\n${labelsSnippet}\n` : ''}
+${strainContext ? `OPTIONAL STRAIN RECORD (from database):\n${JSON.stringify(strainContext, null, 2)}\n` : ''}
+
+REQUIREMENTS:
+
+1) "intensity":
+   - Overall intensity of psychoactive effect.
+   - Must be one of: "LOW", "MEDIUM", "HIGH".
+   - Consider THC %, terpene content, and typical profile if strain is known.
+
+2) "effects":
+   - 3–8 concise effect tags.
+   - Examples: "relaxed", "uplifted", "focused", "creative", "sleepy", "euphoric", "social", "body-heavy".
+   - Use generic but realistic tags if strain is unknown.
+
+3) "flavors":
+   - 2–6 flavor tags.
+   - Examples: "citrus", "diesel", "earthy", "sweet", "berry", "tropical", "pine", "spice".
+   - You may infer from terpenes if available (e.g., limonene → citrus/lemon).
+
+4) "aromas":
+   - 2–6 aroma tags (may overlap with flavor but can be more pungent or specific).
+   - Examples: "skunky", "gassy", "herbal", "spicy", "woody".
+
+5) "dispensaryNotes":
+   - 2–6 short paragraphs (1–3 sentences each) as an array of strings.
+   - Focus on how budtenders should POSITION and EXPLAIN this product to customers.
+   - Include:
+     - When to recommend (time of day, experience level).
+     - What customers it fits (e.g., "after-work relaxation", "creative daytime users").
+     - Any standout lab features (THC, CBD, terpenes) in plain language.
+
+6) "growerNotes":
+   - 2–6 short paragraphs (1–3 sentences each) as an array of strings.
+   - Focus on cultivation-relevant insights based on the apparent type (indica-leaning, sativa-leaning, hybrid) and potency.
+   - Include:
+     - General growth style (tall/stretchy vs compact, bushy).
+     - Environmental preferences (indoor/outdoor, temp/humidity tolerance).
+     - Training recommendations (topping, LST, SCROG).
+     - Harvest timing (early vs late for desired effect) in qualitative terms.
+
+7) "warnings":
+   - 2–6 bullet-style warnings as short strings in an array.
+   - Include safety and compliance language, such as:
+     - "Not recommended for first-time users due to potency."
+     - "Do not operate a vehicle or heavy machinery after use."
+     - "Start with a low dose and wait to feel full effects."
+     - "Keep out of reach of children and pets."
+
+8) "summary":
+   - 2–4 sentences.
+   - High-level overview combining potency, effects, and use-case.
+   - Useful as a quick read for either a buyer or a head grower.
+
+9) "audience":
+   - Always: "dispensary-and-grower".
+
+RETURN ONLY VALID JSON MATCHING THIS STRUCTURE:
+{
+  "intensity": "LOW" | "MEDIUM" | "HIGH",
+  "effects": ["tag1", "tag2", ...],
+  "flavors": ["tag1", "tag2", ...],
+  "aromas": ["tag1", "tag2", ...],
+  "dispensaryNotes": ["paragraph 1", "paragraph 2", ...],
+  "growerNotes": ["paragraph 1", "paragraph 2", ...],
+  "warnings": ["warning 1", "warning 2", ...],
+  "summary": "2-4 sentence overview",
+  "audience": "dispensary-and-grower"
+}
+`.trim();
 }

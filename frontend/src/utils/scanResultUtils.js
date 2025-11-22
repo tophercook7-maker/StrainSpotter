@@ -282,29 +282,33 @@ export function transformScanResult(scan) {
     null;
 
   // Extract AI fields - handle both old and new field names for compatibility
-  const aiEffects = Array.isArray(ai.effectsAndUseCases) 
-    ? ai.effectsAndUseCases 
-    : (Array.isArray(ai.effects) ? ai.effects : []);
+  // Canonical shape: intensity, effects, flavors, aromas, dispensaryNotes, growerNotes, warnings, summary
+  const aiIntensity = ai.intensity || null; // "LOW" | "MEDIUM" | "HIGH" or number (legacy)
+  const aiEffects = Array.isArray(ai.effects) 
+    ? ai.effects 
+    : (Array.isArray(ai.effectsAndUseCases) ? ai.effectsAndUseCases : []);
   const aiFlavors = Array.isArray(ai.flavors) ? ai.flavors : [];
-  const aiIntensity = typeof ai.intensity === 'number' 
-    ? ai.intensity 
-    : (typeof ai.potency_score === 'number' ? ai.potency_score : null);
-  const aiSummaryText = typeof ai.userFacingSummary === 'string' 
-    ? ai.userFacingSummary 
-    : (typeof ai.summary === 'string' ? ai.summary : '');
+  const aiAromas = Array.isArray(ai.aromas) ? ai.aromas : [];
+  const aiSummaryText = typeof ai.summary === 'string' 
+    ? ai.summary 
+    : (typeof ai.userFacingSummary === 'string' ? ai.userFacingSummary : '');
   const aiDispensaryNotes = Array.isArray(ai.dispensaryNotes) 
     ? ai.dispensaryNotes 
-    : (typeof ai.dispensary_notes === 'string' && ai.dispensary_notes.trim() 
-      ? [ai.dispensary_notes.trim()] 
-      : (Array.isArray(ai.dispensary_notes) ? ai.dispensary_notes : []));
+    : (typeof ai.dispensaryNotes === 'string' && ai.dispensaryNotes.trim() 
+      ? [ai.dispensaryNotes.trim()] 
+      : (typeof ai.dispensary_notes === 'string' && ai.dispensary_notes.trim() 
+        ? [ai.dispensary_notes.trim()] 
+        : (Array.isArray(ai.dispensary_notes) ? ai.dispensary_notes : [])));
   const aiGrowerNotes = Array.isArray(ai.growerNotes) 
     ? ai.growerNotes 
-    : (typeof ai.grower_notes === 'string' && ai.grower_notes.trim() 
-      ? [ai.grower_notes.trim()] 
-      : (Array.isArray(ai.grower_notes) ? ai.grower_notes : []));
-  const aiWarnings = Array.isArray(ai.risksAndWarnings) 
-    ? ai.risksAndWarnings 
-    : (Array.isArray(ai.warnings) ? ai.warnings : []);
+    : (typeof ai.growerNotes === 'string' && ai.growerNotes.trim() 
+      ? [ai.growerNotes.trim()] 
+      : (typeof ai.grower_notes === 'string' && ai.grower_notes.trim() 
+        ? [ai.grower_notes.trim()] 
+        : (Array.isArray(ai.grower_notes) ? ai.grower_notes : [])));
+  const aiWarnings = Array.isArray(ai.warnings) 
+    ? ai.warnings 
+    : (Array.isArray(ai.risksAndWarnings) ? ai.risksAndWarnings : []);
 
   // Determine effects/flavors based on product type
   // CRITICAL: Packaged products ALWAYS use AI effects/flavors, NEVER library tags
@@ -343,6 +347,7 @@ export function transformScanResult(scan) {
     growerNotes: aiGrowerNotes,
     warnings: aiWarnings,
     summary: aiSummaryText,
+    aromaTags: aiAromas, // New field for aromas
     // Keep old field names for backward compatibility
     aiIntensity,
     aiSummaryText,
