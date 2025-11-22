@@ -828,36 +828,25 @@ export default function ScanPage({ onBack, onNavigate }) {
         // Don't show visual matcher guesses for packaged products without strain name
         let matchedStrain = null;
         
-        if (displayStrain.primaryName) {
+        // CRITICAL: Only create matchedStrain if we have a valid primaryName
+        // For packaged products without strain name, matchedStrain stays null (no visual guesses)
+        if (displayStrain.primaryName && displayStrain.primaryName !== 'Cannabis (strain unknown)') {
           // Create a matched strain object from OCR/packaging/AI data
-          // CRITICAL: Prioritize effects/flavors from AI summary and label insights
-          const effects = displayStrain.effects || 
-            scan.ai_summary?.effects ||
-            scan.result?.effects ||
-            scan.label_insights?.effects ||
-            scan.packaging_insights?.effects ||
-            null;
-          
-          const flavors = displayStrain.flavors ||
-            scan.label_insights?.terpenes ||
-            scan.packaging_insights?.terpenes ||
-            scan.ai_summary?.terpenes ||
-            scan.ai_summary?.flavors ||
-            null;
-          
+          // Use effects/flavors from deriveDisplayStrain (already filtered appropriately)
           matchedStrain = {
             name: displayStrain.primaryName,
             lineage: displayStrain.displaySubline || null, // "Similar to XYZ" subline
             type: displayStrain.primaryType !== 'unknown' ? displayStrain.primaryType : null,
             thc: displayStrain.thcPercent,
             cbd: displayStrain.cbdPercent,
-            effects: effects, // Prioritize AI/label effects over strain DB
-            flavors: flavors, // Prioritize label terpenes over strain DB
-            // Preserve visual matcher data as fallback metadata if available
+            effects: displayStrain.effects, // Already filtered by deriveDisplayStrain
+            flavors: displayStrain.flavors, // Already filtered by deriveDisplayStrain
+            // Preserve visual matcher data as fallback metadata if available (but don't use it)
             visualMatch: result?.visualMatches?.match || result?.matches?.[0] || null,
           };
-        } else if (!displayStrain.isPackagedProduct) {
+        } else if (!displayStrain.isPackagedProduct && !displayStrain.isFlowerGuessOnly) {
           // Only fallback to visual matcher for NON-packaged products (flower/bud photos)
+          // AND only if deriveDisplayStrain didn't already handle it
           // For packaged products without strain name, don't show visual guesses
           matchedStrain = 
             scan.match ||
