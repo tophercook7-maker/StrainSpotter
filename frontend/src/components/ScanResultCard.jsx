@@ -56,7 +56,7 @@ function AIStrainDetailsPanel({
         AI STRAIN DETAILS
       </Typography>
 
-      {typeof intensity === 'number' && (
+      {(intensity != null) && (
         <Box sx={{ mt: 1 }}>
           <Typography
             variant="caption"
@@ -66,26 +66,41 @@ function AIStrainDetailsPanel({
               mb: 0.5,
             }}
           >
-            Estimated intensity
+            Intensity
+            {typeof intensity === 'string' && `: ${intensity}`}
           </Typography>
-          {/* Simple 5-dot meter */}
-          <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5 }}>
-            {Array.from({ length: 5 }).map((_, i) => {
-              const filled = intensity >= (i + 1) / 5;
-              return (
-                <Box
-                  key={i}
-                  sx={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: '50%',
-                    opacity: filled ? 1 : 0.3,
-                    backgroundColor: '#9AE66E',
-                  }}
-                />
-              );
-            })}
-          </Box>
+          {/* Simple 5-dot meter - convert string to number if needed */}
+          {(() => {
+            let intensityValue = 0;
+            if (typeof intensity === 'number') {
+              intensityValue = intensity;
+            } else if (typeof intensity === 'string') {
+              // Convert "LOW" | "MEDIUM" | "HIGH" to 0-1 scale
+              const upper = intensity.toUpperCase();
+              if (upper === 'HIGH') intensityValue = 0.9;
+              else if (upper === 'MEDIUM') intensityValue = 0.6;
+              else if (upper === 'LOW') intensityValue = 0.3;
+            }
+            return (
+              <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5 }}>
+                {Array.from({ length: 5 }).map((_, i) => {
+                  const filled = intensityValue >= (i + 1) / 5;
+                  return (
+                    <Box
+                      key={i}
+                      sx={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        opacity: filled ? 1 : 0.3,
+                        backgroundColor: '#9AE66E',
+                      }}
+                    />
+                  );
+                })}
+              </Box>
+            );
+          })()}
         </Box>
       )}
 
