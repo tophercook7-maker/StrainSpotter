@@ -28,7 +28,7 @@ import { useMembership } from '../membership/MembershipContext';
 import { API_BASE } from '../config';
 import { normalizeScanResult, transformScanResult } from '../utils/scanResultUtils';
 import { resizeImageToBase64 } from '../utils/resizeImageToBase64';
-import { deriveDisplayStrain } from '../utils/deriveDisplayStrain';
+// Removed deriveDisplayStrain - using transformScanResult as single source of truth
 
 const GUEST_LIMIT = 20;
 
@@ -830,16 +830,18 @@ export default function ScanPage({ onBack, onNavigate }) {
         let matchedStrain = null;
         
         if (transformed && transformed.strainName && transformed.strainName !== 'Cannabis (strain unknown)') {
-          // Use deriveDisplayStrain ONLY for additional metadata (lineage, type, thc, cbd)
-          // But strain name, effects, and flavors MUST come from transformScanResult
-          const displayStrain = deriveDisplayStrain(scan);
+          // Get lineage and type from packaging/label insights if available
+          const packagingInsights = scan.packaging_insights || scan.result?.packagingInsights || null;
+          const labelInsights = scan.label_insights || scan.result?.labelInsights || null;
+          const lineage = packagingInsights?.lineage || labelInsights?.lineage || null;
+          const type = packagingInsights?.basic?.type || labelInsights?.type || null;
           
           matchedStrain = {
             name: transformed.strainName, // CRITICAL: Use strainName from transformScanResult
-            lineage: displayStrain.displaySubline || null, // "Similar to XYZ" subline
-            type: displayStrain.primaryType !== 'unknown' ? displayStrain.primaryType : null,
-            thc: displayStrain.thcPercent,
-            cbd: displayStrain.cbdPercent,
+            lineage: lineage || null,
+            type: type || null,
+            thc: transformed.thc || null, // Use thc from transformScanResult
+            cbd: transformed.cbd || null, // Use cbd from transformScanResult
             // CRITICAL: Use effects/flavors from transformScanResult (single source of truth)
             effects: transformed.effectsTags || null,
             flavors: transformed.flavorTags || null,

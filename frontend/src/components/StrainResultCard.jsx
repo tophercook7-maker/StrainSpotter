@@ -46,9 +46,10 @@ export function StrainResultCard({ matchedStrain, scan }) {
   const thc = formatPercent(matchedStrain.thc);
   const cbd = formatPercent(matchedStrain.cbd);
   
-  // CRITICAL: Use effects/flavors from matchedStrain (already filtered by deriveDisplayStrain)
-  // deriveDisplayStrain ensures library effects/flavors are NEVER used for packaged products
-  // unless library strain exactly matches packaging strain
+  // CRITICAL: Use effects/flavors from matchedStrain
+  // Effects/flavors come from transformScanResult which ensures:
+  // - Packaged products ALWAYS use AI effects/flavors, NEVER library tags
+  // - Buds only use AI effects/flavors if visual confidence >= 0.8
   const rawEffects = matchedStrain.effects || null;
   const rawFlavors = matchedStrain.flavors || null;
   
