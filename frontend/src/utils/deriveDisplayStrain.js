@@ -1,8 +1,20 @@
 /**
+ * Normalizes a strain name for comparison (lowercase, remove special chars)
+ * @param {string|null|undefined} name - The strain name to normalize
+ * @returns {string} Normalized name
+ */
+function normalizeName(name) {
+  return (name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
  * Derives the display strain information from a scan object with priority order:
  * 1. OCR / packaging strain (highest priority for packaged products)
  * 2. AI summary strain field
- * 3. Visual matcher (fallback only)
+ * 3. Visual matcher (fallback only for non-packaged products)
  * 
  * @param {Object} scan - The scan object from GET /api/scans/:id
  * @returns {Object} Display strain information
@@ -11,6 +23,7 @@ export function deriveDisplayStrain(scan) {
   if (!scan || typeof scan !== 'object') {
     return {
       primaryName: null,
+      displaySubline: null,
       primaryType: 'unknown',
       estimateLabel: 'Strain estimate',
       estimateConfidence: null,
@@ -33,8 +46,34 @@ export function deriveDisplayStrain(scan) {
   const isPackagedFromPackaging = !!packaging;
   const isPackagedProduct = isPackagedFromSummary || isPackagedFromPackaging;
 
-  // Determine primaryName with priority order
+  // Extract strain names from different sources
+  const packagedStrainName = 
+    (packaging?.strainName || packaging?.strain_name || '').trim() ||
+    (label?.strainName || label?.strain_name || '').trim() ||
+    null;
+
+  const libraryStrainName = 
+    (scan.matched_strain_name || scan.matchedStrainName || '').trim() ||
+    (summary?.matchedStrainName || summary?.strainName || '').trim() ||
+    null;
+
+  // Extract visual matcher strain name (for non-packaged products only)
+  let visualStrainName = null;
+  if (!isPackagedProduct) {
+    const visualMatch = Array.isArray(visual) && visual.length > 0 
+      ? (visual[0]?.match || visual[0]) 
+      : null;
+    if (visualMatch && typeof visualMatch.name === 'string') {
+      visualStrainName = visualMatch.name.trim();
+    }
+  }
+
+  // Determine display strain name and subline
+  const hasPackagedStrain = !!packagedStrainName;
+  const isUnknownPackaged = isPackagedProduct && !hasPackagedStrain;
+  
   let primaryName = null;
+  let displaySubline = null;
   let primaryType = 'unknown';
   let estimateConfidence = null;
   let brandName = null;
@@ -42,62 +81,71 @@ export function deriveDisplayStrain(scan) {
   let cbdPercent = null;
   let isFlowerGuessOnly = false;
 
-  // 1. OCR / packaging strain (highest priority)
-  if (packaging?.strainName && typeof packaging.strainName === 'string') {
-    primaryName = packaging.strainName.trim();
-    estimateConfidence = packaging.overallConfidence || packaging.confidence?.overall || null;
-    brandName = packaging.basic?.brand_name || packaging.package_details?.brand || null;
+  // Pick display name for the TOP CARD
+  if (hasPackagedStrain) {
+    // We trust the label name first
+    primaryName = packagedStrainName;
+    
+    // Extract confidence and brand from packaging
+    estimateConfidence = packaging?.overallConfidence || packaging?.confidence?.overall || null;
+    brandName = packaging?.basic?.brand_name || packaging?.package_details?.brand || null;
     
     // Extract THC/CBD from packaging
-    if (packaging.potency) {
+    if (packaging?.potency) {
       thcPercent = packaging.potency.thc_percent ?? packaging.potency.thc_total_percent ?? null;
       cbdPercent = packaging.potency.cbd_percent ?? packaging.potency.cbd_total_percent ?? null;
     }
-  } else if (label?.strainName && typeof label.strainName === 'string') {
-    primaryName = label.strainName.trim();
-    thcPercent = label.thc ?? null;
-    cbdPercent = label.cbd ?? null;
-  }
-
-  // 2. AI summary strain field (if backend exposes one)
-  if (!primaryName) {
-    if (summary?.matchedStrainName && typeof summary.matchedStrainName === 'string') {
-      primaryName = summary.matchedStrainName.trim();
-    } else if (summary?.strainName && typeof summary.strainName === 'string') {
-      primaryName = summary.strainName.trim();
-    } else if (scan.matched_strain_name && typeof scan.matched_strain_name === 'string') {
-      primaryName = scan.matched_strain_name.trim();
-    }
-  }
-
-  // 3. Fallback to visual matcher ONLY if nothing else found AND it's NOT a packaged product
-  // CRITICAL: For packaged products, don't show visual matcher guesses if we don't have a packaging strain name
-  if (!primaryName && !isPackagedProduct) {
-    const visualMatch = Array.isArray(visual) && visual.length > 0 
-      ? (visual[0]?.match || visual[0]) 
-      : null;
     
-    if (visualMatch && typeof visualMatch.name === 'string') {
-      primaryName = visualMatch.name.trim();
-      isFlowerGuessOnly = true; // This is a visual guess, not OCR-backed
-      
-      // Extract type from visual match if available
-      if (visualMatch.type || visualMatch.strain?.type) {
-        const type = (visualMatch.type || visualMatch.strain?.type || '').toLowerCase();
-        if (type.includes('indica') && type.includes('sativa')) {
-          primaryType = 'hybrid';
-        } else if (type.includes('indica')) {
-          primaryType = 'indica';
-        } else if (type.includes('sativa')) {
-          primaryType = 'sativa';
-        } else if (type.includes('hybrid')) {
-          primaryType = 'hybrid';
-        }
-      }
-      
-      // Extract confidence from visual match
-      estimateConfidence = visualMatch.confidence ?? visualMatch.score ?? null;
+    // If libraryStrainName is different, we can mention it in a soft way
+    if (
+      libraryStrainName &&
+      normalizeName(libraryStrainName) !== normalizeName(packagedStrainName)
+    ) {
+      displaySubline = `Similar to ${libraryStrainName}`;
     }
+  } else if (isUnknownPackaged) {
+    // Packaged product but no strain name from label => DO NOT invent one
+    primaryName = 'Cannabis (strain unknown)';
+    
+    // Extract THC/CBD from label if available
+    if (label) {
+      thcPercent = label.thc ?? null;
+      cbdPercent = label.cbd ?? null;
+    }
+    if (packaging?.potency) {
+      thcPercent = thcPercent ?? packaging.potency.thc_percent ?? packaging.potency.thc_total_percent ?? null;
+      cbdPercent = cbdPercent ?? packaging.potency.cbd_percent ?? packaging.potency.cbd_total_percent ?? null;
+    }
+    brandName = packaging?.basic?.brand_name || packaging?.package_details?.brand || label?.brandName || null;
+  } else if (libraryStrainName || visualStrainName) {
+    // Non-packaged (likely bud) with a best library/visual match
+    primaryName = libraryStrainName || visualStrainName;
+    isFlowerGuessOnly = !!visualStrainName;
+    
+    // Extract type and confidence from visual match if available
+    if (visualStrainName) {
+      const visualMatch = Array.isArray(visual) && visual.length > 0 
+        ? (visual[0]?.match || visual[0]) 
+        : null;
+      
+      if (visualMatch) {
+        if (visualMatch.type || visualMatch.strain?.type) {
+          const type = (visualMatch.type || visualMatch.strain?.type || '').toLowerCase();
+          if (type.includes('indica') && type.includes('sativa')) {
+            primaryType = 'hybrid';
+          } else if (type.includes('indica')) {
+            primaryType = 'indica';
+          } else if (type.includes('sativa')) {
+            primaryType = 'sativa';
+          } else if (type.includes('hybrid')) {
+            primaryType = 'hybrid';
+          }
+        }
+        estimateConfidence = visualMatch.confidence ?? visualMatch.score ?? null;
+      }
+    }
+  } else {
+    primaryName = 'Cannabis (strain unknown)';
   }
 
   // Extract THC/CBD from label_insights if not already set
@@ -153,6 +201,7 @@ export function deriveDisplayStrain(scan) {
 
   return {
     primaryName,
+    displaySubline, // Optional "Similar to XYZ" note
     primaryType,
     estimateLabel,
     estimateConfidence,

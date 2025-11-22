@@ -847,6 +847,7 @@ export default function ScanPage({ onBack, onNavigate }) {
           
           matchedStrain = {
             name: displayStrain.primaryName,
+            lineage: displayStrain.displaySubline || null, // "Similar to XYZ" subline
             type: displayStrain.primaryType !== 'unknown' ? displayStrain.primaryType : null,
             thc: displayStrain.thcPercent,
             cbd: displayStrain.cbdPercent,
