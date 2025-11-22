@@ -86,11 +86,3 @@ if (splash && splash.parentNode) {
 }
 
 console.log('StrainSpotter rendered!');
-
-// Remove splash screen once React is ready
-const splash = document.getElementById('splash-root');
-if (splash && splash.parentNode) {
-  splash.parentNode.removeChild(splash);
-}
-
-console.log('StrainSpotter rendered!');
