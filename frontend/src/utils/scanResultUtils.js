@@ -235,19 +235,145 @@ export function getPrimaryNameForResult(result) {
 }
 
 /**
+ * Transform scan result with strict priority logic for strain name determination.
+ * CRITICAL: Packaged products ALWAYS use label strain, NEVER visual/library guesses.
+ * 
+ * @param {Object} scan - Backend scan object
+ * @returns {Object} Transformed result with strainName, strainSource, effectsTags, flavorTags
+ */
+export function transformScanResult(scan) {
+  if (!scan) return null;
+
+  const result = scan?.result || {};
+  const packagingInsights = scan.packaging_insights || result.packagingInsights || null;
+  const labelInsights = scan.label_insights || result.labelInsights || null;
+  
+  // Determine if this is a packaged product
+  const isPackagedProduct =
+    packagingInsights?.isPackagedProduct === true ||
+    labelInsights?.isPackagedProduct === true ||
+    scan.ai_summary?.isPackagedProduct === true ||
+    false;
+
+  // Extract label strain name (for packaged products)
+  const labelStrain =
+    (labelInsights?.strainName || labelInsights?.strain_name || '').trim() ||
+    (packagingInsights?.strainName || packagingInsights?.strain_name || '').trim() ||
+    null;
+
+  // Extract visual top match (for non-packaged products only)
+  const visualTop =
+    result.visualMatches?.match ||
+    result.visualMatches?.[0] ||
+    result.matches?.[0] ||
+    null;
+
+  // Extract match confidence
+  const matchConfidence =
+    scan.match_confidence ??
+    visualTop?.confidence ??
+    visualTop?.score ??
+    null;
+
+  // Preserve existing fields for backward compatibility
+  const existingFields = {
+    id: scan.id,
+    created_at: scan.created_at,
+    processed_at: scan.processed_at,
+    image_url: scan.image_url,
+    status: scan.status,
+    result: result,
+    packaging_insights: packagingInsights,
+    label_insights: labelInsights,
+    ai_summary: scan.ai_summary,
+    matched_strain_slug: scan.matched_strain_slug,
+    match_confidence: matchConfidence,
+    match_quality: scan.match_quality,
+    matched_strain_name: scan.matched_strain_name,
+  };
+
+  // ======================================================
+  // 1. PACKAGED PRODUCT — ALWAYS TRUST THE LABEL
+  // ======================================================
+  if (isPackagedProduct) {
+    let finalStrainName;
+    if (labelStrain) {
+      finalStrainName = labelStrain;
+    } else {
+      finalStrainName = "Cannabis (strain unknown)";
+    }
+
+    return {
+      ...existingFields,
+      strainName: finalStrainName,
+      strainSource: "packaging",
+      isPackagedProduct: true,
+      matchConfidence: 1.0,
+      effectsTags: [],
+      flavorTags: [],
+    };
+  }
+
+  // ======================================================
+  // 2. RAW BUD (UNPACKAGED) — use visual top match
+  // ======================================================
+  if (visualTop) {
+    if (matchConfidence < 0.6) {
+      return {
+        ...existingFields,
+        strainName: "Cannabis (strain unknown)",
+        strainSource: "visual-low-confidence",
+        isPackagedProduct: false,
+        matchConfidence: matchConfidence || 0,
+        effectsTags: [],
+        flavorTags: [],
+      };
+    }
+
+    return {
+      ...existingFields,
+      strainName: visualTop.name || visualTop.strain?.name || "Cannabis (strain unknown)",
+      strainSource: "visual",
+      isPackagedProduct: false,
+      matchConfidence: matchConfidence || 0,
+      // tags will be set later by deriveDisplayStrain
+      effectsTags: [],
+      flavorTags: [],
+    };
+  }
+
+  // ======================================================
+  // 3. NO STRAIN FOUND AT ALL
+  // ======================================================
+  return {
+    ...existingFields,
+    strainName: "Cannabis (strain unknown)",
+    strainSource: "none",
+    isPackagedProduct: false,
+    matchConfidence: 0,
+    effectsTags: [],
+    flavorTags: [],
+  };
+}
+
+/**
  * Normalize backend scan row into the shape ScanResultCard expects,
  * including labelInsights from the backend.
+ * 
+ * NOTE: This function now uses transformScanResult for strain name determination.
  */
 export function normalizeScanResult(scan) {
   if (!scan || !scan.result) return null;
 
   const result = scan?.result || {};
   
-  // Build matches from visualMatches structure
+  // First, transform the scan to get the canonical strain name
+  const transformed = transformScanResult(scan);
+  if (!transformed) return null;
+  
+  // Build matches from visualMatches structure (for backward compatibility)
   let matchesFromVisual = [];
   if (result.visualMatches) {
-    // visualMatches.match is the top match (single object)
-    // visualMatches.candidates is an array of additional candidates
     const topMatch = result.visualMatches.match;
     const candidates = Array.isArray(result.visualMatches.candidates) 
       ? result.visualMatches.candidates 
@@ -270,15 +396,9 @@ export function normalizeScanResult(scan) {
   
   // Decide which list to use (prefer visualMatches if available)
   const allMatches = matchesFromVisual.length > 0 ? matchesFromVisual : matchesFromFlat;
-  
-  // If no matches found, return null so UI shows "No strain match found yet"
-  if (allMatches.length === 0) {
-    return null;
-  }
 
   // Map each match to normalized format
   const toItem = (candidate) => {
-    // Candidates may be serialized (strain fields directly) or have nested strain
     const strainObj = candidate.strain || candidate;
     const confidence = 
       candidate.confidence ?? 
@@ -290,28 +410,26 @@ export function normalizeScanResult(scan) {
     
     return {
       id: slug || strainObj.name || 'unknown',
-      slug: slug, // Preserve slug for actions row
+      slug: slug,
       name: strainObj.name || 'Unknown strain',
       type: strainObj.type || strainObj.category || 'Hybrid',
       description: strainObj.description || strainObj.summary || '',
       confidence,
-      // IMPORTANT: pass through any DB metadata on the strain, if present
-      dbMeta: strainObj, // we'll use this in ScanResultCard
+      dbMeta: strainObj,
     };
   };
 
-  const [first, ...rest] = allMatches;
+  const [first, ...rest] = allMatches.length > 0 ? allMatches : [null];
 
   // Extract labelInsights from various possible locations
-  // Ensure we preserve all fields including rawText, strainName, category, etc.
   const labelInsights = 
     result.labelInsights || 
     result.visualMatches?.labelInsights || 
+    transformed.label_insights ||
     null;
   
   // Ensure labelInsights has rawText if available
   if (labelInsights && !labelInsights.rawText) {
-    // Try to get rawText from other locations
     labelInsights.rawText = result.rawText || result.detectedText || '';
   }
 
@@ -323,21 +441,28 @@ export function normalizeScanResult(scan) {
     first?.strain?.slug ||
     first?.strain_slug ||
     first?.slug ||
+    transformed.matched_strain_slug ||
     null;
 
   // Extract packagingInsights from result
-  const packagingInsights = result.packagingInsights || null;
+  const packagingInsights = result.packagingInsights || transformed.packaging_insights || null;
 
   return {
-    topMatch: toItem(first),
+    topMatch: first ? toItem(first) : null,
     otherMatches: rest.map(toItem),
-    matches: allMatches.map(toItem), // Preserve matches array with slugs
-    matched_strain_slug, // Preserve slug for actions row
+    matches: allMatches.map(toItem),
+    matched_strain_slug,
     labelInsights,
-    aiSummary: labelInsights?.aiSummary || null,
-    isPackagedProduct: labelInsights?.isPackagedProduct || false,
-    packagingInsights, // GPT-5 nano packaging insights
-    visionRaw: result.vision_raw || null, // Raw Vision API result
+    aiSummary: labelInsights?.aiSummary || transformed.ai_summary || null,
+    isPackagedProduct: transformed.isPackagedProduct || false,
+    packagingInsights,
+    visionRaw: result.vision_raw || null,
+    // CRITICAL: Include transformed fields for UI components
+    strainName: transformed.strainName,
+    strainSource: transformed.strainSource,
+    effectsTags: transformed.effectsTags,
+    flavorTags: transformed.flavorTags,
+    matchConfidence: transformed.matchConfidence,
   };
 }
 

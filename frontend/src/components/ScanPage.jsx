@@ -26,7 +26,7 @@ import StrainResultCard from './StrainResultCard';
 import { useAuth } from '../hooks/useAuth';
 import { useMembership } from '../membership/MembershipContext';
 import { API_BASE } from '../config';
-import { normalizeScanResult } from '../utils/scanResultUtils';
+import { normalizeScanResult, transformScanResult } from '../utils/scanResultUtils';
 import { resizeImageToBase64 } from '../utils/resizeImageToBase64';
 import { deriveDisplayStrain } from '../utils/deriveDisplayStrain';
 
@@ -820,42 +820,33 @@ export default function ScanPage({ onBack, onNavigate }) {
         // Store completed scan for result view
         const processedResult = scan.result || normalized;
         
-        // CRITICAL: Use deriveDisplayStrain to prioritize OCR/packaging strain over visual matcher
-        const displayStrain = deriveDisplayStrain(scan);
+        // CRITICAL: Use transformScanResult to get canonical strain name and metadata
+        // This ensures packaged products ALWAYS use label strain, NEVER visual/library guesses
+        const transformed = transformScanResult(scan);
         
-        // Build matchedStrain object for StrainResultCard
-        // CRITICAL: For packaged products, only show strain name if we have packaging/AI strain name
-        // Don't show visual matcher guesses for packaged products without strain name
+        // Build matchedStrain object for StrainResultCard ONLY if we have a valid strain name
+        // CRITICAL: For packaged products, transformScanResult already handles the priority logic
         let matchedStrain = null;
         
-        // CRITICAL: Only create matchedStrain if we have a valid primaryName
-        // For packaged products without strain name, matchedStrain stays null (no visual guesses)
-        if (displayStrain.primaryName && displayStrain.primaryName !== 'Cannabis (strain unknown)') {
-          // Create a matched strain object from OCR/packaging/AI data
-          // Use effects/flavors from deriveDisplayStrain (already filtered appropriately)
+        if (transformed && transformed.strainName && transformed.strainName !== 'Cannabis (strain unknown)') {
+          // Use deriveDisplayStrain for effects/flavors (already filtered appropriately)
+          const displayStrain = deriveDisplayStrain(scan);
+          
           matchedStrain = {
-            name: displayStrain.primaryName,
+            name: transformed.strainName, // CRITICAL: Use strainName from transformScanResult
             lineage: displayStrain.displaySubline || null, // "Similar to XYZ" subline
             type: displayStrain.primaryType !== 'unknown' ? displayStrain.primaryType : null,
             thc: displayStrain.thcPercent,
             cbd: displayStrain.cbdPercent,
-            effects: displayStrain.effects, // Already filtered by deriveDisplayStrain
-            flavors: displayStrain.flavors, // Already filtered by deriveDisplayStrain
-            // Preserve visual matcher data as fallback metadata if available (but don't use it)
-            visualMatch: result?.visualMatches?.match || result?.matches?.[0] || null,
+            effects: transformed.effectsTags && transformed.effectsTags.length > 0 
+              ? transformed.effectsTags 
+              : displayStrain.effects, // Fallback to deriveDisplayStrain if transformScanResult has empty tags
+            flavors: transformed.flavorTags && transformed.flavorTags.length > 0 
+              ? transformed.flavorTags 
+              : displayStrain.flavors, // Fallback to deriveDisplayStrain if transformScanResult has empty tags
           };
-        } else if (!displayStrain.isPackagedProduct && !displayStrain.isFlowerGuessOnly) {
-          // Only fallback to visual matcher for NON-packaged products (flower/bud photos)
-          // AND only if deriveDisplayStrain didn't already handle it
-          // For packaged products without strain name, don't show visual guesses
-          matchedStrain = 
-            scan.match ||
-            result?.visualMatches?.match ||
-            result?.matches?.[0] ||
-            normalized?.top_match ||
-            null;
         }
-        // If packaged product and no strain name, matchedStrain stays null
+        // If no valid strain name from transformScanResult, matchedStrain stays null
         // This prevents showing incorrect visual matcher guesses like "Limon", "MAC" for packaged products
         
         const extractedVisionText =

@@ -5,83 +5,72 @@ import {
   Typography,
   Box,
 } from '@mui/material';
-import { deriveDisplayStrain } from '../utils/deriveDisplayStrain';
+import { transformScanResult } from '../utils/scanResultUtils';
 
 function ScanResultCard({ result, scan, isGuest }) {
   if (!result && !scan) return null;
 
-  const effective = result || scan || {};
-  
-  // CRITICAL: Use deriveDisplayStrain to prioritize OCR/packaging strain
-  const displayStrain = deriveDisplayStrain(effective);
+  // CRITICAL: Use transformScanResult to get canonical strain name and metadata
+  // This ensures packaged products ALWAYS use label strain, NEVER visual/library guesses
+  const transformed = transformScanResult(result || scan);
+  if (!transformed) return null;
 
-  const packagingInsights =
-    effective.packagingInsights || effective.packaging_insights || null;
+  // Use ONLY fields from transformScanResult - NEVER use old fields
+  const strainName = transformed.strainName || 'Cannabis (strain unknown)';
+  const strainSource = transformed.strainSource || 'none';
+  const isPackagedProduct = transformed.isPackagedProduct || false;
+  const matchConfidence = transformed.matchConfidence ?? null;
 
-  const matchQuality = effective.match_quality || 'none';
-  const matchConf = effective.match_confidence ?? displayStrain.estimateConfidence ?? null;
-
-  // Use primaryName from deriveDisplayStrain (prioritizes OCR/packaging)
-  // CRITICAL: For packaged products, ALWAYS use packaging_insights.strainName if available
-  const packagingStrainName = packagingInsights?.strainName || 
-    effective.packaging_insights?.strainName || null;
-  
-  let strainName = packagingStrainName || displayStrain.primaryName;
-
-  if (!strainName) {
-    // Only show "Cannabis (strain unknown)" if we truly have nothing AND it's not a packaged product
-    if (displayStrain.isPackagedProduct && packagingInsights) {
-      // For packaged products with packaging data, show "Packaged product" instead of "unknown"
-      strainName = 'Packaged product';
+  // Determine match label based on strainSource
+  let matchLabel = 'Strain estimate';
+  if (strainSource === 'packaging') {
+    matchLabel = 'Label-based match';
+  } else if (strainSource === 'visual') {
+    if (matchConfidence >= 0.7) {
+      matchLabel = 'Visual match';
     } else {
-      strainName =
-        matchQuality === 'none'
-          ? 'Cannabis (strain unknown)'
-          : 'Best guess strain';
+      matchLabel = 'Best guess match';
     }
+  } else if (strainSource === 'visual-low-confidence' || strainSource === 'none') {
+    matchLabel = 'Strain unknown';
   }
 
-  // Use estimateLabel from deriveDisplayStrain
-  const matchLabel = displayStrain.estimateLabel || (() => {
-    if (matchQuality === 'high') return 'High confidence match';
-    if (matchQuality === 'medium') return 'Likely match';
-    if (matchQuality === 'low') return 'Best guess match';
-    if (matchQuality === 'label-fallback') return 'Label-based guess';
-    return 'Strain estimate';
-  })();
+  // Get packaging insights for display (but strain name comes from transformScanResult)
+  const packagingInsights =
+    transformed.packaging_insights || transformed.packagingInsights || null;
 
-  // If packagingInsights exists, you can show your rich packaging UI.
-  // To keep things fast and avoid freezes, use a lightweight header +
-  // simple body instead of rendering massive raw payloads.
-
-  if (packagingInsights || displayStrain.isPackagedProduct) {
+  // If packagingInsights exists, show rich packaging UI
+  if (packagingInsights || isPackagedProduct) {
     const basic = packagingInsights?.basic || {};
     const potency = packagingInsights?.potency || {};
     const details = packagingInsights?.package_details || {};
     const confidence = packagingInsights?.confidence || {};
 
-    // Use displayStrain values (prioritizes OCR/packaging strain)
-    const pkgStrainName = displayStrain.primaryName || strainName;
+    // CRITICAL: Use strainName from transformScanResult (already prioritized correctly)
+    const pkgStrainName = strainName;
 
-    const brandName = displayStrain.brandName || 
+    const brandName = 
       basic.brand_name ||
       details.brand ||
       'Unknown brand';
 
-    // Use displayStrain THC/CBD (from packaging or label_insights)
-    const thc = displayStrain.thcPercent ??
+    // Extract THC/CBD from packaging or label insights
+    const thc = 
       potency.thc_percent ??
       potency.thc_total_percent ??
+      transformed.label_insights?.thc ??
       null;
 
-    const cbd = displayStrain.cbdPercent ??
+    const cbd = 
       potency.cbd_percent ??
       potency.cbd_total_percent ??
+      transformed.label_insights?.cbd ??
       null;
 
-    const overallConf = displayStrain.estimateConfidence ?? 
+    const overallConf = 
       confidence.overall ?? 
-      matchConf;
+      matchConfidence ??
+      null;
 
     return (
       <Card
