@@ -5,12 +5,17 @@
  * 1. Packaging/label strain (for packaged products) - NEVER overridden by visual guesses
  * 2. Visual match (for raw bud) - only if confidence >= 0.6
  * 3. None - "Cannabis (strain unknown)"
+ * 
+ * IMPORTANT:
+ * - Do NOT mutate packagingInsights or labelInsights in-place
+ * - Do NOT allow visual guesses ("Limon", "MAC", "Evergreen Berry", etc.) to override packaging strain
+ * - Visual guesses only count when not packaged
  */
 
 /**
  * Normalize packaging strain name by removing quantity tokens and cleaning whitespace
  */
-function normalizePackagingStrainName(name) {
+export function normalizePackagingStrainName(name) {
   if (!name) return null;
   let s = String(name).trim();
   
@@ -24,79 +29,61 @@ function normalizePackagingStrainName(name) {
 }
 
 /**
- * Determine canonical strain name with strict priority rules
+ * Resolve canonical strain name with strict priority rules
  * 
  * @param {Object} params
- * @param {Object} params.packagingInsights - Packaging insights object
  * @param {Object} params.labelInsights - Label insights object
- * @param {Object} params.visualMatch - Top visual match object
- * @param {number} params.visualConfidence - Visual match confidence (0-1)
+ * @param {Object} params.packagingInsights - Packaging insights object
+ * @param {Array} params.visualMatches - Array of visual match objects
+ * @param {number} params.matchConfidence - Optional previous match confidence (0-1)
  * @returns {Object} Canonical strain decision
  */
-export function determineCanonicalStrain({
-  packagingInsights = null,
-  labelInsights = null,
-  visualMatch = null,
-  visualConfidence = null,
-}) {
+export function resolveCanonicalStrain({ labelInsights, packagingInsights, visualMatches, matchConfidence }) {
   // Extract packaging/label strain name
   const packagingStrainRaw =
     packagingInsights?.strainName ||
     labelInsights?.strainName ||
     null;
   
-  const packagingStrain = normalizePackagingStrainName(packagingStrainRaw);
-  
   // Determine if this is a packaged product
   const isPackagedProduct =
     !!(packagingInsights?.isPackagedProduct ||
-       labelInsights?.isPackagedProduct ||
-       packagingInsights ||
-       (labelInsights && (labelInsights.category === 'vape' || labelInsights.category === 'packaged')));
+       labelInsights?.isPackagedProduct);
   
-  // Extract visual match strain name (for non-packaged products only)
-  let visualStrain = null;
-  if (visualMatch) {
-    visualStrain = visualMatch.strain?.name ||
-                   visualMatch.strain?.strain_name ||
-                   visualMatch.strain?.slug ||
-                   visualMatch.name ||
-                   null;
+  // Normalize packaging strain name
+  const packagingStrain = normalizePackagingStrainName(packagingStrainRaw);
+  
+  // Extract visual match from visualMatches array
+  const visualTop = (visualMatches && visualMatches[0]) || null;
+  const visualStrain = visualTop?.name || null;
+  
+  // Determine visual confidence (handle 0-100 scale conversion)
+  let visualConfidence = null;
+  if (typeof visualTop?.confidence === 'number') {
+    // visualTop.confidence is 0–100, convert to 0–1
+    visualConfidence = visualTop.confidence / 100;
+  } else if (typeof matchConfidence === 'number') {
+    // Optional previous matchConfidence 0–1
+    visualConfidence = matchConfidence;
   }
   
   // Determine canonical strain name with strict priority
   let canonicalStrainName = null;
   let strainSource = 'none';
-  let matchConfidence = null;
+  let canonicalMatchConfidence = null;
   
   // Priority 1: Packaged products ALWAYS use packaging strain (NEVER visual guesses)
-  if (isPackagedProduct) {
-    if (packagingStrain) {
-      canonicalStrainName = packagingStrain;
-      strainSource = 'packaging';
-      matchConfidence = packagingInsights?.overallConfidence ||
-                       packagingInsights?.confidence?.overall ||
-                       labelInsights?.confidence ||
-                       1.0; // High confidence for packaging-derived names
-    } else {
-      // Packaged product but no strain name from label
-      canonicalStrainName = 'Cannabis (strain unknown)';
-      strainSource = 'packaging-unknown';
-      matchConfidence = 0;
-    }
-  } else {
+  if (isPackagedProduct && packagingStrain) {
+    canonicalStrainName = packagingStrain;
+    strainSource = 'packaging';
+    canonicalMatchConfidence = 1;
+  } else if (visualStrain && visualConfidence != null && visualConfidence >= 0.6) {
     // Priority 2: Raw bud - use visual match only if confidence >= 0.6
-    if (visualStrain && visualConfidence != null && visualConfidence >= 0.6) {
-      canonicalStrainName = visualStrain;
-      strainSource = 'visual';
-      matchConfidence = visualConfidence;
-    } else {
-      // No valid visual match
-      canonicalStrainName = 'Cannabis (strain unknown)';
-      strainSource = 'none';
-      matchConfidence = 0;
-    }
+    canonicalStrainName = visualStrain;
+    strainSource = 'visual';
+    canonicalMatchConfidence = visualConfidence;
   }
+  // Otherwise: canonicalStrainName stays null, strainSource stays 'none', confidence stays null
   
   return {
     isPackagedProduct,
@@ -104,7 +91,7 @@ export function determineCanonicalStrain({
     visualStrain,
     canonicalStrainName,
     strainSource,
-    matchConfidence,
+    matchConfidence: canonicalMatchConfidence,
   };
 }
 

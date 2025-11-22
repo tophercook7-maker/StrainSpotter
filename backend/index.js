@@ -50,7 +50,7 @@ import usersRoutes from './routes/users.js';
 import creditsRoutes from './routes/credits.js';
 import directMessagesRoutes from './routes/direct-messages.js';
 import { matchStrainByVisuals } from './services/visualMatcher.js';
-import { determineCanonicalStrain } from './services/scanUtils.js';
+import { resolveCanonicalStrain } from './services/scanUtils.js';
 import { generateLabelAISummary } from './services/aiLabelExplainer.js';
 import { generateScanAISummary, buildScanAISummary } from './services/aiSummaries.js';
 import { analyzePlantHealth } from './services/plantHealthAnalyzer.js';
@@ -1557,13 +1557,20 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       matchQuality: visualQuality,
     } = matchResult || {};
 
+    // Extract visual matches array for canonical strain resolution
+    const visualMatchesArray = matches.map(m => ({
+      name: m.strain?.name || m.strain?.strain_name || m.strain?.slug || m.name || null,
+      confidence: m.confidence || m.score || null,
+    })).filter(m => m.name);
+
     // CRITICAL: Use canonical strain decision helper to determine final strain name
     // This ensures packaging strain is NEVER overridden by visual guesses
-    const canonicalStrain = determineCanonicalStrain({
-      packagingInsights: packagingInsights || null, // Will be set later, but check if available
+    // Note: packagingInsights will be set later, but we check labelInsights first
+    const canonicalStrain = resolveCanonicalStrain({
       labelInsights: labelInsights || null,
-      visualMatch: topMatch || null,
-      visualConfidence: visualConfidence || null,
+      packagingInsights: null, // Will be updated after packaging insights are generated
+      visualMatches: visualMatchesArray,
+      matchConfidence: visualConfidence || null,
     });
 
     // Use canonical strain name (prioritizes packaging over visual guesses)
