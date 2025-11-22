@@ -608,6 +608,20 @@ export default function ScanPage({ onBack, onNavigate }) {
     const maxAttempts = 120; // ~120s at 1s delay (increased from 90s to match timeout)
     const delayMs = 1000; // 1 second polling interval
 
+    // CRITICAL: Use stored scan ID from ref (most up-to-date) or fallback to passed scanId
+    const currentScanId = scanIdRef.current || scanId;
+    
+    // CRITICAL: Validate scanId before polling
+    if (!currentScanId || typeof currentScanId !== 'string') {
+      console.error('[POLL] ERROR: Invalid scanId', { 
+        scanId: currentScanId, 
+        type: typeof currentScanId,
+        refScanId: scanIdRef.current,
+        passedScanId: scanId,
+      });
+      throw new Error(`Invalid scan ID: ${currentScanId}`);
+    }
+
     try {
       // Update status message based on attempt number to show progress
       if (attempt === 0) {
@@ -650,7 +664,7 @@ export default function ScanPage({ onBack, onNavigate }) {
       if (attempt === 0) {
         console.time('[Scanner] polling');
         console.log('[POLL] Starting poll', { 
-          scanId: actualScanId, 
+          scanId: currentScanId, 
           passedScanId: scanId,
           refScanId: scanIdRef.current,
           maxAttempts, 
@@ -661,12 +675,12 @@ export default function ScanPage({ onBack, onNavigate }) {
       // CRITICAL: Log the exact ID being polled
       console.log('[POLL] Polling scanId', {
         attempt,
-        scanId: actualScanId,
+        scanId: currentScanId,
         passedScanId: scanId,
         refScanId: scanIdRef.current,
       });
       
-      const res = await fetch(apiUrl(`/api/scans/${actualScanId}`), {
+      const res = await fetch(apiUrl(`/api/scans/${currentScanId}`), {
         credentials: 'include',
       });
       const data = await safeJson(res);
@@ -688,22 +702,22 @@ export default function ScanPage({ onBack, onNavigate }) {
       
       // CRITICAL: Consistency check - verify returned ID matches expected ID
       const returnedId = scan?.id || data?.id;
-      if (returnedId && returnedId !== actualScanId) {
+      if (returnedId && returnedId !== currentScanId) {
         console.error('[POLL] ID MISMATCH DETECTED', {
-          expectedId: actualScanId,
+          expectedId: currentScanId,
           returnedId: returnedId,
           passedScanId: scanId,
           refScanId: scanIdRef.current,
           responseData: data,
         });
-        throw new Error(`Scan ID mismatch: expected ${actualScanId}, got ${returnedId}`);
+        throw new Error(`Scan ID mismatch: expected ${currentScanId}, got ${returnedId}`);
       }
       
       // Debug logging to understand response structure
       if (attempt === 0 || attempt % 10 === 0) {
         console.log('[POLL] response structure', {
           attempt,
-          scanId: actualScanId,
+          scanId: currentScanId,
           returnedId,
           hasData: !!data,
           hasScan: !!data?.scan,
@@ -753,7 +767,7 @@ export default function ScanPage({ onBack, onNavigate }) {
       if (attempt > 0 && (isComplete || hasResult)) {
         console.log('[POLL] completion check', {
           attempt,
-          scanId: actualScanId,
+          scanId: currentScanId,
           status,
           isComplete,
           hasScan,
@@ -782,7 +796,7 @@ export default function ScanPage({ onBack, onNavigate }) {
         if (timeoutRef) clearTimeout(timeoutRef);
         console.timeEnd('[Scanner] polling');
         console.log('[POLL] SCAN COMPLETE - stopping polling', {
-          scanId: actualScanId,
+          scanId: currentScanId,
           attempt,
           status,
           isComplete,
@@ -939,11 +953,12 @@ export default function ScanPage({ onBack, onNavigate }) {
       // Otherwise, schedule another poll attempt
       // CRITICAL: Use ref value to ensure we're polling the correct ID
       setTimeout(() => {
-        const nextScanId = scanIdRef.current || scanId;
+        const nextScanId = scanIdRef.current || currentScanId || scanId;
         if (!nextScanId) {
           console.error('[POLL] ERROR: No scan ID available for next poll attempt', {
             attempt,
             scanId,
+            currentScanId,
             refScanId: scanIdRef.current,
           });
           throw new Error('Scan ID lost during polling');

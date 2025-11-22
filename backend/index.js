@@ -1194,6 +1194,15 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
   const writeClient = supabaseAdmin ?? supabase;
   let creditConsumed = false;
   const id = req.params.id;
+  
+  // CRITICAL: Log process endpoint start with scan ID and request body
+  console.log('[scan-process] START', {
+    id,
+    hasBody: !!req.body,
+    bodyKeys: req.body ? Object.keys(req.body) : [],
+    frameImageUrls: req.body?.frameImageUrls?.length || 0,
+  });
+  
   console.time(`[scan-process-total] ${id}`);
   
   try {
@@ -1767,7 +1776,24 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     } catch (updateErr) {
       console.error('[scan-process] Failed to update scan status to failed:', updateErr);
     }
-    return res.status(500).json({ error: String(e) });
+    // CRITICAL: Log full error details before returning 500
+    console.error('[scan-process] ERROR - 500 response', {
+      id,
+      error: String(e),
+      message: e?.message || 'Unknown error',
+      stack: e?.stack || null,
+      name: e?.name || null,
+    });
+    
+    // Return structured error response
+    return res.status(500).json({ 
+      ok: false,
+      error: {
+        code: 'SCAN_START_FAILED',
+        message: 'Failed to start scan pipeline',
+        details: String(e),
+      }
+    });
   }
 });
 
