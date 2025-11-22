@@ -491,9 +491,10 @@ function BudEstimateCard({
   result,
   scan,
 }) {
-  // Get display strain info for lineage
-  const displayStrain = deriveDisplayStrain(result || scan);
-  const lineage = displayStrain.displaySubline || null;
+  // Get lineage from packaging insights or label insights
+  const packagingInsights = result?.packaging_insights || scan?.packaging_insights || null;
+  const labelInsights = result?.label_insights || scan?.label_insights || null;
+  const lineage = packagingInsights?.lineage || labelInsights?.lineage || null;
 
   return (
     <>
@@ -609,13 +610,13 @@ function ScanResultCard({ result, scan, isGuest }) {
     <BudEstimateCard
       strainName={transformed.strainName}
       matchConfidence={transformed.matchConfidence}
-      summary={transformed.aiSummaryText}
+      summary={transformed.summary}
       effects={transformed.effectsTags}
       flavors={transformed.flavorTags}
-      intensity={transformed.aiIntensity}
-      dispensaryNotes={transformed.aiDispensaryNotes}
-      growerNotes={transformed.aiGrowerNotes}
-      warnings={transformed.aiWarnings}
+      intensity={transformed.intensity}
+      dispensaryNotes={transformed.dispensaryNotes}
+      growerNotes={transformed.growerNotes}
+      warnings={transformed.warnings}
       result={result}
       scan={scan}
     />
