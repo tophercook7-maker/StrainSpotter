@@ -959,7 +959,7 @@ export default function ScanPage({ onBack, onNavigate }) {
       setScanPhase('error');
       
       // Never show raw JS errors to users - sanitize all error messages
-      const errorMsg = String(e?.message || e || '');
+      const errorMsg = String(err?.message || err || '');
       let userMessage = 'We couldn\'t finish this scan. Please try again.';
       let errorType = 'unknown';
       
@@ -998,6 +998,9 @@ export default function ScanPage({ onBack, onNavigate }) {
       });
       setError(userMessage);
       setStatusMessage(userMessage);
+      
+      // Re-throw the error so caller can handle it
+      throw err;
     }
   }
 
