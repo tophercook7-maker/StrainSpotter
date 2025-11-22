@@ -6,12 +6,18 @@ import { Box, Typography, Container } from '@mui/material';
  * 
  * In production: Blocks desktop users and shows a message
  * In development: Allows all devices (so you can work on desktop)
+ * On web (non-Capacitor): Always allows access (web version supports desktop)
  */
 export default function MobileOnlyGuard({ children }) {
   const [isMobile, setIsMobile] = useState(true);
   const [isProduction, setIsProduction] = useState(false);
+  const [isWeb, setIsWeb] = useState(false);
 
   useEffect(() => {
+    // Check if we're running in web mode (not Capacitor)
+    const isWebMode = typeof window !== 'undefined' && window.location.protocol !== 'capacitor:';
+    setIsWeb(isWebMode);
+
     // Check if we're in production
     const isProd = import.meta.env.PROD;
     setIsProduction(isProd);
@@ -30,6 +36,11 @@ export default function MobileOnlyGuard({ children }) {
 
     return () => window.removeEventListener('resize', checkDevice);
   }, []);
+
+  // On web (non-Capacitor), always allow access regardless of device
+  if (isWeb) {
+    return <>{children}</>;
+  }
 
   // In development, always allow access
   if (!isProduction) {
@@ -59,7 +70,7 @@ export default function MobileOnlyGuard({ children }) {
     );
   }
 
-  // In production, block desktop users
+  // In production (Capacitor only), block desktop users
   if (isProduction && !isMobile) {
     return (
       <Container maxWidth="sm">

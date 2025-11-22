@@ -97,6 +97,62 @@ button, a, [role="button"] {
   cursor: pointer;
 }
 
+/* Web-specific styles */
+body.web-root {
+  background: #050705;
+}
+
+.web-app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.web-app-main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.web-nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: rgba(5, 7, 5, 0.95);
+  backdrop-filter: blur(10px);
+}
+
+.web-nav-logo {
+  transition: opacity 0.2s;
+}
+
+.web-nav-logo:hover {
+  opacity: 0.8;
+}
+
+.web-nav-links a {
+  transition: color 0.2s;
+}
+
+.web-hero {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 80px 20px 60px;
+}
+
+.web-section {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 60px 20px;
+}
+
+.web-footer {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  text-align: center;
+}
+
 a {
   font-weight: 500;
   color: var(--color-primary-light);

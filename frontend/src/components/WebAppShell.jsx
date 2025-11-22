@@ -8,6 +8,7 @@ export default function WebAppShell() {
 
   return (
     <div
+      className="web-app-shell"
       style={{
         minHeight: '100vh',
         display: 'flex',
@@ -17,6 +18,7 @@ export default function WebAppShell() {
     >
       {/* Top Navigation */}
       <nav
+        className="web-nav"
         style={{
           padding: '12px 20px',
           borderBottom: '1px solid rgba(124,179,66,0.2)',
@@ -27,10 +29,14 @@ export default function WebAppShell() {
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '16px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 1000,
         }}
       >
         <Link
           to="/"
+          className="web-nav-logo"
           style={{
             fontSize: '1.25rem',
             fontWeight: 700,
@@ -45,6 +51,7 @@ export default function WebAppShell() {
           <span>StrainSpotter</span>
         </Link>
         <div
+          className="web-nav-links"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -57,7 +64,10 @@ export default function WebAppShell() {
               color: '#9CCC65',
               textDecoration: 'none',
               fontSize: '0.9375rem',
+              transition: 'color 0.2s',
             }}
+            onMouseEnter={(e) => e.target.style.color = '#CDDC39'}
+            onMouseLeave={(e) => e.target.style.color = '#9CCC65'}
           >
             Home
           </Link>
@@ -68,7 +78,10 @@ export default function WebAppShell() {
               textDecoration: 'none',
               fontSize: '0.9375rem',
               fontWeight: isAppRoute ? 600 : 400,
+              transition: 'color 0.2s',
             }}
+            onMouseEnter={(e) => !isAppRoute && (e.target.style.color = '#CDDC39')}
+            onMouseLeave={(e) => !isAppRoute && (e.target.style.color = '#9CCC65')}
           >
             App
           </Link>
@@ -77,9 +90,11 @@ export default function WebAppShell() {
 
       {/* Main Content Area */}
       <main
+        className="web-app-main"
         style={{
           flex: 1,
           minHeight: 0,
+          overflow: 'auto',
         }}
       >
         <App />

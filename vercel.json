@@ -1,4 +1,10 @@
 {
   "buildCommand": "cd frontend && npm ci && npm run build && rm -rf ../dist && cp -R dist ../dist",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }

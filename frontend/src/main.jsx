@@ -45,8 +45,8 @@ const LoadingFallback = () => (
   </div>
 );
 
-// Root component for Capacitor (iOS/Android) - direct App render
-function CapacitorRoot() {
+// Root app component with providers (shared between Capacitor and web)
+function RootApp() {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <App />
@@ -54,8 +54,23 @@ function CapacitorRoot() {
   );
 }
 
+// Root component for Capacitor (iOS/Android) - direct App render
+function CapacitorRoot() {
+  return <RootApp />;
+}
+
 // Root component for web - uses React Router
 function WebRoot() {
+  // Add web-root class to body for web-specific styling
+  React.useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.body.classList.add('web-root');
+      return () => {
+        document.body.classList.remove('web-root');
+      };
+    }
+  }, []);
+
   return (
     <BrowserRouter>
       <Suspense fallback={<LoadingFallback />}>

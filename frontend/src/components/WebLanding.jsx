@@ -265,6 +265,159 @@ export default function WebLanding() {
             </li>
           </ul>
         </section>
+
+        {/* How the scanner works */}
+        <section
+          style={{
+            marginBottom: '60px',
+            padding: '40px',
+            borderRadius: '16px',
+            background: 'rgba(124,179,66,0.08)',
+            border: '1px solid rgba(124,179,66,0.2)',
+          }}
+        >
+          <h2
+            style={{
+              fontSize: '2rem',
+              fontWeight: 700,
+              margin: '0 0 16px',
+              color: '#CDDC39',
+            }}
+          >
+            How the Scanner Works
+          </h2>
+          <p
+            style={{
+              fontSize: '1.125rem',
+              lineHeight: 1.7,
+              opacity: 0.9,
+              marginBottom: '24px',
+            }}
+          >
+            Our AI-powered scanner uses multiple steps to give you accurate results:
+          </p>
+          <ol
+            style={{
+              listStyle: 'none',
+              padding: 0,
+              margin: 0,
+              counterReset: 'step-counter',
+            }}
+          >
+            <li
+              style={{
+                marginBottom: '20px',
+                paddingLeft: '40px',
+                position: 'relative',
+                counterIncrement: 'step-counter',
+              }}
+            >
+              <span
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 700,
+                  fontSize: '0.875rem',
+                  color: '#04140a',
+                }}
+              >
+                1
+              </span>
+              <strong>Vision & OCR</strong> — Google Vision API extracts text and labels from your photo
+            </li>
+            <li
+              style={{
+                marginBottom: '20px',
+                paddingLeft: '40px',
+                position: 'relative',
+                counterIncrement: 'step-counter',
+              }}
+            >
+              <span
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 700,
+                  fontSize: '0.875rem',
+                  color: '#04140a',
+                }}
+              >
+                2
+              </span>
+              <strong>Visual Matching</strong> — AI compares your image against 35,000+ strains in our database
+            </li>
+            <li
+              style={{
+                marginBottom: '20px',
+                paddingLeft: '40px',
+                position: 'relative',
+                counterIncrement: 'step-counter',
+              }}
+            >
+              <span
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 700,
+                  fontSize: '0.875rem',
+                  color: '#04140a',
+                }}
+              >
+                3
+              </span>
+              <strong>Label Analysis</strong> — Extracts product info, batch numbers, and lab results
+            </li>
+            <li
+              style={{
+                marginBottom: '20px',
+                paddingLeft: '40px',
+                position: 'relative',
+                counterIncrement: 'step-counter',
+              }}
+            >
+              <span
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 700,
+                  fontSize: '0.875rem',
+                  color: '#04140a',
+                }}
+              >
+                4
+              </span>
+              <strong>AI Summary</strong> — Generates effects, use cases, warnings, and grower insights
+            </li>
+          </ol>
+        </section>
       </div>
 
       {/* Footer */}
