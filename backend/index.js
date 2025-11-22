@@ -2967,6 +2967,286 @@ async function ensureZipGroupForBusinessProfile(profile) {
   }
 }
 
+// GET /api/business/me - Get current user's business profile
+app.get('/api/business/me', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('business_profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .limit(1);
+
+    if (error) {
+      console.error('[business] Error fetching profile', { error, userId: user.id });
+      return res.status(500).json({ error: 'Error fetching business profile' });
+    }
+
+    const profile = data && data[0] ? data[0] : null;
+    return res.json({ profile });
+  } catch (err) {
+    console.error('[business] /api/business/me error', {
+      message: err?.message,
+      name: err?.name,
+      stack: err?.stack,
+    });
+    return res.status(500).json({ error: 'Unexpected error fetching business profile' });
+  }
+});
+
+// POST /api/business/me - Create or update current user's business profile
+app.post('/api/business/me', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const {
+      business_type,
+      name,
+      city,
+      state,
+      country,
+      postal_code,
+      phone,
+      website,
+    } = req.body || {};
+
+    if (!business_type || !['grower', 'dispensary'].includes(business_type)) {
+      return res.status(400).json({ error: 'Invalid or missing business_type' });
+    }
+
+    // Fetch existing profile (if any)
+    const { data: existingRows, error: fetchError } = await supabaseAdmin
+      .from('business_profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .limit(1);
+
+    if (fetchError) {
+      console.error('[business] Error fetching existing profile', { error: fetchError, userId: user.id });
+      return res.status(500).json({ error: 'Error checking existing profile' });
+    }
+
+    const existing = existingRows && existingRows[0];
+
+    let savedProfile = null;
+
+    if (existing) {
+      // UPDATE
+      const { data: updatedRows, error: updateError } = await supabaseAdmin
+        .from('business_profiles')
+        .update({
+          business_type,
+          name: name ?? existing.name,
+          city: city ?? existing.city,
+          state: state ?? existing.state,
+          country: country ?? existing.country,
+          postal_code: postal_code ?? existing.postal_code,
+          phone: phone ?? existing.phone,
+          website: website ?? existing.website,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .select()
+        .limit(1);
+
+      if (updateError) {
+        console.error('[business] Error updating profile', { error: updateError, userId: user.id });
+        return res.status(500).json({ error: 'Error updating business profile' });
+      }
+
+      savedProfile = updatedRows && updatedRows[0];
+    } else {
+      // INSERT
+      // Generate business_code if not exists
+      let code = null;
+      let attempts = 0;
+      let isUnique = false;
+      while (!isUnique && attempts < 10) {
+        code = generateBusinessCode();
+        const { data: checkExisting } = await supabaseAdmin
+          .from('business_profiles')
+          .select('business_code')
+          .eq('business_code', code)
+          .maybeSingle();
+        if (!checkExisting) {
+          isUnique = true;
+        }
+        attempts++;
+      }
+      if (!isUnique) {
+        return res.status(500).json({ error: 'Failed to generate unique business code' });
+      }
+
+      const { data: insertedRows, error: insertError } = await supabaseAdmin
+        .from('business_profiles')
+        .insert({
+          user_id: user.id,
+          business_type,
+          business_code: code,
+          name: name || null,
+          city: city || null,
+          state: state || null,
+          country: country || 'US',
+          postal_code: postal_code || null,
+          phone: phone || null,
+          website: website || null,
+        })
+        .select()
+        .limit(1);
+
+      if (insertError) {
+        console.error('[business] Error creating profile', { error: insertError, userId: user.id });
+        return res.status(500).json({ error: 'Error creating business profile' });
+      }
+
+      savedProfile = insertedRows && insertedRows[0];
+    }
+
+    // Ensure ZIP group + membership (best effort)
+    if (savedProfile) {
+      try {
+        await ensureZipGroupForBusinessProfile(savedProfile);
+      } catch (groupErr) {
+        // Log but don't fail the request
+        console.error('[business] Group creation failed (non-blocking)', {
+          profileId: savedProfile.id,
+          error: groupErr?.message || String(groupErr),
+        });
+      }
+    }
+
+    return res.json({ profile: savedProfile });
+  } catch (err) {
+    console.error('[business] /api/business/me POST error', {
+      message: err?.message,
+      name: err?.name,
+      stack: err?.stack,
+    });
+    return res.status(500).json({ error: 'Unexpected error saving business profile' });
+  }
+});
+
+// GET /api/business/groups/my-zip - Get current user's ZIP group + members
+app.get('/api/business/groups/my-zip', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // 1) Get user profile
+    const { data: profileRows, error: profileError } = await supabaseAdmin
+      .from('business_profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .limit(1);
+
+    if (profileError) {
+      console.error('[business-groups] Error fetching profile for my-zip', { error: profileError, userId: user.id });
+      return res.status(500).json({ error: 'Error fetching business profile' });
+    }
+
+    const profile = profileRows && profileRows[0];
+    if (!profile) {
+      return res.status(404).json({ error: 'No business profile found for this user' });
+    }
+
+    // 2) Find memberships for this profile
+    const { data: memberships, error: membershipError } = await supabaseAdmin
+      .from('business_group_memberships')
+      .select('id, group_id, role')
+      .eq('business_profile_id', profile.id);
+
+    if (membershipError) {
+      console.error('[business-groups] Error fetching memberships', { error: membershipError, profileId: profile.id });
+      return res.status(500).json({ error: 'Error fetching group memberships' });
+    }
+
+    if (!memberships || memberships.length === 0) {
+      return res.json({ group: null, members: [] });
+    }
+
+    const groupIds = memberships.map(m => m.group_id);
+
+    // 3) Fetch groups
+    const { data: groups, error: groupError } = await supabaseAdmin
+      .from('business_groups')
+      .select('*')
+      .in('id', groupIds);
+
+    if (groupError) {
+      console.error('[business-groups] Error fetching groups', { error: groupError, groupIds });
+      return res.status(500).json({ error: 'Error fetching groups' });
+    }
+
+    if (!groups || groups.length === 0) {
+      return res.json({ group: null, members: [] });
+    }
+
+    // 4) Pick first zip group
+    const zipGroups = groups.filter(g => g.type === 'zip');
+    const group = zipGroups[0] || groups[0];
+
+    if (!group) {
+      return res.json({ group: null, members: [] });
+    }
+
+    // 5) Fetch all memberships for this group
+    const { data: groupMemberships, error: groupMembersError } = await supabaseAdmin
+      .from('business_group_memberships')
+      .select('id, business_profile_id, role')
+      .eq('group_id', group.id);
+
+    if (groupMembersError) {
+      console.error('[business-groups] Error fetching group memberships', { error: groupMembersError, groupId: group.id });
+      return res.status(500).json({ error: 'Error fetching group members' });
+    }
+
+    if (!groupMemberships || groupMemberships.length === 0) {
+      return res.json({ group, members: [] });
+    }
+
+    const memberProfileIds = groupMemberships.map(m => m.business_profile_id);
+
+    // 6) Fetch profiles for members
+    const { data: memberProfiles, error: memberProfilesError } = await supabaseAdmin
+      .from('business_profiles')
+      .select('*')
+      .in('id', memberProfileIds);
+
+    if (memberProfilesError) {
+      console.error('[business-groups] Error fetching member profiles', { error: memberProfilesError, groupId: group.id });
+      return res.status(500).json({ error: 'Error fetching member profiles' });
+    }
+
+    const profileById = new Map();
+    (memberProfiles || []).forEach(p => {
+      profileById.set(p.id, p);
+    });
+
+    const members = groupMemberships.map(m => ({
+      role: m.role,
+      profile: profileById.get(m.business_profile_id) || null,
+    }));
+
+    return res.json({ group, members });
+  } catch (err) {
+    console.error('[business-groups] /api/business/groups/my-zip error', {
+      message: err?.message,
+      name: err?.name,
+      stack: err?.stack,
+    });
+    return res.status(500).json({ error: 'Unexpected error fetching zip group' });
+  }
+});
+
 // POST /api/business/register - Create or update grower/dispensary profile
 app.post('/api/business/register', express.json(), async (req, res) => {
   try {
