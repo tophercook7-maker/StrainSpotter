@@ -321,7 +321,9 @@ export default function ScanPage({ onBack, onNavigate }) {
       setScanPhase('uploading');
       setStatusMessage('Resizing image for faster upload…');
       
+      console.time('[Scanner] image-compression');
       const { base64, contentType } = await resizeImageToBase64(file, 1280, 0.7);
+      console.timeEnd('[Scanner] image-compression');
 
       setStatusMessage('Uploading image…');
       const payload = {
@@ -330,6 +332,7 @@ export default function ScanPage({ onBack, onNavigate }) {
         base64,
       };
 
+    console.time('[Scanner] upload');
     const res = await fetch(apiUrl('/api/uploads'), {
       method: 'POST',
       headers: {
@@ -337,6 +340,7 @@ export default function ScanPage({ onBack, onNavigate }) {
       },
       body: JSON.stringify(payload),
     });
+    console.timeEnd('[Scanner] upload');
 
     const data = await safeJson(res);
 
@@ -401,11 +405,13 @@ export default function ScanPage({ onBack, onNavigate }) {
           }
         }
         
+        console.time('[Scanner] process-trigger');
         const processRes = await fetch(apiUrl(`/api/scans/${scanId}/process`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ frameImageUrls }),
         });
+        console.timeEnd('[Scanner] process-trigger');
         if (!processRes.ok) {
           console.warn('[startScan] Process endpoint returned non-OK:', processRes.status);
         }
@@ -420,16 +426,19 @@ export default function ScanPage({ onBack, onNavigate }) {
     setScanPhase('processing');
     setStatusMessage('Processing image with Vision API…');
 
-    // Set up hard timeout to prevent infinite hanging
+    // Removed hard timeout - let the server complete processing
+    // Increased to 90 seconds as a safety net (only triggers on genuine network issues)
     const timeoutId = setTimeout(() => {
       setIsPolling(false);
       setScanPhase('error');
-      setError('Scan is taking too long. The server may be overloaded. Please try again in a moment.');
+      setError('Our AI took longer than expected to finish this scan. Please try again in a moment.');
       setStatusMessage('Scan timed out. Please try again.');
-    }, 35000); // 35 seconds hard timeout
+    }, 90000); // 90 seconds safety timeout (increased from 35s)
 
     try {
+      console.time('[Scanner] total-scan-time');
       await pollScan(scanId, 0, timeoutId);
+      console.timeEnd('[Scanner] total-scan-time');
     } finally {
       clearTimeout(timeoutId);
     }
@@ -464,7 +473,7 @@ export default function ScanPage({ onBack, onNavigate }) {
   }
 
   async function pollScan(scanId, attempt = 0, timeoutRef = null) {
-    const maxAttempts = 30; // ~30s at 1s delay (hard timeout)
+    const maxAttempts = 90; // ~90s at 1s delay (increased from 30s)
     const delayMs = 1000; // 1 second polling interval
 
     try {
@@ -481,6 +490,9 @@ export default function ScanPage({ onBack, onNavigate }) {
         setStatusMessage('Finalizing results…');
       }
 
+      if (attempt === 0) {
+        console.time('[Scanner] polling');
+      }
       const res = await fetch(apiUrl(`/api/scans/${scanId}`));
       const data = await safeJson(res);
 
@@ -538,12 +550,13 @@ export default function ScanPage({ onBack, onNavigate }) {
       // If scan is complete OR has a result, stop polling and show results
       if (isComplete || hasResult) {
         if (timeoutRef) clearTimeout(timeoutRef);
+        console.timeEnd('[Scanner] polling');
         setIsPolling(false);
         setScanPhase('done');
         setStatusMessage('Scan complete!');
         
         // Temporary debug log
-        console.log('[pollScan] done', { status, hasResult, result: scan.result });
+        console.log('[pollScan] done', { status, hasResult, result: scan.result, attempts: attempt });
         
         const normalized = normalizeScanResult(scan);
         if (!normalized) {
@@ -622,13 +635,13 @@ export default function ScanPage({ onBack, onNavigate }) {
         return;
       }
 
-      // If we've hit max attempts, stop polling
-      if (attempt >= maxAttempts) {
+      // If we've hit max attempts, stop polling (increased from 30 to 90 attempts = 90 seconds)
+      if (attempt >= 90) {
         if (timeoutRef) clearTimeout(timeoutRef);
         setIsPolling(false);
         setScanPhase('error');
         setFramePulsing(false);
-        const timeoutError = 'Scan is taking too long. The server may be processing many requests. Please try again in a moment.';
+        const timeoutError = 'Our AI took longer than expected to finish this scan. Please try again in a moment.';
         setError(timeoutError);
         setStatusMessage(timeoutError);
         return;

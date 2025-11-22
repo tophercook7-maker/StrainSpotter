@@ -1177,8 +1177,10 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
   const readClient = supabaseAdmin ?? supabase;
   const writeClient = supabaseAdmin ?? supabase;
   let creditConsumed = false;
+  const id = req.params.id;
+  console.time(`[scan-process-total] ${id}`);
+  
   try {
-    const id = req.params.id;
     const { frameImageUrls } = req.body || {}; // Optional: array of additional frame image URLs for multi-angle
     
     const { data: scan, error: fetchErr } = await readClient.from('scans').select('*').eq('id', id).maybeSingle();
@@ -1330,6 +1332,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
         .toBuffer();
 
       // Call Vision API
+      console.time(`[scan-process-vision] ${id}-frame${i + 1}`);
       const [frameResult] = await visionClient.annotateImage({
         image: { content: optimizedBuffer },
         features: [
@@ -1339,13 +1342,16 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
           { type: 'TEXT_DETECTION' }
         ],
       });
+      console.timeEnd(`[scan-process-vision] ${id}-frame${i + 1}`);
 
       visionResults.push(frameResult);
       
       // Run visual matching on this frame
       try {
+        console.time(`[scan-process-matching] ${id}-frame${i + 1}`);
         const strains = await loadStrainLibrary();
         const frameMatchResult = matchStrainByVisuals(frameResult, strains);
+        console.timeEnd(`[scan-process-matching] ${id}-frame${i + 1}`);
         frameMatchResults.push(frameMatchResult);
       } catch (matchErr) {
         console.error(`[process] Error matching frame ${i + 1}:`, matchErr);
@@ -1466,6 +1472,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     let aiSummary = null;
     if (labelInsights && labelInsights.isPackagedProduct) {
       try {
+        console.time(`[scan-process-label-ai] ${id}`);
         const detectedText = result.textAnnotations?.[0]?.description || '';
         const rawText = labelInsights.rawText || detectedText;
         
@@ -1487,6 +1494,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
           detectedCategory,
           extraHints: null
         });
+        console.timeEnd(`[scan-process-label-ai] ${id}`);
         
         if (aiSummary) {
           console.log('[process] AI summary generated successfully');
@@ -1532,6 +1540,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     // Generate GPT-5 nano packaging insights AFTER Vision processing
     let packagingInsights = null;
     try {
+      console.time(`[scan-process-packaging] ${id}`);
       // Sample strain library for GPT context
       let strainLibrarySample = [];
       try {
@@ -1557,6 +1566,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
         countryHint: null,
         regionHint: null,
       });
+      console.timeEnd(`[scan-process-packaging] ${id}`);
 
       console.log('[scan-process] packagingInsights computed', {
         id,
@@ -1572,6 +1582,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     // Generate AI summary for consumers, dispensaries, and growers
     let scanAISummary = null;
     try {
+      console.time(`[scan-process-summary] ${id}`);
       // Extract Vision data
       const visionText = result.textAnnotations?.[0]?.description || result.fullTextAnnotation?.text || '';
       const visionLabels = result.labelAnnotations || [];
@@ -1584,6 +1595,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
         visionLabels,
         strainRecord: matchedStrainRecord
       });
+      console.timeEnd(`[scan-process-summary] ${id}`);
 
       if (scanAISummary) {
         console.log('[scan-process] AI summary generated successfully', {
@@ -1672,6 +1684,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       hasPackagingInsights: !!finalResult.packagingInsights,
       hasAISummary: !!scanAISummary,
     });
+    console.timeEnd(`[scan-process-total] ${id}`);
 
     // Extract vision text and matched strain for response
     const visionText = result.textAnnotations?.[0]?.description || result.fullTextAnnotation?.text || null;
@@ -1700,6 +1713,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       }
     });
   } catch (e) {
+    console.timeEnd(`[scan-process-total] ${id}`);
     if (req?.params?.id) {
       try {
         const { data: scan } = await (supabaseAdmin ?? supabase)
