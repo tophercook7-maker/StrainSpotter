@@ -1557,65 +1557,11 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       matchQuality: visualQuality,
     } = matchResult || {};
 
-    // Extract visual matches array for canonical strain resolution
-    const visualMatchesArray = matches.map(m => ({
-      name: m.strain?.name || m.strain?.strain_name || m.strain?.slug || m.name || null,
-      confidence: m.confidence || m.score || null,
-    })).filter(m => m.name);
-
-    // CRITICAL: Use canonical strain decision helper to determine final strain name
-    // This ensures packaging strain is NEVER overridden by visual guesses
-    // Note: packagingInsights will be set later, but we check labelInsights first
-    const canonicalStrain = resolveCanonicalStrain({
-      labelInsights: labelInsights || null,
-      packagingInsights: null, // Will be updated after packaging insights are generated
-      visualMatches: visualMatchesArray,
-      matchConfidence: visualConfidence || null,
-    });
-
-    // Use canonical strain name (prioritizes packaging over visual guesses)
-    let finalStrainName = canonicalStrain.canonicalStrainName || null;
+    // Temporary values (will be replaced by canonical strain after packaging insights)
+    let finalStrainName = visualNameFinal || null;
     let finalStrainSlug = visualSlugFinal || null;
     let finalMatchQuality = visualQuality || 'none';
-    let finalMatchConfidence = canonicalStrain.matchConfidence ?? visualConfidence ?? 0;
-
-    // If canonical strain is from packaging, ensure we use it (even if visual match exists)
-    if (canonicalStrain.strainSource === 'packaging' && canonicalStrain.packagingStrain) {
-      finalStrainName = canonicalStrain.packagingStrain;
-      // Generate slug from packaging strain name
-      finalStrainSlug = canonicalStrain.packagingStrain
-        .toString()
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-      finalMatchQuality = 'label-fallback';
-      finalMatchConfidence = canonicalStrain.matchConfidence ?? 1.0;
-      
-      console.log('[process] Using canonical packaging strain:', {
-        strainName: finalStrainName,
-        source: canonicalStrain.strainSource,
-        confidence: finalMatchConfidence,
-      });
-    } else if (canonicalStrain.strainSource === 'visual' && canonicalStrain.visualStrain) {
-      // Visual match for raw bud (only if confidence >= 0.6)
-      finalStrainName = canonicalStrain.visualStrain;
-      finalStrainSlug = visualSlugFinal || null;
-      finalMatchQuality = visualQuality || 'none';
-      finalMatchConfidence = canonicalStrain.matchConfidence ?? visualConfidence ?? 0;
-      
-      console.log('[process] Using canonical visual strain:', {
-        strainName: finalStrainName,
-        source: canonicalStrain.strainSource,
-        confidence: finalMatchConfidence,
-      });
-    } else {
-      // Fallback: no valid strain found
-      finalStrainName = 'Cannabis (strain unknown)';
-      finalStrainSlug = null;
-      finalMatchQuality = 'none';
-      finalMatchConfidence = 0;
-    }
+    let finalMatchConfidence = visualConfidence || 0;
 
     // Generate AI summary if we have label insights (for packaged products)
     let aiSummary = null;
