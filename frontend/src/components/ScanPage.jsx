@@ -824,10 +824,12 @@ export default function ScanPage({ onBack, onNavigate }) {
         const displayStrain = deriveDisplayStrain(scan);
         
         // Build matchedStrain object for StrainResultCard
-        // Use OCR/packaging strain if available, otherwise fall back to visual matcher
+        // CRITICAL: For packaged products, only show strain name if we have packaging/AI strain name
+        // Don't show visual matcher guesses for packaged products without strain name
         let matchedStrain = null;
+        
         if (displayStrain.primaryName) {
-          // Create a matched strain object from OCR/packaging data
+          // Create a matched strain object from OCR/packaging/AI data
           // CRITICAL: Prioritize effects/flavors from AI summary and label insights
           const effects = displayStrain.effects || 
             scan.ai_summary?.effects ||
@@ -853,8 +855,9 @@ export default function ScanPage({ onBack, onNavigate }) {
             // Preserve visual matcher data as fallback metadata if available
             visualMatch: result?.visualMatches?.match || result?.matches?.[0] || null,
           };
-        } else {
-          // Fallback to visual matcher only if no OCR/packaging strain found
+        } else if (!displayStrain.isPackagedProduct) {
+          // Only fallback to visual matcher for NON-packaged products (flower/bud photos)
+          // For packaged products without strain name, don't show visual guesses
           matchedStrain = 
             scan.match ||
             result?.visualMatches?.match ||
@@ -862,6 +865,8 @@ export default function ScanPage({ onBack, onNavigate }) {
             normalized?.top_match ||
             null;
         }
+        // If packaged product and no strain name, matchedStrain stays null
+        // This prevents showing incorrect visual matcher guesses like "Limon", "MAC" for packaged products
         
         const extractedVisionText =
           scan.visionText ||

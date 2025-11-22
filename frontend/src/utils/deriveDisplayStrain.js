@@ -70,8 +70,9 @@ export function deriveDisplayStrain(scan) {
     }
   }
 
-  // 3. Fallback to visual matcher ONLY if nothing else found
-  if (!primaryName) {
+  // 3. Fallback to visual matcher ONLY if nothing else found AND it's NOT a packaged product
+  // CRITICAL: For packaged products, don't show visual matcher guesses if we don't have a packaging strain name
+  if (!primaryName && !isPackagedProduct) {
     const visualMatch = Array.isArray(visual) && visual.length > 0 
       ? (visual[0]?.match || visual[0]) 
       : null;
