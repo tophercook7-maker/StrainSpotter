@@ -244,154 +244,88 @@ export function getPrimaryNameForResult(result) {
 export function transformScanResult(scan) {
   if (!scan) return null;
 
-  const result = scan?.result || {};
-  const packagingInsights = scan.packaging_insights || result.packagingInsights || null;
-  const labelInsights = scan.label_insights || result.labelInsights || null;
-  
-  // CRITICAL: Use canonicalStrain as single source of truth
-  // Backend sets canonicalStrain with strict priority: Packaging > Label > Visual
-  const canonical = scan.canonicalStrain || result.canonicalStrain || {
-    name: scan.matched_strain_name || null,
-    source: scan.match_quality || null,
-    confidence: scan.match_confidence || null,
-  };
-  
-  // Determine if this is a packaged product
-  const isPackagedProduct =
-    packagingInsights?.isPackagedProduct === true ||
-    labelInsights?.isPackagedProduct === true ||
-    scan.ai_summary?.isPackagedProduct === true ||
-    canonical.source === 'packaging' ||
-    canonical.source === 'packaged-unknown' ||
-    false;
+  const ai = scan.ai_summary || {};
+  const pkg = scan.packaging_insights || {};
+  const label = scan.label_insights || {};
+  const visual = scan.result?.visualMatches?.[0] || null;
 
-  // Extract packaging strain name from insights
-  const packagingStrainName =
-    packagingInsights?.strainName ||
-    packagingInsights?.basic?.strain_name ||
-    labelInsights?.strainName ||
-    labelInsights?.strain_name ||
+  const isPackaged = !!pkg.strainName || !!label.strainName;
+
+  const packagingStrain =
+    pkg.strainName ||
+    label.strainName ||
     null;
 
-  // Extract THC/CBD from packaging or label insights
-  const potency = packagingInsights?.potency || {};
+  const visualStrain =
+    visual?.name && visual.confidence >= 0.8
+      ? visual.name
+      : null;
+
+  const finalStrain = isPackaged
+    ? packagingStrain
+    : visualStrain;
+
+  const isPackagedKnown = isPackaged && !!packagingStrain;
+  const isBudUnknown = !isPackaged && !visualStrain;
+
+  // Extract THC/CBD from packaging or label insights (needed for PackagedProductCard)
+  const potency = pkg.potency || {};
   const thc = 
     potency.thc_percent ??
     potency.thc_total_percent ??
-    labelInsights?.thc ??
+    label.thc ??
     null;
   const cbd = 
     potency.cbd_percent ??
     potency.cbd_total_percent ??
-    labelInsights?.cbd ??
+    label.cbd ??
     null;
 
-  // Extract AI summary data
-  const aiSummary = scan.ai_summary || result.aiSummary || null;
-  
-  // Extract effects and flavors from AI summary or library strain
-  const aiEffects = Array.isArray(aiSummary?.effectsAndUseCases) 
-    ? aiSummary.effectsAndUseCases 
-    : [];
-  const aiFlavors = Array.isArray(aiSummary?.flavors) 
-    ? aiSummary.flavors 
-    : [];
-  
-  // Extract other AI fields
-  const aiIntensity = typeof aiSummary?.intensity === 'number' 
-    ? aiSummary.intensity 
-    : (typeof aiSummary?.potency_score === 'number' ? aiSummary.potency_score : null);
-  const aiDispensaryNotes = Array.isArray(aiSummary?.dispensaryNotes) 
-    ? aiSummary.dispensaryNotes 
-    : (typeof aiSummary?.dispensaryNotes === 'string' && aiSummary.dispensaryNotes.trim() 
-      ? [aiSummary.dispensaryNotes.trim()] 
-      : []);
-  const aiGrowerNotes = Array.isArray(aiSummary?.growerNotes) 
-    ? aiSummary.growerNotes 
-    : (typeof aiSummary?.growerNotes === 'string' && aiSummary.growerNotes.trim() 
-      ? [aiSummary.growerNotes.trim()] 
-      : []);
-  const aiWarnings = Array.isArray(aiSummary?.risksAndWarnings) 
-    ? aiSummary.risksAndWarnings 
-    : [];
-  const aiSummaryText = typeof aiSummary?.userFacingSummary === 'string' 
-    ? aiSummary.userFacingSummary 
-    : null;
-
-  // Determine when to use library tags vs AI tags
-  const canTrustVisual = canonical.source === 'visual' && canonical.confidence != null && canonical.confidence >= 0.8;
-  const isPackagedUnknown = canonical.source === 'packaged-unknown';
-  const canUseLibraryTags = !isPackagedUnknown && (canonical.source === 'packaging' || canTrustVisual);
-  
-  // For now, prefer AI effects/flavors when available, fall back to library tags if needed
-  // TODO: Add library strain lookup if needed
-  const effectsTags = aiEffects.length > 0 ? aiEffects : [];
-  const flavorTags = aiFlavors.length > 0 ? aiFlavors : [];
-
-  // Preserve existing fields for backward compatibility
-  const existingFields = {
-    id: scan.id,
-    created_at: scan.created_at,
-    processed_at: scan.processed_at,
-    image_url: scan.image_url,
-    status: scan.status,
-    result: result,
-    packaging_insights: packagingInsights,
-    label_insights: labelInsights,
-    ai_summary: scan.ai_summary,
-    matched_strain_slug: scan.matched_strain_slug,
-    match_confidence: canonical.confidence ?? scan.match_confidence,
-    match_quality: canonical.source || scan.match_quality,
-    matched_strain_name: canonical.name !== 'Cannabis (strain unknown)' ? canonical.name : scan.matched_strain_name,
-  };
-
-  // For buds, only use visual strain if confidence >= 0.8 (conservative guesses)
-  let finalStrainName = canonical.name || 'Cannabis (strain unknown)';
-  let finalStrainSource = canonical.source || 'none';
-  let finalMatchConfidence = canonical.confidence ?? 0;
-  
-  if (!isPackagedProduct && canonical.source === 'visual' && canonical.confidence != null && canonical.confidence < 0.8) {
-    // Bud with low confidence visual match: show unknown instead of wrong guess
-    finalStrainName = 'Cannabis (strain unknown)';
-    finalStrainSource = 'visual-unknown';
-    finalMatchConfidence = 0;
-  }
-
-  // Derived flags for UI logic
-  const hasPackagingStrain = !!(packagingInsights?.strainName || labelInsights?.strainName);
-  const canonicalStrainName = finalStrainName;
-  const canonicalStrainSource = finalStrainSource;
-  const canonicalMatchConfidence = finalMatchConfidence;
-  
-  const hasCanonicalStrain = !!(canonicalStrainName && canonicalStrainSource && canonicalStrainName !== 'Cannabis (strain unknown)');
-  
-  const isPackagedKnown = 
-    isPackagedProduct && 
-    (hasPackagingStrain || (canonicalStrainSource === 'packaging' && !!canonicalStrainName && canonicalStrainName !== 'Cannabis (strain unknown)'));
-
-  const isBudUnknown = 
-    !isPackagedProduct && 
-    (!hasCanonicalStrain || canonicalMatchConfidence == null || canonicalMatchConfidence < 0.8);
+  // Extract AI fields - handle both old and new field names for compatibility
+  const aiEffects = Array.isArray(ai.effectsAndUseCases) 
+    ? ai.effectsAndUseCases 
+    : (Array.isArray(ai.effects) ? ai.effects : []);
+  const aiFlavors = Array.isArray(ai.flavors) ? ai.flavors : [];
+  const aiIntensity = typeof ai.intensity === 'number' 
+    ? ai.intensity 
+    : (typeof ai.potency_score === 'number' ? ai.potency_score : null);
+  const aiSummaryText = typeof ai.userFacingSummary === 'string' 
+    ? ai.userFacingSummary 
+    : (typeof ai.summary === 'string' ? ai.summary : '');
+  const aiDispensaryNotes = Array.isArray(ai.dispensaryNotes) 
+    ? ai.dispensaryNotes 
+    : (typeof ai.dispensary_notes === 'string' && ai.dispensary_notes.trim() 
+      ? [ai.dispensary_notes.trim()] 
+      : (Array.isArray(ai.dispensary_notes) ? ai.dispensary_notes : []));
+  const aiGrowerNotes = Array.isArray(ai.growerNotes) 
+    ? ai.growerNotes 
+    : (typeof ai.grower_notes === 'string' && ai.grower_notes.trim() 
+      ? [ai.grower_notes.trim()] 
+      : (Array.isArray(ai.grower_notes) ? ai.grower_notes : []));
+  const aiWarnings = Array.isArray(ai.risksAndWarnings) 
+    ? ai.risksAndWarnings 
+    : (Array.isArray(ai.warnings) ? ai.warnings : []);
 
   return {
-    ...existingFields,
-    strainName: finalStrainName,
-    strainSource: finalStrainSource,
-    matchConfidence: finalMatchConfidence,
-    isPackagedProduct: isPackagedProduct,
-    hasPackagingStrain: hasPackagingStrain,
-    hasCanonicalStrain: hasCanonicalStrain,
-    isPackagedKnown: isPackagedKnown,
-    isBudUnknown: isBudUnknown,
-    thc: thc,
-    cbd: cbd,
-    effectsTags: effectsTags,
-    flavorTags: flavorTags,
-    aiIntensity: aiIntensity,
-    aiDispensaryNotes: aiDispensaryNotes,
-    aiGrowerNotes: aiGrowerNotes,
-    aiWarnings: aiWarnings,
-    aiSummaryText: aiSummaryText,
+    strainName: finalStrain || 'Cannabis (strain unknown)',
+    isPackagedProduct: isPackaged,
+    isPackagedKnown,
+    isBudUnknown,
+    matchConfidence: visual?.confidence || scan.match_confidence || 0,
+    thc,
+    cbd,
+    effectsTags: aiEffects,
+    flavorTags: aiFlavors,
+    aiIntensity,
+    aiSummaryText,
+    aiDispensaryNotes,
+    aiGrowerNotes,
+    aiWarnings,
+    // Preserve original fields for backward compatibility
+    packaging_insights: pkg,
+    label_insights: label,
+    ai_summary: ai,
+    result: scan.result,
   };
 }
 
