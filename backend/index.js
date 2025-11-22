@@ -1265,12 +1265,20 @@ app.get('/api/scans/:id', async (req, res, next) => {
     }
     
     // Ensure canonicalStrain is included in response
+    // Priority: dedicated columns > result.canonicalStrain > legacy fields
     const result = scan.result || {};
-    const canonicalStrain = result.canonicalStrain || {
-      name: scan.matched_strain_name || null,
-      source: scan.match_quality || null,
-      confidence: scan.match_confidence || null,
-    };
+    const canonicalStrain = 
+      (scan.canonical_strain_name || scan.canonical_strain_source || scan.canonical_match_confidence != null)
+        ? {
+            name: scan.canonical_strain_name || null,
+            source: scan.canonical_strain_source || null,
+            confidence: scan.canonical_match_confidence ?? null,
+          }
+        : (result.canonicalStrain || {
+            name: scan.matched_strain_name || null,
+            source: scan.match_quality || null,
+            confidence: scan.match_confidence || null,
+          });
     
     // Return scan object directly (not wrapped) - frontend expects this shape
     return res.json({
