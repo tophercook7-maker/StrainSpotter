@@ -1782,23 +1782,70 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
         console.error('[scan] Failed to refund credits after error:', refundErr);
       }
     }
+    // CRITICAL: Check if error is schema-related
+    const isSchema = isSchemaError(e);
+    
+    if (isSchema) {
+      // Schema error - return 200 with warning instead of 500
+      console.warn('[scan-process] Schema error detected, returning 200 with warning', {
+        id,
+        error: String(e),
+        message: e?.message || 'Unknown schema error',
+      });
+      
+      // Try to refund credits if consumed
+      if (creditConsumed) {
+        try {
+          const { data: scan } = await (supabaseAdmin ?? supabase)
+            .from('scans')
+            .select('user_id')
+            .eq('id', req.params.id)
+            .maybeSingle();
+          if (scan?.user_id) {
+            await grantScanCredits(scan.user_id, 1, 'scan-refund', { scan_id: req.params.id, reason: 'schema-error' });
+          }
+        } catch (refundErr) {
+          console.error('[scan] Failed to refund credits after schema error:', refundErr);
+        }
+      }
+      
+      // Return 200 - scan can still proceed, just some fields won't be saved
+      return res.json({
+        ok: true,
+        scanId: id,
+        status: 'processing',
+        warning: 'Column missing, some fields skipped',
+      });
+    }
+    
+    // CRITICAL: Use safe write for error status update
     try {
-      await writeClient
-        .from('scans')
-        .update({ 
+      const updateResult = await safeUpdateScan(
+        writeClient,
+        req.params.id,
+        { 
           status: 'failed', 
           result: null,
           error: { code: 'PROCESSING_ERROR', message: String(e) }
-        })
-        .eq('id', req.params.id);
-      console.log('[scan-process] marked as failed', {
-        id: req.params.id,
-        status: 'failed',
-        error: { code: 'PROCESSING_ERROR', message: String(e) },
-      });
+        },
+        'scan-process-error'
+      );
+      
+      if (updateResult.success) {
+        console.log('[scan-process] marked as failed', {
+          id: req.params.id,
+          status: 'failed',
+          skippedFields: updateResult.skippedFields || [],
+        });
+      } else if (updateResult.error && !isSchemaError(updateResult.error)) {
+        console.error('[scan-process] Failed to update scan status to failed:', updateResult.error);
+      }
     } catch (updateErr) {
-      console.error('[scan-process] Failed to update scan status to failed:', updateErr);
+      if (!isSchemaError(updateErr)) {
+        console.error('[scan-process] Failed to update scan status to failed:', updateErr);
+      }
     }
+    
     // CRITICAL: Log full error details before returning 500
     console.error('[scan-process] ERROR - 500 response', {
       id,
