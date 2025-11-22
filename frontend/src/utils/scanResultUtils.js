@@ -265,6 +265,14 @@ export function transformScanResult(scan) {
     canonical.source === 'packaged-unknown' ||
     false;
 
+  // Extract packaging strain name from insights
+  const packagingStrainName =
+    packagingInsights?.strainName ||
+    packagingInsights?.basic?.strain_name ||
+    labelInsights?.strainName ||
+    labelInsights?.strain_name ||
+    null;
+
   // Extract AI summary data
   const aiSummary = scan.ai_summary || result.aiSummary || null;
   
@@ -336,12 +344,18 @@ export function transformScanResult(scan) {
     finalMatchConfidence = 0;
   }
 
+  // Derived flags for UI logic
+  const hasPackagingStrain = !!(packagingStrainName && packagingStrainName.trim() !== '');
+  const hasCanonicalStrain = !!(finalStrainName && finalStrainName !== 'Cannabis (strain unknown)' && finalStrainSource != null);
+
   return {
     ...existingFields,
     strainName: finalStrainName,
     strainSource: finalStrainSource,
     matchConfidence: finalMatchConfidence,
     isPackagedProduct: isPackagedProduct,
+    hasPackagingStrain: hasPackagingStrain,
+    hasCanonicalStrain: hasCanonicalStrain,
     effectsTags: effectsTags,
     flavorTags: flavorTags,
     aiIntensity: aiIntensity,

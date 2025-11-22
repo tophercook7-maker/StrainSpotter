@@ -263,6 +263,8 @@ function ScanResultCard({ result, scan, isGuest }) {
     strainName,
     strainSource,
     isPackagedProduct,
+    hasPackagingStrain,
+    hasCanonicalStrain,
     matchConfidence,
     effectsTags,
     flavorTags,
@@ -310,7 +312,8 @@ function ScanResultCard({ result, scan, isGuest }) {
   const showTHCCBD = thc != null || cbd != null;
 
   // Render based on strainSource
-  if (strainSource === 'packaging') {
+  // For packaged products with a strain name, show packaging card (even if source is 'label' or 'ai')
+  if (isPackagedProduct && hasPackagingStrain && strainName !== 'Cannabis (strain unknown)') {
     // PACKAGED PRODUCT: Show strain name, lineage if available, THC/CBD badge
     return (
       <>
@@ -335,7 +338,7 @@ function ScanResultCard({ result, scan, isGuest }) {
                     mb: 0.5,
                   }}
                 >
-                  Label-based match
+                  {strainSource === 'packaging' || strainSource === 'label' ? 'Label-based match' : 'Packaged product'}
                 </Typography>
                 <Typography
                   variant="h6"
@@ -481,6 +484,8 @@ function ScanResultCard({ result, scan, isGuest }) {
   }
 
   // UNKNOWN: Show "Cannabis (strain unknown)" with different subtitle for packaged vs bud
+  // CRITICAL: Never show unknown card for packaged products that have a packaging strain
+  // (Those cases are already handled by the packaging card above)
   const isUnknownPackaged = isPackagedProduct && (strainSource === 'packaged-unknown' || strainSource === 'none');
   const unknownSubtitle = isUnknownPackaged
     ? 'Label text could not be confidently decoded. You can still use the AI details below.'
