@@ -273,6 +273,19 @@ export function transformScanResult(scan) {
     labelInsights?.strain_name ||
     null;
 
+  // Extract THC/CBD from packaging or label insights
+  const potency = packagingInsights?.potency || {};
+  const thc = 
+    potency.thc_percent ??
+    potency.thc_total_percent ??
+    labelInsights?.thc ??
+    null;
+  const cbd = 
+    potency.cbd_percent ??
+    potency.cbd_total_percent ??
+    labelInsights?.cbd ??
+    null;
+
   // Extract AI summary data
   const aiSummary = scan.ai_summary || result.aiSummary || null;
   
@@ -345,8 +358,20 @@ export function transformScanResult(scan) {
   }
 
   // Derived flags for UI logic
-  const hasPackagingStrain = !!(packagingStrainName && packagingStrainName.trim() !== '');
-  const hasCanonicalStrain = !!(finalStrainName && finalStrainName !== 'Cannabis (strain unknown)' && finalStrainSource != null);
+  const hasPackagingStrain = !!(packagingInsights?.strainName || labelInsights?.strainName);
+  const canonicalStrainName = finalStrainName;
+  const canonicalStrainSource = finalStrainSource;
+  const canonicalMatchConfidence = finalMatchConfidence;
+  
+  const hasCanonicalStrain = !!(canonicalStrainName && canonicalStrainSource && canonicalStrainName !== 'Cannabis (strain unknown)');
+  
+  const isPackagedKnown = 
+    isPackagedProduct && 
+    (hasPackagingStrain || (canonicalStrainSource === 'packaging' && !!canonicalStrainName && canonicalStrainName !== 'Cannabis (strain unknown)'));
+
+  const isBudUnknown = 
+    !isPackagedProduct && 
+    (!hasCanonicalStrain || canonicalMatchConfidence == null || canonicalMatchConfidence < 0.8);
 
   return {
     ...existingFields,
@@ -356,6 +381,10 @@ export function transformScanResult(scan) {
     isPackagedProduct: isPackagedProduct,
     hasPackagingStrain: hasPackagingStrain,
     hasCanonicalStrain: hasCanonicalStrain,
+    isPackagedKnown: isPackagedKnown,
+    isBudUnknown: isBudUnknown,
+    thc: thc,
+    cbd: cbd,
     effectsTags: effectsTags,
     flavorTags: flavorTags,
     aiIntensity: aiIntensity,

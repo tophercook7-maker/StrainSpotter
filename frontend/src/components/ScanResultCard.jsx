@@ -250,44 +250,29 @@ function AIStrainDetailsPanel({
   );
 }
 
-function ScanResultCard({ result, scan, isGuest }) {
-  if (!result && !scan) return null;
-
-  // CRITICAL: Use transformScanResult to get canonical strain name and metadata
-  // This ensures packaged products ALWAYS use label strain, NEVER visual/library guesses
-  const transformed = transformScanResult(result || scan);
-  if (!transformed) return null;
-
-  // Destructure transformed fields
-  const {
-    strainName,
-    strainSource,
-    isPackagedProduct,
-    hasPackagingStrain,
-    hasCanonicalStrain,
-    matchConfidence,
-    effectsTags,
-    flavorTags,
-    aiIntensity,
-    aiDispensaryNotes,
-    aiGrowerNotes,
-    aiWarnings,
-    aiSummaryText,
-  } = transformed;
-
+// Packaged Product Card Component
+function PackagedProductCard({ 
+  strainName, 
+  thc, 
+  cbd, 
+  summary, 
+  effects, 
+  flavors, 
+  intensity, 
+  dispensaryNotes, 
+  growerNotes, 
+  warnings,
+  result,
+  scan,
+}) {
   // Get display strain info for lineage and additional metadata
   const displayStrain = deriveDisplayStrain(result || scan);
   const lineage = displayStrain.displaySubline || null;
 
   // Get packaging insights for display
-  const packagingInsights =
-    transformed.packaging_insights || transformed.packagingInsights || null;
-  const labelInsights = transformed.label_insights || scan?.label_insights || null;
-  const aiSummary = transformed.ai_summary || scan?.ai_summary || null;
-
-  // Extract additional data for display
+  const packagingInsights = result?.packaging_insights || scan?.packaging_insights || null;
+  const labelInsights = result?.label_insights || scan?.label_insights || null;
   const basic = packagingInsights?.basic || {};
-  const potency = packagingInsights?.potency || {};
   const details = packagingInsights?.package_details || {};
   const brandName = 
     basic.brand_name ||
@@ -295,202 +280,121 @@ function ScanResultCard({ result, scan, isGuest }) {
     labelInsights?.brandName ||
     null;
 
-  // Extract THC/CBD from packaging or label insights
-  const thc = 
-    potency.thc_percent ??
-    potency.thc_total_percent ??
-    labelInsights?.thc ??
-    null;
-
-  const cbd = 
-    potency.cbd_percent ??
-    potency.cbd_total_percent ??
-    labelInsights?.cbd ??
-    null;
-
-  // Show THC/CBD badge only if available
   const showTHCCBD = thc != null || cbd != null;
 
-  // Render based on strainSource
-  // For packaged products with a strain name, show packaging card (even if source is 'label' or 'ai')
-  if (isPackagedProduct && hasPackagingStrain && strainName !== 'Cannabis (strain unknown)') {
-    // PACKAGED PRODUCT: Show strain name, lineage if available, THC/CBD badge
-    return (
-      <>
-        <Card
-          variant="outlined"
-          sx={{
-            mb: 2,
-            borderColor: 'rgba(165, 214, 167, 0.35)',
-            background:
-              'radial-gradient(circle at top left, rgba(129, 199, 132, 0.12), transparent 55%), #0b100a',
-          }}
-        >
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-              <Box sx={{ flex: 1 }}>
+  return (
+    <>
+      <Card
+        variant="outlined"
+        sx={{
+          mb: 2,
+          borderColor: 'rgba(165, 214, 167, 0.35)',
+          background:
+            'radial-gradient(circle at top left, rgba(129, 199, 132, 0.12), transparent 55%), #0b100a',
+        }}
+      >
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+            <Box sx={{ flex: 1 }}>
+              <Typography
+                variant="overline"
+                sx={{
+                  color: 'rgba(200, 230, 201, 0.7)',
+                  letterSpacing: 1,
+                  display: 'block',
+                  mb: 0.5,
+                }}
+              >
+                Label-based match
+              </Typography>
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 700, color: '#E8F5E9', mb: 0.5 }}
+              >
+                {strainName}
+              </Typography>
+              {lineage && (
                 <Typography
-                  variant="overline"
-                  sx={{
-                    color: 'rgba(200, 230, 201, 0.7)',
-                    letterSpacing: 1,
-                    display: 'block',
-                    mb: 0.5,
-                  }}
+                  variant="body2"
+                  sx={{ color: 'rgba(200, 230, 201, 0.75)', fontSize: '0.875rem', mb: 0.5 }}
                 >
-                  {strainSource === 'packaging' || strainSource === 'label' ? 'Label-based match' : 'Packaged product'}
+                  Lineage: {lineage}
                 </Typography>
+              )}
+              {brandName && (
                 <Typography
-                  variant="h6"
-                  sx={{ fontWeight: 700, color: '#E8F5E9', mb: 0.5 }}
+                  variant="body2"
+                  sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 1 }}
                 >
-                  {strainName}
+                  {brandName}
                 </Typography>
-                {lineage && (
-                  <Typography
-                    variant="body2"
-                    sx={{ color: 'rgba(200, 230, 201, 0.75)', fontSize: '0.875rem', mb: 0.5 }}
-                  >
-                    Lineage: {lineage}
-                  </Typography>
-                )}
-                {brandName && (
-                  <Typography
-                    variant="body2"
-                    sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 1 }}
-                  >
-                    {brandName}
-                  </Typography>
-                )}
-              </Box>
-              {showTHCCBD && (
-                <Box sx={{ ml: 2, textAlign: 'right' }}>
-                  {thc != null && (
-                    <Chip
-                      label={`THC ${thc}%`}
-                      size="small"
-                      sx={{
-                        bgcolor: 'rgba(255, 204, 128, 0.15)',
-                        color: '#FFCC80',
-                        border: '1px solid rgba(255, 204, 128, 0.3)',
-                        mb: 0.5,
-                        display: 'block',
-                      }}
-                    />
-                  )}
-                  {cbd != null && (
-                    <Chip
-                      label={`CBD ${cbd}%`}
-                      size="small"
-                      sx={{
-                        bgcolor: 'rgba(179, 229, 252, 0.15)',
-                        color: '#B3E5FC',
-                        border: '1px solid rgba(179, 229, 252, 0.3)',
-                      }}
-                    />
-                  )}
-                </Box>
               )}
             </Box>
-
-            {details.net_weight_label || details.net_weight ? (
-              <Typography
-                variant="caption"
-                sx={{ color: 'rgba(200, 230, 201, 0.7)', display: 'block', mt: 1 }}
-              >
-                Package size: {details.net_weight_label || details.net_weight}
-              </Typography>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        {/* AI Details Panel */}
-        <AIStrainDetailsPanel
-          intensity={aiIntensity}
-          effects={effectsTags}
-          flavors={flavorTags}
-          dispensaryNotes={aiDispensaryNotes}
-          growerNotes={aiGrowerNotes}
-          warnings={aiWarnings}
-          summary={aiSummaryText}
-        />
-      </>
-    );
-  }
-
-  if (strainSource === 'visual') {
-    // VISUAL MATCH: Show "Strain estimate – XX%" above name, then strainName
-    return (
-      <>
-        <Card
-          variant="outlined"
-          sx={{
-            mb: 2,
-            borderColor: 'rgba(165, 214, 167, 0.35)',
-            background:
-              'radial-gradient(circle at top left, rgba(129, 199, 132, 0.12), transparent 55%), #0b100a',
-          }}
-        >
-          <CardContent>
-            <Typography
-              variant="overline"
-              sx={{
-                color: 'rgba(200, 230, 201, 0.7)',
-                letterSpacing: 1,
-                display: 'block',
-                mb: 0.5,
-              }}
-            >
-              Strain estimate{matchConfidence != null ? ` – ${Math.round(matchConfidence * 100)}%` : ''}
-            </Typography>
-            <Typography
-              variant="h6"
-              sx={{ fontWeight: 700, color: '#E8F5E9', mb: 0.5 }}
-            >
-              {strainName}
-            </Typography>
-            {lineage && (
-              <Typography
-                variant="body2"
-                sx={{ color: 'rgba(200, 230, 201, 0.75)', fontSize: '0.875rem', mb: 1 }}
-              >
-                Lineage: {lineage}
-              </Typography>
+            {showTHCCBD && (
+              <Box sx={{ ml: 2, textAlign: 'right' }}>
+                {thc != null && (
+                  <Chip
+                    label={`THC ${thc}%`}
+                    size="small"
+                    sx={{
+                      bgcolor: 'rgba(255, 204, 128, 0.15)',
+                      color: '#FFCC80',
+                      border: '1px solid rgba(255, 204, 128, 0.3)',
+                      mb: 0.5,
+                      display: 'block',
+                    }}
+                  />
+                )}
+                {cbd != null && (
+                  <Chip
+                    label={`CBD ${cbd}%`}
+                    size="small"
+                    sx={{
+                      bgcolor: 'rgba(179, 229, 252, 0.15)',
+                      color: '#B3E5FC',
+                      border: '1px solid rgba(179, 229, 252, 0.3)',
+                    }}
+                  />
+                )}
+              </Box>
             )}
-            {!isPackagedProduct && (
-              <Typography
-                variant="body2"
-                sx={{ color: 'rgba(200, 230, 201, 0.85)' }}
-              >
-                For live plants and buds, this is an estimated strain based on visual
-                and label signals. Results may vary by grower and phenotype.
-              </Typography>
-            )}
-          </CardContent>
-        </Card>
+          </Box>
 
-        {/* AI Details Panel */}
-        <AIStrainDetailsPanel
-          intensity={aiIntensity}
-          effects={effectsTags}
-          flavors={flavorTags}
-          dispensaryNotes={aiDispensaryNotes}
-          growerNotes={aiGrowerNotes}
-          warnings={aiWarnings}
-          summary={aiSummaryText}
-        />
-      </>
-    );
-  }
+          {details.net_weight_label || details.net_weight ? (
+            <Typography
+              variant="caption"
+              sx={{ color: 'rgba(200, 230, 201, 0.7)', display: 'block', mt: 1 }}
+            >
+              Package size: {details.net_weight_label || details.net_weight}
+            </Typography>
+          ) : null}
+        </CardContent>
+      </Card>
 
-  // UNKNOWN: Show "Cannabis (strain unknown)" with different subtitle for packaged vs bud
-  // CRITICAL: Never show unknown card for packaged products that have a packaging strain
-  // (Those cases are already handled by the packaging card above)
-  const isUnknownPackaged = isPackagedProduct && (strainSource === 'packaged-unknown' || strainSource === 'none');
-  const unknownSubtitle = isUnknownPackaged
-    ? 'Label text could not be confidently decoded. You can still use the AI details below.'
-    : 'For live plants and buds, this is an estimated strain based on visual and label signals. Results may vary by grower and phenotype.';
+      {/* AI Details Panel */}
+      <AIStrainDetailsPanel
+        intensity={intensity}
+        effects={effects}
+        flavors={flavors}
+        dispensaryNotes={dispensaryNotes}
+        growerNotes={growerNotes}
+        warnings={warnings}
+        summary={summary}
+      />
+    </>
+  );
+}
 
+// Unknown Bud Card Component
+function UnknownBudCard({ 
+  summary, 
+  effects, 
+  flavors, 
+  intensity, 
+  dispensaryNotes, 
+  growerNotes, 
+  warnings 
+}) {
   return (
     <>
       <Card
@@ -524,22 +428,163 @@ function ScanResultCard({ result, scan, isGuest }) {
             variant="body2"
             sx={{ color: 'rgba(200, 230, 201, 0.85)' }}
           >
-            {unknownSubtitle}
+            For live plants and buds, this is an estimated strain based on visual and label signals. Results may vary by grower and phenotype.
+          </Typography>
+        </CardContent>
+      </Card>
+
+      {/* AI Details Panel - still show even for unknown buds */}
+      <AIStrainDetailsPanel
+        intensity={intensity}
+        effects={effects}
+        flavors={flavors}
+        dispensaryNotes={dispensaryNotes}
+        growerNotes={growerNotes}
+        warnings={warnings}
+        summary={summary}
+      />
+    </>
+  );
+}
+
+// Bud Estimate Card Component
+function BudEstimateCard({ 
+  strainName, 
+  matchConfidence, 
+  summary, 
+  effects, 
+  flavors, 
+  intensity, 
+  dispensaryNotes, 
+  growerNotes, 
+  warnings,
+  result,
+  scan,
+}) {
+  // Get display strain info for lineage
+  const displayStrain = deriveDisplayStrain(result || scan);
+  const lineage = displayStrain.displaySubline || null;
+
+  return (
+    <>
+      <Card
+        variant="outlined"
+        sx={{
+          mb: 2,
+          borderColor: 'rgba(165, 214, 167, 0.35)',
+          background:
+            'radial-gradient(circle at top left, rgba(129, 199, 132, 0.12), transparent 55%), #0b100a',
+        }}
+      >
+        <CardContent>
+          <Typography
+            variant="overline"
+            sx={{
+              color: 'rgba(200, 230, 201, 0.7)',
+              letterSpacing: 1,
+              display: 'block',
+              mb: 0.5,
+            }}
+          >
+            Strain estimate{matchConfidence != null ? ` – ${Math.round(matchConfidence * 100)}%` : ''}
+          </Typography>
+          <Typography
+            variant="h6"
+            sx={{ fontWeight: 700, color: '#E8F5E9', mb: 0.5 }}
+          >
+            {strainName}
+          </Typography>
+          {lineage && (
+            <Typography
+              variant="body2"
+              sx={{ color: 'rgba(200, 230, 201, 0.75)', fontSize: '0.875rem', mb: 1 }}
+            >
+              Lineage: {lineage}
+            </Typography>
+          )}
+          <Typography
+            variant="body2"
+            sx={{ color: 'rgba(200, 230, 201, 0.85)' }}
+          >
+            For live plants and buds, this is an estimated strain based on visual
+            and label signals. Results may vary by grower and phenotype.
           </Typography>
         </CardContent>
       </Card>
 
       {/* AI Details Panel */}
       <AIStrainDetailsPanel
-        intensity={aiIntensity}
-        effects={effectsTags}
-        flavors={flavorTags}
-        dispensaryNotes={aiDispensaryNotes}
-        growerNotes={aiGrowerNotes}
-        warnings={aiWarnings}
-        summary={aiSummaryText}
+        intensity={intensity}
+        effects={effects}
+        flavors={flavors}
+        dispensaryNotes={dispensaryNotes}
+        growerNotes={growerNotes}
+        warnings={warnings}
+        summary={summary}
       />
     </>
+  );
+}
+
+function ScanResultCard({ result, scan, isGuest }) {
+  if (!result && !scan) return null;
+
+  // CRITICAL: Use transformScanResult to get canonical strain name and metadata
+  // This ensures packaged products ALWAYS use label strain, NEVER visual/library guesses
+  const transformed = transformScanResult(result || scan);
+  if (!transformed) return null;
+
+  // ===============================
+  // NEW RENDER LOGIC
+  // ===============================
+
+  if (transformed.isPackagedKnown) {
+    return (
+      <PackagedProductCard
+        strainName={transformed.strainName}
+        thc={transformed.thc}
+        cbd={transformed.cbd}
+        summary={transformed.aiSummaryText}
+        effects={transformed.effectsTags}
+        flavors={transformed.flavorTags}
+        intensity={transformed.aiIntensity}
+        dispensaryNotes={transformed.aiDispensaryNotes}
+        growerNotes={transformed.aiGrowerNotes}
+        warnings={transformed.aiWarnings}
+        result={result}
+        scan={scan}
+      />
+    );
+  }
+
+  if (transformed.isBudUnknown) {
+    return (
+      <UnknownBudCard
+        summary={transformed.aiSummaryText}
+        effects={transformed.effectsTags}
+        flavors={transformed.flavorTags}
+        intensity={transformed.aiIntensity}
+        dispensaryNotes={transformed.aiDispensaryNotes}
+        growerNotes={transformed.aiGrowerNotes}
+        warnings={transformed.aiWarnings}
+      />
+    );
+  }
+
+  return (
+    <BudEstimateCard
+      strainName={transformed.strainName}
+      matchConfidence={transformed.matchConfidence}
+      summary={transformed.aiSummaryText}
+      effects={transformed.effectsTags}
+      flavors={transformed.flavorTags}
+      intensity={transformed.aiIntensity}
+      dispensaryNotes={transformed.aiDispensaryNotes}
+      growerNotes={transformed.aiGrowerNotes}
+      warnings={transformed.aiWarnings}
+      result={result}
+      scan={scan}
+    />
   );
 }
 
