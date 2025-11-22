@@ -1737,9 +1737,20 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     try {
       await writeClient
         .from('scans')
-        .update({ status: 'failed', result: { error: String(e) } })
+        .update({ 
+          status: 'failed', 
+          result: null,
+          error: { code: 'PROCESSING_ERROR', message: String(e) }
+        })
         .eq('id', req.params.id);
-    } catch {}
+      console.log('[scan-process] marked as failed', {
+        id: req.params.id,
+        status: 'failed',
+        error: { code: 'PROCESSING_ERROR', message: String(e) },
+      });
+    } catch (updateErr) {
+      console.error('[scan-process] Failed to update scan status to failed:', updateErr);
+    }
     return res.status(500).json({ error: String(e) });
   }
 });
