@@ -95,6 +95,8 @@ export default function ScanPage({ onBack, onNavigate }) {
   
   // Current scan ID for tracking
   const [currentScanId, setCurrentScanId] = useState(null);
+  // CRITICAL: Store scan ID in ref to prevent mutation during polling
+  const scanIdRef = useRef(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [lastPhotoUrl, setLastPhotoUrl] = useState(null);
   const [framePulsing, setFramePulsing] = useState(false);
@@ -415,8 +417,23 @@ export default function ScanPage({ onBack, onNavigate }) {
         throw new Error(errorMessage);
       }
 
-    const scanId = data.id || data.scan_id || data.scanId;
+    // CRITICAL: Extract scan ID EXACTLY as backend returns it - NO transformation
+    const scanId = data.id; // Backend returns { id: scanId, image_url: ... }
+    
+    // CRITICAL: Log the exact scan ID received from backend
+    console.log('[SCAN-ID] Received from backend', {
+      scanId,
+      responseData: data,
+      hasId: !!data.id,
+      hasScanId: !!data.scanId,
+      hasScan_id: !!data.scan_id,
+    });
+    
     if (!scanId) {
+      console.error('[SCAN-ID] ERROR: No scan ID in backend response', {
+        responseData: data,
+        responseKeys: Object.keys(data || {}),
+      });
       setScanPhase('idle');
       setScanStatus({
         phase: 'error',
@@ -426,7 +443,11 @@ export default function ScanPage({ onBack, onNavigate }) {
       throw new Error('Did not receive a scan id from the server.');
     }
     
+    // CRITICAL: Store scan ID in stable ref to prevent mutation
+    scanIdRef.current = scanId;
+    
     setCurrentScanId(scanId);
+    console.log('[SCAN-ID] Stored scan ID', { scanId, storedInRef: scanIdRef.current });
     setScanStatus({
       phase: 'queued',
       message: 'Scan received. Getting in line...',
@@ -628,9 +649,24 @@ export default function ScanPage({ onBack, onNavigate }) {
 
       if (attempt === 0) {
         console.time('[Scanner] polling');
-        console.log('[pollScan] Starting poll', { scanId, maxAttempts, timeoutMs: maxAttempts * delayMs });
+        console.log('[POLL] Starting poll', { 
+          scanId: actualScanId, 
+          passedScanId: scanId,
+          refScanId: scanIdRef.current,
+          maxAttempts, 
+          timeoutMs: maxAttempts * delayMs 
+        });
       }
-      const res = await fetch(apiUrl(`/api/scans/${scanId}`), {
+      
+      // CRITICAL: Log the exact ID being polled
+      console.log('[POLL] Polling scanId', {
+        attempt,
+        scanId: actualScanId,
+        passedScanId: scanId,
+        refScanId: scanIdRef.current,
+      });
+      
+      const res = await fetch(apiUrl(`/api/scans/${actualScanId}`), {
         credentials: 'include',
       });
       const data = await safeJson(res);
@@ -650,11 +686,25 @@ export default function ScanPage({ onBack, onNavigate }) {
       // Handle both wrapped { scan: {...} } and direct scan object for compatibility
       const scan = data?.scan || data;
       
+      // CRITICAL: Consistency check - verify returned ID matches expected ID
+      const returnedId = scan?.id || data?.id;
+      if (returnedId && returnedId !== actualScanId) {
+        console.error('[POLL] ID MISMATCH DETECTED', {
+          expectedId: actualScanId,
+          returnedId: returnedId,
+          passedScanId: scanId,
+          refScanId: scanIdRef.current,
+          responseData: data,
+        });
+        throw new Error(`Scan ID mismatch: expected ${actualScanId}, got ${returnedId}`);
+      }
+      
       // Debug logging to understand response structure
       if (attempt === 0 || attempt % 10 === 0) {
-        console.log('[pollScan] response structure', {
+        console.log('[POLL] response structure', {
           attempt,
-          scanId,
+          scanId: actualScanId,
+          returnedId,
           hasData: !!data,
           hasScan: !!data?.scan,
           scanStatus: scan?.status,
@@ -701,12 +751,14 @@ export default function ScanPage({ onBack, onNavigate }) {
       
       // Debug logging for completion check
       if (attempt > 0 && (isComplete || hasResult)) {
-        console.log('[pollScan] completion check', {
+        console.log('[POLL] completion check', {
           attempt,
-          scanId,
+          scanId: actualScanId,
           status,
           isComplete,
+          hasScan,
           hasResult,
+          hasResultData,
           resultType: result ? typeof result : 'null',
           resultKeys: result ? Object.keys(result) : [],
         });
@@ -719,21 +771,24 @@ export default function ScanPage({ onBack, onNavigate }) {
         !!scan?.error || 
         !!scan?.errorMessage;
 
-      // If scan is complete OR has a result, stop polling and show results
+      // CRITICAL: If scan is complete OR has a result, stop polling and show results
       // IMPORTANT: Backend sets status='completed' when scan completes (backend/index.js line 1661)
-      // Also check for result object presence as a fallback
-      // If status is 'completed'/'done' OR result object exists, consider it complete
+      // Stop polling if:
+      // 1. Status is 'completed'/'done'/'complete'/'success'
+      // 2. Result object exists (indicates backend finished processing)
       const shouldStopPolling = isComplete || hasResult || (status === 'completed' && result) || (status === 'done' && result);
       
       if (shouldStopPolling) {
         if (timeoutRef) clearTimeout(timeoutRef);
         console.timeEnd('[Scanner] polling');
-        console.log('[pollScan] SCAN COMPLETE - stopping polling', {
-          scanId,
+        console.log('[POLL] SCAN COMPLETE - stopping polling', {
+          scanId: actualScanId,
           attempt,
           status,
           isComplete,
+          hasScan,
           hasResult,
+          hasResultData,
           resultPresent: !!result,
           resultType: result ? typeof result : null,
           resultKeys: result ? Object.keys(result).slice(0, 10) : [],
@@ -882,8 +937,18 @@ export default function ScanPage({ onBack, onNavigate }) {
       }
 
       // Otherwise, schedule another poll attempt
+      // CRITICAL: Use ref value to ensure we're polling the correct ID
       setTimeout(() => {
-        pollScan(scanId, attempt + 1);
+        const nextScanId = scanIdRef.current || scanId;
+        if (!nextScanId) {
+          console.error('[POLL] ERROR: No scan ID available for next poll attempt', {
+            attempt,
+            scanId,
+            refScanId: scanIdRef.current,
+          });
+          throw new Error('Scan ID lost during polling');
+        }
+        pollScan(nextScanId, attempt + 1, timeoutRef);
       }, delayMs);
     } catch (e) {
       if (timeoutRef) clearTimeout(timeoutRef);

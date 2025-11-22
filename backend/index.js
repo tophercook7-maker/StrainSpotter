@@ -930,7 +930,23 @@ app.post('/api/uploads', writeLimiter, async (req, res, next) => {
       }
 
       const scan = Array.isArray(insert.data) ? insert.data[0] : insert.data;
-      res.json({ id: scan?.id || null, image_url: publicUrl });
+      const scanId = scan?.id || null;
+      
+      // CRITICAL: Log the exact scan ID being returned to frontend
+      console.log('[uploads] Returning scan ID to frontend', {
+        scanId,
+        hasScan: !!scan,
+        scanKeys: scan ? Object.keys(scan) : [],
+      });
+      
+      if (!scanId) {
+        console.error('[uploads] ERROR: No scan ID in insert response', {
+          insertData: insert.data,
+          scan,
+        });
+      }
+      
+      res.json({ id: scanId, image_url: publicUrl });
     } catch (dbErr) {
       console.error('[uploads:error] Database insert exception:', {
         message: dbErr?.message || 'unknown exception',
