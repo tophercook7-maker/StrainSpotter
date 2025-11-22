@@ -781,7 +781,18 @@ export default function ScanPage({ onBack, onNavigate }) {
       }
 
       // Parse successful response
-      const data = await safeJson(res);
+      // BACKEND CONTRACT: GET /api/scans/:id returns the scan object directly (not wrapped)
+      let data;
+      try {
+        data = await res.json();
+      } catch (e) {
+        console.error('[POLL] Failed to parse JSON response', {
+          scanId: currentScanId,
+          attempt,
+          error: e?.message || String(e),
+        });
+        throw new Error('Invalid JSON response from server');
+      }
       
       // CRITICAL: Log raw response data to verify backend contract
       console.log('[POLL] raw scan data', {
@@ -792,14 +803,16 @@ export default function ScanPage({ onBack, onNavigate }) {
         status: data?.status,
         hasResult: !!data?.result,
         resultKeys: data?.result ? Object.keys(data.result).slice(0, 10) : [],
+        data, // Log full data for debugging
       });
 
-      // Backend GET /api/scans/:id returns the scan object directly (not wrapped)
-      // Handle both wrapped { scan: {...} } and direct scan object for compatibility
-      const scan = data?.scan || data;
+      // BACKEND CONTRACT: The JSON body IS the scan object itself (not wrapped)
+      // Backend returns: { id, status, result, ai_summary, ... }
+      // NOT: { scan: { id, status, ... } }
+      const scan = data;
       
       // CRITICAL: Consistency check - verify returned ID matches expected ID
-      const returnedId = scan?.id || data?.id;
+      const returnedId = scan?.id;
       if (returnedId && returnedId !== currentScanId) {
         console.error('[POLL] ID MISMATCH DETECTED', {
           expectedId: currentScanId,
@@ -811,166 +824,81 @@ export default function ScanPage({ onBack, onNavigate }) {
         throw new Error(`Scan ID mismatch: expected ${currentScanId}, got ${returnedId}`);
       }
       
-      // BACKEND CONTRACT: GET /api/scans/:id returns the scan object directly (not wrapped)
-      // Response shape: { id, status, result, ai_summary, matched_strain_slug, ... }
-      // The scan object is returned directly as JSON, not wrapped in { scan: {...} }
-      
-      // Debug logging to understand response structure
-      if (attempt === 0 || attempt % 10 === 0) {
-        console.log('[POLL] response structure', {
-          attempt,
+      // Validate scan object structure
+      if (!scan || typeof scan !== 'object') {
+        console.error('[POLL] Invalid scan response', {
           scanId: currentScanId,
-          returnedId,
-          hasData: !!data,
-          isDirectScan: !!data?.id && !!data?.status, // Direct scan object
-          isWrapped: !!data?.scan, // Wrapped in { scan: {...} }
-          scanStatus: scan?.status,
-          scanState: scan?.state,
-          hasResult: !!scan?.result,
-          resultType: scan?.result ? typeof scan.result : 'null',
-          resultKeys: scan?.result ? Object.keys(scan.result) : [],
-          hasAISummary: !!scan?.ai_summary,
-          hasPackagingInsights: !!scan?.result?.packagingInsights,
+          attempt,
+          scanType: typeof scan,
+          scan,
         });
-      }
-      
-      // Extract AI summary, match, and visionText from response (could be at top level or in scan object)
-      const aiSummary = data?.aiSummary || scan?.ai_summary || null;
-      const summary = data?.summary || null; // Rich structured summary from buildScanAISummary
-      const match = data?.match || null; // Matched strain from backend
-      const visionText = data?.visionText || null; // Vision OCR text from backend
-
-      if (!scan) {
         throw new Error('Invalid scan response from server');
       }
 
       // BACKEND CONTRACT: Status values are: 'pending' | 'processing' | 'completed' | 'failed'
-      // Backend sets status='completed' when scan finishes successfully (backend/index.js line 1701)
-      const status = scan?.status || scan?.state || 'unknown';
+      // Backend sets status='completed' when scan finishes successfully
+      const status = scan?.status || 'unknown';
       const result = scan?.result;
-
-      // BACKEND CONTRACT: Result object structure includes:
-      // - vision_raw: Vision API response
-      // - packagingInsights: Packaging analysis from AI
-      // - visualMatches: Visual strain matching results
-      // - labelInsights: Label text analysis
-      // - matched_strain_slug, matched_strain_name, match_confidence, match_quality
       
-      // Check if scan has a result - ANY result object indicates processing completed
-      // Even if no matches found, result.vision_raw or result.packagingInsights means backend finished
-      const hasResult = !!(
-        result && 
-        typeof result === 'object' && 
-        Object.keys(result).length > 0
-      );
+      // Parse status with normalization for backward compatibility
+      const normalizedStatus = typeof status === 'string' ? status.toLowerCase() : status;
       
-      // Additional check: if result has meaningful data (matches, insights, etc.)
+      // Extract fields from scan object (backend returns these at top level)
+      const aiSummary = scan?.ai_summary || null;
+      const summary = scan?.summary || null; // Rich structured summary
+      const match = scan?.match || null; // Matched strain (if backend includes it)
+      const visionText = scan?.visionText || null; // Vision OCR text (if backend includes it)
+      
+      // Check if scan has result data
       const hasResultData = !!(
-        result && (
-          (result.visualMatches && (result.visualMatches.match || result.visualMatches.candidates?.length > 0)) ||
-          (Array.isArray(result.matches) && result.matches.length > 0) ||
-          result.match ||
-          result.labelInsights ||
-          result.vision_raw || // Vision API result indicates processing completed
-          result.packagingInsights // Packaging insights indicate processing completed
+        scan &&
+        (
+          !!scan.result ||
+          !!scan.packaging_insights ||
+          !!scan.label_insights ||
+          !!scan.ai_summary
         )
       );
-
-      // BACKEND CONTRACT: Status 'completed' means scan finished successfully
-      // Also accept 'done' for backward compatibility
-      const isComplete = 
-        status === 'completed' || // Primary status (backend/index.js line 1701)
-        status === 'done' || // Legacy status (backward compatibility)
-        status === 'complete' || // Alternative spelling
-        status === 'success'; // Alternative status
       
-      // Debug logging for completion check
-      if (attempt > 0 && (isComplete || hasResult)) {
-        console.log('[POLL] completion check', {
-          attempt,
-          scanId: currentScanId,
-          status,
-          isComplete,
-          hasResult,
-          hasResultData,
-          resultType: result ? typeof result : 'null',
-          resultKeys: result ? Object.keys(result) : [],
-          hasAISummary: !!scan?.ai_summary,
-          hasPackagingInsights: !!result?.packagingInsights,
-        });
-      }
+      // Log parsed scan status
+      console.log('[POLL] parsed scan status', {
+        scanId: currentScanId,
+        attempt,
+        status,
+        normalizedStatus,
+        hasResultData,
+        hasResult: !!result,
+        hasError: !!scan?.error,
+        resultKeys: result ? Object.keys(result).slice(0, 10) : [],
+      });
 
-      // Check if scan has an error
-      const isError = 
-        status === 'error' || 
-        status === 'failed' || 
-        !!scan?.error || 
-        !!scan?.errorMessage;
-
-      // CRITICAL: Stop polling when scan is complete
-      // BACKEND CONTRACT: When status='completed' AND result exists, scan is done
-      // Stop polling if:
-      // 1. Status is 'completed' (highest priority - backend explicitly marks completion)
-      // 2. Status is 'done'/'complete'/'success' (backward compatibility)
-      // 3. Result object exists (indicates backend finished processing, even if no matches)
-      const shouldStopPolling = 
-        status === 'completed' || // Primary: backend explicitly marks as completed
-        (status === 'completed' && hasResult) || // Explicit: completed status + result
-        isComplete || // Status is done/complete/success (backward compat)
-        hasResult; // Result exists = backend finished processing
-      
-      // Enhanced logging for completion detection
-      if (shouldStopPolling) {
-        console.log('[POLL] SCAN COMPLETE - stopping polling', {
+      // BACKEND CONTRACT: Stop polling when status is 'completed'
+      // This is the primary signal that the scan pipeline finished successfully
+      if (normalizedStatus === 'completed') {
+        console.log('[POLL] scan completed', {
           scanId: currentScanId,
           attempt,
           status,
-          isComplete,
-          hasResult,
           hasResultData,
-          shouldStopPolling,
-          resultPresent: !!result,
-          resultKeys: result ? Object.keys(result).slice(0, 10) : [],
-          hasAISummary: !!scan?.ai_summary,
-          hasPackagingInsights: !!result?.packagingInsights,
         });
-      }
-      
-      if (shouldStopPolling) {
+        
+        // Stop polling and return the scan
         if (timeoutRef) clearTimeout(timeoutRef);
-        console.timeEnd('[Scanner] polling');
-        console.log('[POLL] SCAN COMPLETE - stopping polling', {
-          scanId: currentScanId,
-          attempt,
-          status,
-          isComplete,
-          hasScan,
-          hasResult,
-          hasResultData,
-          resultPresent: !!result,
-          resultType: result ? typeof result : null,
-          resultKeys: result ? Object.keys(result).slice(0, 10) : [],
-        });
         setIsPolling(false);
-        setHasCompletedScan(true); // Mark as completed to prevent timeout race
-        hasCompletedScanRef.current = true; // Also set ref for immediate timeout check
+        setHasCompletedScan(true);
+        hasCompletedScanRef.current = true;
         setScanPhase('done');
         setStatusMessage('Scan complete!');
-        setError(null); // Clear any previous errors
-        setScanError(null); // Clear any previous structured errors
+        setError(null);
+        setScanError(null);
         setScanStatus({
           phase: 'completed',
           message: 'Scan complete.',
           details: '',
         });
         
-        // Temporary debug log
-        console.log('[pollScan] done', { status, hasResult, result: scan.result, attempts: attempt });
-        
+        // Process and display results
         const normalized = normalizeScanResult(scan);
-        
-        // Even if normalizeScanResult returns null (no matches), we still have a valid scan
-        // Show the result with available data (label insights, vision text, etc.)
         if (normalized) {
           setScanResult(normalized);
         } else {
@@ -987,22 +915,17 @@ export default function ScanPage({ onBack, onNavigate }) {
             visionRaw: result?.vision_raw || null,
           });
         }
-
-        // Store the completed scan locally for the result view
+        
+        // Store completed scan for result view
         const processedResult = scan.result || normalized;
-        
-        // Extract matched strain from multiple sources (prioritize backend match, then fallback to result)
-        // Note: serializeMatch flattens the structure, so match already has strain fields at top level
         const matchedStrain = 
-          match || // From backend response (already serialized)
-          result?.visualMatches?.match || // Already serialized (flattened structure)
-          result?.matches?.[0] || // Array of matches
-          normalized?.top_match || // Normalized result
+          match ||
+          result?.visualMatches?.match ||
+          result?.matches?.[0] ||
+          normalized?.top_match ||
           null;
-        
-        // Extract vision text (prioritize backend response, then fallback to result)
         const extractedVisionText =
-          visionText || // From backend response
+          visionText ||
           result?.vision_raw?.textAnnotations?.[0]?.description ||
           result?.vision_raw?.fullTextAnnotation?.text ||
           result?.visionRaw?.textAnnotations?.[0]?.description ||
@@ -1014,17 +937,16 @@ export default function ScanPage({ onBack, onNavigate }) {
           result: processedResult,
           created_at: scan.created_at || new Date().toISOString(),
           ai_summary: aiSummary || scan.ai_summary || null,
-          summary: summary || null, // Rich structured summary
+          summary: summary || null,
           matchedStrain: matchedStrain || null,
           visionText: extractedVisionText || null,
           matched_strain_slug: scan.matched_strain_slug || null,
         });
         setActiveView('result');
-
+        
         // Count successful scans (only for non-members)
         if (!isMember) {
           registerScanConsumed();
-          // Also maintain legacy guest scan tracking for backward compatibility
           if (isGuest) {
             const used = guestScansUsed + 1;
             setGuestScansUsedState(used);
@@ -1034,16 +956,22 @@ export default function ScanPage({ onBack, onNavigate }) {
         return;
       }
 
-      // If scan has an error status or error field, stop polling and show error
-      if (isError) {
+      // Handle failed status explicitly
+      if (normalizedStatus === 'failed' || scan?.error) {
+        console.error('[POLL] scan failed', {
+          scanId: currentScanId,
+          attempt,
+          status,
+          error: scan?.error,
+        });
+        
         if (timeoutRef) clearTimeout(timeoutRef);
         setIsPolling(false);
-        setHasCompletedScan(true); // Mark as completed to prevent timeout race
-        hasCompletedScanRef.current = true; // Also set ref for immediate timeout check
+        setHasCompletedScan(true);
+        hasCompletedScanRef.current = true;
         setScanPhase('error');
         setFramePulsing(false);
         const errorMessage = scan?.error || scan?.errorMessage || 'Scan failed on the server.';
-        // Provide more specific error messages
         let userMessage = errorMessage;
         if (errorMessage.includes('Vision') || errorMessage.includes('OCR')) {
           userMessage = 'Could not read text from the image. Try a clearer photo with better lighting.';
@@ -1067,6 +995,9 @@ export default function ScanPage({ onBack, onNavigate }) {
         setStatusMessage(userMessage);
         return;
       }
+
+      // Continue polling for pending/processing states
+      // Only stop if we've hit max attempts or timeout
 
       // If we've hit max attempts, stop polling (increased to 120 attempts = 120 seconds)
       if (attempt >= 120) {
