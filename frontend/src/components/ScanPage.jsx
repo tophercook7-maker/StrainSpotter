@@ -643,8 +643,23 @@ export default function ScanPage({ onBack, onNavigate }) {
         throw new Error(errorMessage);
       }
 
-      // Backend may return wrapped { scan: {...} } or direct scan object
+      // Backend GET /api/scans/:id returns the scan object directly (not wrapped)
+      // Handle both wrapped { scan: {...} } and direct scan object for compatibility
       const scan = data?.scan || data;
+      
+      // Debug logging to understand response structure
+      if (attempt === 0 || attempt % 10 === 0) {
+        console.log('[pollScan] response structure', {
+          attempt,
+          scanId,
+          hasData: !!data,
+          hasScan: !!data?.scan,
+          scanStatus: scan?.status,
+          scanState: scan?.state,
+          hasResult: !!scan?.result,
+          resultKeys: scan?.result ? Object.keys(scan.result) : [],
+        });
+      }
       
       // Extract AI summary, match, and visionText from response (could be at top level or in scan object)
       const aiSummary = data?.aiSummary || scan?.ai_summary || null;
@@ -656,6 +671,7 @@ export default function ScanPage({ onBack, onNavigate }) {
         throw new Error('Invalid scan response from server');
       }
 
+      // Backend sets status to 'done' when scan completes (backend/index.js line 1661)
       const status = scan?.status || scan?.state || 'unknown';
       const result = scan?.result;
 
@@ -670,11 +686,25 @@ export default function ScanPage({ onBack, onNavigate }) {
       );
 
       // Check if scan is complete
+      // Backend sets status to 'done' when scan completes (backend/index.js line 1661)
       const isComplete = 
         status === 'done' || 
         status === 'complete' || 
         status === 'completed' || 
         status === 'success';
+      
+      // Debug logging for completion check
+      if (attempt > 0 && (isComplete || hasResult)) {
+        console.log('[pollScan] completion check', {
+          attempt,
+          scanId,
+          status,
+          isComplete,
+          hasResult,
+          resultType: result ? typeof result : 'null',
+          resultKeys: result ? Object.keys(result) : [],
+        });
+      }
 
       // Check if scan has an error
       const isError = 
@@ -684,9 +714,21 @@ export default function ScanPage({ onBack, onNavigate }) {
         !!scan?.errorMessage;
 
       // If scan is complete OR has a result, stop polling and show results
+      // IMPORTANT: Backend sets status='done' when scan completes (backend/index.js line 1661)
+      // Also check for result object presence as a fallback
       if (isComplete || hasResult) {
         if (timeoutRef) clearTimeout(timeoutRef);
         console.timeEnd('[Scanner] polling');
+        console.log('[pollScan] SCAN COMPLETE - stopping polling', {
+          scanId,
+          attempt,
+          status,
+          isComplete,
+          hasResult,
+          resultPresent: !!result,
+          resultType: result ? typeof result : null,
+          resultKeys: result ? Object.keys(result).slice(0, 10) : [],
+        });
         setIsPolling(false);
         setHasCompletedScan(true); // Mark as completed to prevent timeout race
         hasCompletedScanRef.current = true; // Also set ref for immediate timeout check
