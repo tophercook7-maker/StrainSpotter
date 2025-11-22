@@ -834,13 +834,13 @@ export default function ScanPage({ onBack, onNavigate }) {
         )
       );
 
-      // Check if scan is complete
-      // Backend sets status to 'done' when scan completes (backend/index.js line 1661)
+      // BACKEND CONTRACT: Status 'completed' means scan finished successfully
+      // Also accept 'done' for backward compatibility
       const isComplete = 
-        status === 'done' || 
-        status === 'complete' || 
-        status === 'completed' || 
-        status === 'success';
+        status === 'completed' || // Primary status (backend/index.js line 1701)
+        status === 'done' || // Legacy status (backward compatibility)
+        status === 'complete' || // Alternative spelling
+        status === 'success'; // Alternative status
       
       // Debug logging for completion check
       if (attempt > 0 && (isComplete || hasResult)) {
@@ -849,11 +849,12 @@ export default function ScanPage({ onBack, onNavigate }) {
           scanId: currentScanId,
           status,
           isComplete,
-          hasScan,
           hasResult,
           hasResultData,
           resultType: result ? typeof result : 'null',
           resultKeys: result ? Object.keys(result) : [],
+          hasAISummary: !!scan?.ai_summary,
+          hasPackagingInsights: !!result?.packagingInsights,
         });
       }
 
@@ -864,17 +865,17 @@ export default function ScanPage({ onBack, onNavigate }) {
         !!scan?.error || 
         !!scan?.errorMessage;
 
-      // CRITICAL: If scan is complete OR has a result, stop polling and show results
-      // IMPORTANT: Backend sets status='completed' when scan completes (backend/index.js line 1698)
+      // CRITICAL: Stop polling when scan is complete
+      // BACKEND CONTRACT: When status='completed' AND result exists, scan is done
       // Stop polling if:
-      // 1. Status is 'completed'/'done'/'complete'/'success' (highest priority)
-      // 2. Result object exists AND has content (indicates backend finished processing)
-      // 3. Status is 'completed'/'done' AND result exists (explicit completion check)
+      // 1. Status is 'completed' (highest priority - backend explicitly marks completion)
+      // 2. Status is 'done'/'complete'/'success' (backward compatibility)
+      // 3. Result object exists (indicates backend finished processing, even if no matches)
       const shouldStopPolling = 
-        isComplete || // Status is completed/done/complete/success
-        (hasResult && hasResultData) || // Result exists and has meaningful data
+        status === 'completed' || // Primary: backend explicitly marks as completed
         (status === 'completed' && hasResult) || // Explicit: completed status + result
-        (status === 'done' && hasResult); // Explicit: done status + result (backward compat)
+        isComplete || // Status is done/complete/success (backward compat)
+        hasResult; // Result exists = backend finished processing
       
       // Enhanced logging for completion detection
       if (shouldStopPolling) {
@@ -883,12 +884,13 @@ export default function ScanPage({ onBack, onNavigate }) {
           attempt,
           status,
           isComplete,
-          hasScan,
           hasResult,
           hasResultData,
           shouldStopPolling,
           resultPresent: !!result,
           resultKeys: result ? Object.keys(result).slice(0, 10) : [],
+          hasAISummary: !!scan?.ai_summary,
+          hasPackagingInsights: !!result?.packagingInsights,
         });
       }
       
