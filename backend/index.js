@@ -1697,28 +1697,33 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
       // CRITICAL: Re-determine canonical strain AFTER packaging insights are available
       // This ensures packaging strain takes priority over visual guesses
       if (packagingInsights) {
+        const isPackagedProductFlag = 
+          !!(packagingInsights?.isPackagedProduct ||
+             labelInsights?.isPackagedProduct);
+        
         const updatedCanonicalStrain = resolveCanonicalStrain({
           labelInsights: labelInsights || null,
           packagingInsights: packagingInsights,
           visualMatches: visualMatchesArray,
-          matchConfidence: visualConfidence || null,
+          aiSummary: null, // Not available yet at this point
+          isPackagedProduct: isPackagedProductFlag,
         });
         
         // If packaging insights provide a strain name, use it as canonical
-        if (updatedCanonicalStrain.strainSource === 'packaging' && updatedCanonicalStrain.packagingStrain) {
-          finalStrainName = updatedCanonicalStrain.packagingStrain;
-          finalStrainSlug = updatedCanonicalStrain.packagingStrain
+        if (updatedCanonicalStrain.source === 'packaging' && updatedCanonicalStrain.name) {
+          finalStrainName = updatedCanonicalStrain.name;
+          finalStrainSlug = updatedCanonicalStrain.name
             .toString()
             .trim()
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-+|-+$/g, '');
-          finalMatchQuality = 'label-fallback';
-          finalMatchConfidence = updatedCanonicalStrain.matchConfidence ?? 1.0;
+          finalMatchQuality = 'packaging';
+          finalMatchConfidence = updatedCanonicalStrain.confidence ?? 1.0;
           
           console.log('[process] Updated to packaging strain after packagingInsights:', {
             strainName: finalStrainName,
-            source: updatedCanonicalStrain.strainSource,
+            source: updatedCanonicalStrain.source,
             confidence: finalMatchConfidence,
           });
         }
