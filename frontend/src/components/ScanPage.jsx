@@ -492,27 +492,28 @@ export default function ScanPage({ onBack, onNavigate }) {
     hasCompletedScanRef.current = false; // Reset ref flag for new scan
 
     // Removed hard timeout - let the server complete processing
-    // Increased to 90 seconds as a safety net (only triggers on genuine network issues)
+    // Increased to 120 seconds as a safety net (heavy multi-step AI scan needs more time)
     const timeoutId = setTimeout(() => {
       // Only fire timeout if scan hasn't completed yet (check ref for immediate updates)
       if (!hasCompletedScanRef.current) {
+        console.warn('[Scanner] Scan timed out', { scanId: currentScanId });
         setIsPolling(false);
         setScanPhase('error');
         setScanError({
           type: 'timeout',
-          message: 'Scan is taking longer than expected.',
-          details: 'Our servers didn\'t finish in time. This doesn\'t mean your scan is bad — just that it took too long to complete.',
+          message: 'Our AI took longer than expected.',
+          details: 'This scan may still finish in the background. It\'s usually a temporary slowdown on the server or network.',
           scanId: currentScanId || undefined,
         });
         setScanStatus({
           phase: 'error',
-          message: 'Scan took too long.',
-          details: 'You can try again now or later on a stronger connection.',
+          message: 'Scan is taking longer than normal.',
+          details: 'You can try again now, or wait a bit and retry on a stronger connection.',
         });
         setError('Our AI took longer than expected to finish this scan. Please try again in a moment.');
         setStatusMessage('Scan timed out. Please try again.');
       }
-    }, 90000); // 90 seconds safety timeout (increased from 35s)
+    }, 120000); // 120 seconds safety timeout (increased from 90s for heavy AI scans)
 
     try {
       console.time('[Scanner] total-scan-time');
@@ -583,7 +584,7 @@ export default function ScanPage({ onBack, onNavigate }) {
   }
 
   async function pollScan(scanId, attempt = 0, timeoutRef = null) {
-    const maxAttempts = 90; // ~90s at 1s delay (increased from 30s)
+    const maxAttempts = 120; // ~120s at 1s delay (increased from 90s to match timeout)
     const delayMs = 1000; // 1 second polling interval
 
     try {
@@ -803,20 +804,29 @@ export default function ScanPage({ onBack, onNavigate }) {
         return;
       }
 
-      // If we've hit max attempts, stop polling (increased from 30 to 90 attempts = 90 seconds)
-      if (attempt >= 90) {
+      // If we've hit max attempts, stop polling (increased to 120 attempts = 120 seconds)
+      if (attempt >= 120) {
         if (timeoutRef) clearTimeout(timeoutRef);
         setIsPolling(false);
         setHasCompletedScan(true); // Mark as completed to prevent duplicate errors
         hasCompletedScanRef.current = true; // Also set ref for immediate timeout check
         setScanPhase('error');
         setFramePulsing(false);
-        // Only set error if we haven't already completed
-        if (!hasCompletedScanRef.current) {
-          const timeoutError = 'Our AI took longer than expected to finish this scan. Please try again in a moment.';
-          setError(timeoutError);
-          setStatusMessage(timeoutError);
-        }
+        // Set timeout error (not a hard failure)
+        setScanError({
+          type: 'timeout',
+          message: 'Our AI took longer than expected.',
+          details: 'This scan may still finish in the background. It\'s usually a temporary slowdown on the server or network.',
+          scanId: scanId || currentScanId || undefined,
+        });
+        setScanStatus({
+          phase: 'error',
+          message: 'Scan is taking longer than normal.',
+          details: 'You can try again now, or wait a bit and retry on a stronger connection.',
+        });
+        const timeoutError = 'Our AI took longer than expected to finish this scan. Please try again in a moment.';
+        setError(timeoutError);
+        setStatusMessage(timeoutError);
         return;
       }
 
