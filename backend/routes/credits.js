@@ -17,6 +17,7 @@ const router = express.Router();
 
 const USD = 'usd';
 const MODERATOR_DISCOUNT_RATE = 0.2; // 20% off for moderators
+const FOUNDER_EMAIL = 'topher.cook7@gmail.com';
 
 const BASE_PACKAGE_DEFINITIONS = [
   {
@@ -157,6 +158,29 @@ router.get('/balance', async (req, res) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
+    // 🔥 FOUNDER OVERRIDE: Check email before any credit checks
+    const email = user.email || user.user_email || null;
+    
+    if (email === FOUNDER_EMAIL) {
+      return res.json({
+        success: true,
+        canScan: true,
+        unlimited: true,
+        remainingScans: Infinity,
+        creditsRemaining: 999999,
+        membershipTier: 'founder_unlimited',
+        tier: 'admin',
+        monthlyLimit: 999999,
+        usedThisMonth: 0,
+        lifetimeScansUsed: 0,
+        isUnlimited: true,
+        needsUpgrade: false,
+        override: 'founder',
+        reason: 'Founder bypass active'
+      });
+    }
+
+    // 🔻 Otherwise continue with existing logic
     const summary = await scanCreditsV2.getCreditSummary(user.id);
 
     res.json({
@@ -165,6 +189,34 @@ router.get('/balance', async (req, res) => {
     });
   } catch (e) {
     console.error('[credits/balance] Error:', e);
+
+    // 🔥 FAILSAFE: Founder always gets unlimited even if server fails
+    try {
+      const { user } = await getUserContext(req);
+      const emailFallback = user?.email || user?.user_email || null;
+
+      if (emailFallback === FOUNDER_EMAIL) {
+        return res.json({
+          success: true,
+          canScan: true,
+          unlimited: true,
+          remainingScans: Infinity,
+          creditsRemaining: 999999,
+          membershipTier: 'founder_unlimited',
+          tier: 'admin',
+          monthlyLimit: 999999,
+          usedThisMonth: 0,
+          lifetimeScansUsed: 0,
+          isUnlimited: true,
+          needsUpgrade: false,
+          override: 'founder_fallback',
+          reason: 'System error — founder bypass fallback'
+        });
+      }
+    } catch (fallbackErr) {
+      console.error('[credits/balance] Fallback check failed:', fallbackErr);
+    }
+
     res.status(500).json({ error: 'Failed to get credit balance' });
   }
 });
