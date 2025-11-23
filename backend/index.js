@@ -3317,22 +3317,23 @@ app.get('/api/business/groups/my-zip', async (req, res) => {
 // POST /api/business/register - Create or update grower/dispensary profile
 app.post('/api/business/register', express.json(), async (req, res) => {
   try {
-    const { user_id, name, business_type, city, state, country, phone, website, postal_code } = req.body || {};
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { name, business_type, city, state, country, phone, website } = req.body || {};
 
     // 1. Validate business type
     if (!business_type || !['grower', 'dispensary'].includes(business_type)) {
       return res.status(400).json({ error: 'Invalid business_type. Must be "grower" or "dispensary".' });
     }
 
-    if (!user_id) {
-      return res.status(400).json({ error: 'user_id is required' });
-    }
-
     // 2. Check if a record already exists
     const { data: existing, error: existingError } = await supabaseAdmin
       .from('business_profiles')
       .select('*')
-      .eq('user_id', user_id)
+      .eq('user_id', user.id)
       .maybeSingle();
 
     if (existingError && existingError.code !== 'PGRST116') {
@@ -3364,14 +3365,13 @@ app.post('/api/business/register', express.json(), async (req, res) => {
     }
 
     const payload = {
-      user_id,
+      user_id: user.id,
       name: name || null,
       business_type,
       business_code: code,
       city: city || null,
       state: state || null,
       country: country || null,
-      postal_code: postal_code || null,
       phone: phone || null,
       website: website || null,
       updated_at: new Date().toISOString(),
@@ -3383,7 +3383,7 @@ app.post('/api/business/register', express.json(), async (req, res) => {
       const { data, error } = await supabaseAdmin
         .from('business_profiles')
         .update(payload)
-        .eq('user_id', user_id)
+        .eq('user_id', user.id)
         .select()
         .single();
 
