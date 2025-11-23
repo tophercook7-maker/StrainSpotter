@@ -1,55 +1,127 @@
+// backend/services/chatTyping.js
+
 import { supabaseAdmin } from '../supabaseAdminClient.js';
 
 const TABLE = 'chat_typing_indicators';
+const TYPING_TTL_SECONDS = 10;
 
+function nowPlusSeconds(seconds) {
+  const d = new Date();
+  d.setSeconds(d.getSeconds() + seconds);
+  return d.toISOString();
+}
+
+/**
+ * Upsert a typing indicator for a user in a group.
+ * If it already exists, extends the expiry; otherwise inserts a new row.
+ */
 export async function upsertTypingIndicator({ userId, groupId, expiresAt }) {
-  if (!userId || !groupId) return;
-
-  await supabaseAdmin.from(TABLE).upsert(
-    {
-      user_id: userId,
-      group_id: groupId,
-      expires_at: expiresAt ?? new Date(Date.now() + 15_000).toISOString(),
-    },
-    {
-      onConflict: 'user_id,group_id',
-    }
-  );
-}
-
-export async function listTypingIndicators(groupId) {
-  if (!groupId) return [];
-
-  const { data, error } = await supabaseAdmin
-    .from(TABLE)
-    .select('*')
-    .eq('group_id', groupId)
-    .gt('expires_at', new Date().toISOString());
-
-  if (error) {
-    console.error('[chatTyping] listTypingIndicators error', error);
-    return [];
-  }
-
-  return data || [];
-}
-
-export async function cleanupStaleTyping() {
   try {
+    if (!userId || !groupId) {
+      console.warn('[chatTyping] Missing userId or groupId', { userId, groupId });
+      return;
+    }
+
+    const expires_at = expiresAt || nowPlusSeconds(TYPING_TTL_SECONDS);
+
+    const { error } = await supabaseAdmin
+      .from(TABLE)
+      .upsert(
+        {
+          user_id: userId,
+          group_id: groupId,
+          expires_at,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,group_id' }
+      );
+
+    if (error) {
+      console.error('[chatTyping] upsertTypingIndicator error', error);
+    } else {
+      console.log('[chatTyping] upsertTypingIndicator ok', { userId, groupId, expires_at });
+    }
+  } catch (err) {
+    console.error('[chatTyping] upsertTypingIndicator threw', err);
+  }
+}
+
+/**
+ * Clear typing indicator when the user stops typing or leaves the group.
+ */
+export async function clearTypingIndicator({ userId, groupId }) {
+  try {
+    if (!userId || !groupId) return;
+
     const { error } = await supabaseAdmin
       .from(TABLE)
       .delete()
-      .lt('expires_at', new Date().toISOString());
+      .match({ user_id: userId, group_id: groupId });
 
     if (error) {
-      console.error('[chatTyping] cleanupStaleTyping error', error);
+      console.error('[chatTyping] clearTypingIndicator error', error);
+    } else {
+      console.log('[chatTyping] clearTypingIndicator ok', { userId, groupId });
     }
-  } catch (e) {
-    console.error('[chatTyping] cleanupStaleTyping exception', e);
+  } catch (err) {
+    console.error('[chatTyping] clearTypingIndicator threw', err);
   }
 }
 
-// Backward compatibility: export old function names that backend/index.js uses
+/**
+ * Get all active typing indicators for a group (non-expired).
+ */
+export async function getTypingIndicatorsForGroup(groupId) {
+  try {
+    if (!groupId) return [];
+
+    const nowIso = new Date().toISOString();
+
+    const { data, error } = await supabaseAdmin
+      .from(TABLE)
+      .select('user_id, group_id, expires_at, updated_at')
+      .eq('group_id', groupId)
+      .gt('expires_at', nowIso);
+
+    if (error) {
+      console.error('[chatTyping] getTypingIndicatorsForGroup error', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('[chatTyping] getTypingIndicatorsForGroup threw', err);
+    return [];
+  }
+}
+
+/**
+ * Housekeeping: delete expired rows.
+ * NOTE: uses chat_typing_indicators (correct table), not chat_typing.
+ */
+export async function cleanupStaleTyping() {
+  try {
+    const nowIso = new Date().toISOString();
+
+    const { error } = await supabaseAdmin
+      .from(TABLE)
+      .delete()
+      .lte('expires_at', nowIso);
+
+    if (error) {
+      console.error('[chatTyping] cleanupStaleTyping error', error);
+    } else {
+      console.log('[chatTyping] cleanupStaleTyping ok');
+    }
+  } catch (err) {
+    console.error('[chatTyping] cleanupStaleTyping threw', err);
+  }
+}
+
+/**
+ * Backward compatibility: old function names used by backend/index.js
+ * Maps to new function signatures
+ */
 export async function updateTyping(scope, channelId, userId, isTyping) {
   if (!scope || !channelId || !userId) {
     throw new Error('scope, channelId, and userId are required');
@@ -65,19 +137,13 @@ export async function updateTyping(scope, channelId, userId, isTyping) {
       await upsertTypingIndicator({
         userId,
         groupId: channelId,
-        expiresAt: new Date(Date.now() + 15_000).toISOString(),
+        expiresAt: nowPlusSeconds(TYPING_TTL_SECONDS),
       });
     } else {
-      // Delete typing indicator
-      const { error } = await supabaseAdmin
-        .from(TABLE)
-        .delete()
-        .eq('user_id', userId)
-        .eq('group_id', channelId);
-
-      if (error) {
-        console.error('[chatTyping] updateTyping delete error', error);
-      }
+      await clearTypingIndicator({
+        userId,
+        groupId: channelId,
+      });
     }
   }
 
@@ -91,7 +157,7 @@ export async function getTypingUsers(scope, channelId) {
 
   // For now, only handle group scope
   if (scope === 'group') {
-    const indicators = await listTypingIndicators(channelId);
+    const indicators = await getTypingIndicatorsForGroup(channelId);
     
     // Transform to user objects (would need to join with profiles table for full user info)
     return indicators.map((indicator) => ({
@@ -102,3 +168,6 @@ export async function getTypingUsers(scope, channelId) {
 
   return [];
 }
+
+// Alias for backward compatibility
+export const listTypingIndicators = getTypingIndicatorsForGroup;
