@@ -1220,6 +1220,26 @@ app.get('/api/scans/credits', async (req, res) => {
     if (!userId) {
       return res.status(400).json({ error: 'user_id required' });
     }
+    
+    // FOUNDER OVERRIDE: Check if user is founder before credit checks
+    if (await isFounder(userId)) {
+      return res.json({
+        canScan: true,
+        unlimited: true,
+        remainingScans: Number.POSITIVE_INFINITY,
+        membershipTier: 'founder_unlimited',
+        tier: 'admin',
+        creditsRemaining: 999999,
+        monthlyLimit: 999999,
+        usedThisMonth: 0,
+        lifetimeScansUsed: 0,
+        isUnlimited: true,
+        needsUpgrade: false,
+        override: 'founder',
+        message: 'Founder account — unlimited scans active'
+      });
+    }
+    
     await ensureStarterBundle(userId);
     const summary = await getCreditSummary(userId);
     res.json(summary);
@@ -2849,6 +2869,29 @@ app.get('/api/barcode/lookup', async (req, res) => {
 // ========================================
 // BUSINESS PROFILES: Register and lookup
 // ========================================
+
+// Founder email whitelist
+const FOUNDER_EMAIL = 'topher.cook7@gmail.com';
+
+/**
+ * Check if a user is a founder by their user ID
+ */
+async function isFounder(userId) {
+  if (!userId) return false;
+  
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.admin.getUserById(userId);
+    
+    if (error || !user || !user.email) {
+      return false;
+    }
+    
+    return user.email.toLowerCase().trim() === FOUNDER_EMAIL.toLowerCase();
+  } catch (e) {
+    console.error('[isFounder] Error checking founder status', e);
+    return false;
+  }
+}
 
 // Helper: Get authenticated user from request
 async function getUserFromRequest(req) {
