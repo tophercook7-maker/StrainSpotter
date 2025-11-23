@@ -5457,6 +5457,30 @@ app.post('/api/groups/:groupId/join', express.json(), async (req, res) => {
   }
 });
 
+// POST /api/groups/:groupId/leave - Leave a group
+app.post('/api/groups/:groupId/leave', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const userId = user.id;
+    const groupId = req.params.groupId;
+
+    await supabaseAdmin
+      .from('chat_group_members')
+      .delete()
+      .eq('group_id', groupId)
+      .eq('user_id', userId);
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[api/groups/:groupId/leave] error', e);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
 // GET /api/groups/:groupId/messages - Get messages in a group
 app.get('/api/groups/:groupId/messages', async (req, res) => {
   try {
