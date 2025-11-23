@@ -74,11 +74,6 @@ import {
   findOrCreateConversationForUserBusiness,
 } from './services/dmConversations.js';
 import {
-  ensureDefaultGroups,
-  ensureZipGroup,
-  autoJoinUserToGroups,
-} from './services/groupSeeder.js';
-import {
   consumeScanCredits,
   ensureMonthlyBundle,
   getCreditSummary,
