@@ -4896,6 +4896,182 @@ app.post('/api/dm/:conversationId/messages', express.json(), async (req, res) =>
   }
 });
 
+// GET /api/dm/:conversationId/messages - Get messages in a DM conversation
+app.get('/api/dm/:conversationId/messages', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversationId = req.params.conversationId;
+    const limit = Math.min(parseInt(req.query.limit || '50', 10), 100);
+    const before = req.query.before;
+
+    // Verify conversation exists
+    const { data: conv, error: convErr } = await supabaseAdmin
+      .from('conversations')
+      .select('*')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    if (convErr) {
+      console.error('[api/dm/:conversationId/messages] conversation lookup error', convErr);
+      return res.status(500).json({ error: 'Failed to verify conversation' });
+    }
+
+    if (!conv) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    // Check if user is participant
+    let isParticipant = false;
+    if (conv.user_a_id === user.id || conv.user_b_id === user.id) {
+      isParticipant = true;
+    } else if (conv.business_b_id) {
+      // Check if user owns the business
+      const { data: business } = await supabaseAdmin
+        .from('business_profiles')
+        .select('user_id')
+        .eq('id', conv.business_b_id)
+        .single();
+      if (business && business.user_id === user.id) {
+        isParticipant = true;
+      }
+    }
+
+    if (!isParticipant) {
+      return res.status(403).json({ error: 'Not allowed' });
+    }
+
+    // Fetch messages
+    let query = supabaseAdmin
+      .from('conversation_messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (before) {
+      query = query.lt('created_at', before);
+    }
+
+    const { data: messages, error: msgError } = await query;
+
+    if (msgError) {
+      console.error('[api/dm/:conversationId/messages] fetch messages error', msgError);
+      return res.status(500).json({ error: 'Failed to load messages' });
+    }
+
+    // Mark messages from the other side as read
+    await supabaseAdmin
+      .from('conversation_messages')
+      .update({ is_read: true })
+      .eq('conversation_id', conversationId)
+      .neq('sender_user_id', user.id)
+      .eq('is_read', false);
+
+    return res.json({ messages: messages || [] });
+  } catch (e) {
+    console.error('[api/dm/:conversationId/messages] error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
+// GET /api/dm/inbox - Get all DM conversations for current user with unread counts
+app.get('/api/dm/inbox', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Get all conversations where user is a participant
+    const { data: conversations, error: convError } = await supabaseAdmin
+      .from('conversations')
+      .select(`
+        *,
+        business:business_profiles (
+          id,
+          business_type,
+          business_code,
+          name,
+          city,
+          state
+        )
+      `)
+      .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
+      .eq('is_group', false)
+      .order('last_message_at', { ascending: false, nullsFirst: false });
+
+    if (convError) {
+      console.error('[api/dm/inbox] fetch conversations error', convError);
+      return res.status(500).json({ error: 'Failed to load inbox' });
+    }
+
+    // For each conversation, count unread messages
+    const convoIds = (conversations || []).map((c) => c.id);
+    let unreadByConv = {};
+
+    if (convoIds.length > 0) {
+      // Get unread message counts per conversation
+      const { data: unreadData, error: unreadError } = await supabaseAdmin
+        .from('conversation_messages')
+        .select('conversation_id')
+        .in('conversation_id', convoIds)
+        .eq('is_read', false)
+        .neq('sender_user_id', user.id);
+
+      if (unreadError) {
+        console.error('[api/dm/inbox] unread count error', unreadError);
+      } else {
+        // Count unread messages per conversation
+        (unreadData || []).forEach((msg) => {
+          unreadByConv[msg.conversation_id] = (unreadByConv[msg.conversation_id] || 0) + 1;
+        });
+      }
+    }
+
+    // Also check business conversations where user owns the business
+    if (conversations && conversations.length > 0) {
+      const businessConvoIds = conversations
+        .filter((c) => c.business_b_id)
+        .map((c) => c.id);
+
+      if (businessConvoIds.length > 0) {
+        // Get business conversations where user owns the business
+        const { data: userBusinesses } = await supabaseAdmin
+          .from('business_profiles')
+          .select('id')
+          .eq('user_id', user.id);
+
+        const userBusinessIds = (userBusinesses || []).map((b) => b.id);
+
+        const businessConvos = conversations.filter(
+          (c) => c.business_b_id && userBusinessIds.includes(c.business_b_id)
+        );
+
+        businessConvos.forEach((conv) => {
+          if (!convoIds.includes(conv.id)) {
+            convoIds.push(conv.id);
+          }
+        });
+      }
+    }
+
+    // Format response with unread counts
+    const formatted = (conversations || []).map((c) => ({
+      ...c,
+      unread_count: unreadByConv[c.id] || 0,
+    }));
+
+    return res.json({ conversations: formatted });
+  } catch (e) {
+    console.error('[api/dm/inbox] error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
 // GET /api/dm/conversations - List all DM conversations for current user
 app.get('/api/dm/conversations', async (req, res) => {
   try {
