@@ -5332,35 +5332,55 @@ app.post('/api/dm/conversations/:id/read', async (req, res) => {
 // GROUP CHAT ENDPOINTS
 // ========================================
 
-// GET /api/groups - List all available groups (filtered by type, zip, etc.)
+// GET /api/groups - List all available groups with membership status
 app.get('/api/groups', async (req, res) => {
   try {
-    const { type, zipCode } = req.query || {};
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
 
-    let query = supabaseAdmin
+    const userId = user.id;
+
+    const { data: groups, error } = await supabaseAdmin
       .from('chat_groups')
-      .select('*')
-      .eq('is_public', true)
-      .order('created_at', { ascending: false });
+      .select(`
+        id,
+        group_type,
+        zip_code,
+        name,
+        description,
+        business_only,
+        is_public,
+        created_at,
+        members:chat_group_members!left (
+          user_id
+        )
+      `)
+      .order('group_type', { ascending: true })
+      .order('name', { ascending: true });
 
-    if (type && ['zip', 'global', 'interest'].includes(type)) {
-      query = query.eq('group_type', type);
-    }
-
-    if (zipCode) {
-      query = query.eq('zip_code', zipCode);
-    }
-
-    const { data: groups, error: groupsError } = await query;
-
-    if (groupsError) {
-      console.error('[api/groups] fetch error', groupsError);
+    if (error) {
+      console.error('[api/groups] fetch error', error);
       return res.status(500).json({ error: 'Failed to load groups' });
     }
 
-    return res.json({ groups: groups || [] });
-  } catch (err) {
-    console.error('[api/groups] error', err);
+    const result =
+      groups?.map((g) => ({
+        id: g.id,
+        group_type: g.group_type,
+        zip_code: g.zip_code,
+        name: g.name,
+        description: g.description,
+        business_only: g.business_only,
+        is_public: g.is_public,
+        created_at: g.created_at,
+        is_member: (g.members || []).some((m) => m.user_id === userId),
+      })) || [];
+
+    return res.json({ groups: result });
+  } catch (e) {
+    console.error('[api/groups] error', e);
     return res.status(500).json({ error: 'Internal error' });
   }
 });
