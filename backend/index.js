@@ -3431,6 +3431,73 @@ app.post('/api/business/register', express.json(), async (req, res) => {
   }
 });
 
+// POST /api/business/claim - Claim an existing business by code
+app.post('/api/business/claim', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { business_code } = req.body || {};
+
+    if (!business_code || typeof business_code !== 'string') {
+      return res.status(400).json({ error: 'business_code is required' });
+    }
+
+    const code = business_code.trim().toUpperCase();
+
+    // Check if code exists and is not already claimed
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('business_profiles')
+      .select('*')
+      .eq('business_code', code)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('[business/claim] Error fetching business', fetchError);
+      return res.status(500).json({ error: 'Failed to check business code' });
+    }
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Business code not found' });
+    }
+
+    if (existing.user_id) {
+      return res.status(400).json({ error: 'Business code already claimed' });
+    }
+
+    // Claim the business by updating user_id
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from('business_profiles')
+      .update({
+        user_id: user.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('[business/claim] Error claiming business', updateError);
+      return res.status(500).json({ error: 'Failed to claim business' });
+    }
+
+    return res.json({
+      success: true,
+      profile: updated,
+      business_code: updated.business_code,
+    });
+  } catch (err) {
+    console.error('[business/claim] Unexpected error', {
+      error: err?.message,
+      name: err?.name,
+      stack: err?.stack,
+    });
+    return res.status(500).json({ error: 'Unexpected error claiming business' });
+  }
+});
+
 // ========================================
 // DIRECT MESSAGING SYSTEM
 // ========================================
