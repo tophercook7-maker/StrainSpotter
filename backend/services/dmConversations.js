@@ -1,134 +1,129 @@
 // backend/services/dmConversations.js
 // Helper functions for DM conversations (1:1 messaging)
+// Uses the conversations table with is_group=false for DMs
 
 import { supabaseAdmin } from '../supabaseAdmin.js';
 
 /**
- * Get or create a DM conversation between two users
+ * Find or create a conversation for user-user DM
  * Ensures canonical ordering (user_a_id < user_b_id)
+ * @param {string} userAId - First user ID
+ * @param {string} userBId - Second user ID
+ * @returns {Promise<object>} conversation object
+ */
+export async function findOrCreateConversationForUserUser(userAId, userBId) {
+  if (!userAId || !userBId) {
+    throw new Error('Both user IDs are required for user-user DM');
+  }
+
+  if (userAId === userBId) {
+    throw new Error('Cannot create DM with yourself');
+  }
+
+  // Order IDs so (A,B) and (B,A) match same row
+  const [minId, maxId] = [userAId, userBId].sort();
+
+  const { data: conv, error: lookupError } = await supabaseAdmin
+    .from('conversations')
+    .select('*')
+    .eq('user_a_id', minId)
+    .eq('user_b_id', maxId)
+    .eq('is_group', false)
+    .is('business_b_id', null)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error('[dmConversations] findOrCreateConversationForUserUser lookup error', lookupError);
+    throw lookupError;
+  }
+
+  if (conv) return conv;
+
+  const { data, error } = await supabaseAdmin
+    .from('conversations')
+    .insert({
+      is_group: false,
+      user_a_id: minId,
+      user_b_id: maxId,
+      business_b_id: null,
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('[dmConversations] findOrCreateConversationForUserUser create error', error);
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Find or create a conversation for user-business DM
+ * @param {string} userId - User ID
+ * @param {string} businessId - Business profile ID
+ * @returns {Promise<object>} conversation object
+ */
+export async function findOrCreateConversationForUserBusiness(userId, businessId) {
+  if (!userId || !businessId) {
+    throw new Error('User ID and business ID are required for user-business DM');
+  }
+
+  const { data: conv, error: lookupError } = await supabaseAdmin
+    .from('conversations')
+    .select('*')
+    .eq('user_a_id', userId)
+    .eq('is_group', false)
+    .is('user_b_id', null)
+    .eq('business_b_id', businessId)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error('[dmConversations] findOrCreateConversationForUserBusiness lookup error', lookupError);
+    throw lookupError;
+  }
+
+  if (conv) return conv;
+
+  const { data, error } = await supabaseAdmin
+    .from('conversations')
+    .insert({
+      is_group: false,
+      user_a_id: userId,
+      user_b_id: null,
+      business_b_id: businessId,
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('[dmConversations] findOrCreateConversationForUserBusiness create error', error);
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Get or create a DM conversation between two users (backward compatibility)
  * @param {string} userId1 - First user ID
  * @param {string} userId2 - Second user ID
  * @returns {Promise<string>} conversation_id
  */
 export async function getOrCreateUserUserDM(userId1, userId2) {
-  if (!userId1 || !userId2) {
-    throw new Error('Both user IDs are required for user-user DM');
-  }
-
-  if (userId1 === userId2) {
-    throw new Error('Cannot create DM with yourself');
-  }
-
-  // Canonical ordering: always store smaller ID as user_a_id
-  const [userA, userB] = [userId1, userId2].sort();
-
-  // Check if conversation already exists
-  const { data: existing, error: existingError } = await supabaseAdmin
-    .from('dm_conversations')
-    .select('id')
-    .eq('user_a_id', userA)
-    .eq('user_b_id', userB)
-    .is('business_b_id', null)
-    .maybeSingle();
-
-  if (existingError) {
-    console.error('[dmConversations] getOrCreateUserUserDM lookup error', existingError);
-    throw existingError;
-  }
-
-  if (existing?.id) {
-    return existing.id;
-  }
-
-  // Create new conversation
-  const { data: newConv, error: createError } = await supabaseAdmin
-    .from('dm_conversations')
-    .insert({
-      user_a_id: userA,
-      user_b_id: userB,
-      business_b_id: null,
-    })
-    .select('id')
-    .single();
-
-  if (createError) {
-    console.error('[dmConversations] getOrCreateUserUserDM create error', createError);
-    throw createError;
-  }
-
-  // Initialize read receipts for both users
-  await supabaseAdmin.from('dm_read_receipts').insert([
-    { conversation_id: newConv.id, user_id: userA, unread_count: 0 },
-    { conversation_id: newConv.id, user_id: userB, unread_count: 0 },
-  ]);
-
-  return newConv.id;
+  const conv = await findOrCreateConversationForUserUser(userId1, userId2);
+  return conv.id;
 }
 
 /**
- * Get or create a DM conversation between a user and a business
+ * Get or create a DM conversation between a user and a business (backward compatibility)
  * @param {string} userId - User ID
  * @param {string} businessId - Business profile ID
  * @returns {Promise<string>} conversation_id
  */
 export async function getOrCreateUserBusinessDM(userId, businessId) {
-  if (!userId || !businessId) {
-    throw new Error('User ID and business ID are required for user-business DM');
-  }
-
-  // Check if conversation already exists
-  // For user-business, user_a_id is always the user
-  const { data: existing, error: existingError } = await supabaseAdmin
-    .from('dm_conversations')
-    .select('id')
-    .eq('user_a_id', userId)
-    .eq('business_b_id', businessId)
-    .is('user_b_id', null)
-    .maybeSingle();
-
-  if (existingError) {
-    console.error('[dmConversations] getOrCreateUserBusinessDM lookup error', existingError);
-    throw existingError;
-  }
-
-  if (existing?.id) {
-    return existing.id;
-  }
-
-  // Get business owner's user_id for read receipts
-  const { data: business, error: businessError } = await supabaseAdmin
-    .from('business_profiles')
-    .select('user_id')
-    .eq('id', businessId)
-    .single();
-
-  if (businessError || !business) {
-    throw new Error('Business not found');
-  }
-
-  // Create new conversation
-  const { data: newConv, error: createError } = await supabaseAdmin
-    .from('dm_conversations')
-    .insert({
-      user_a_id: userId,
-      user_b_id: null,
-      business_b_id: businessId,
-    })
-    .select('id')
-    .single();
-
-  if (createError) {
-    console.error('[dmConversations] getOrCreateUserBusinessDM create error', createError);
-    throw createError;
-  }
-
-  // Initialize read receipts for user and business owner
-  await supabaseAdmin.from('dm_read_receipts').insert([
-    { conversation_id: newConv.id, user_id: userId, unread_count: 0 },
-    { conversation_id: newConv.id, user_id: business.user_id, unread_count: 0 },
-  ]);
-
-  return newConv.id;
+  const conv = await findOrCreateConversationForUserBusiness(userId, businessId);
+  return conv.id;
 }
 
 /**
@@ -142,15 +137,15 @@ export async function getOrCreateUserBusinessDM(userId, businessId) {
 export async function sendDMMessage(conversationId, senderId, body, options = {}) {
   const { imageUrl, imageType } = options;
 
-  // Insert message
+  // Insert message (use conversation_messages for group chats, dm_messages for DMs)
+  // For now, we'll use conversation_messages for all conversations
   const { data: message, error: msgError } = await supabaseAdmin
-    .from('dm_messages')
+    .from('conversation_messages')
     .insert({
       conversation_id: conversationId,
-      sender_id: senderId,
-      body,
+      sender_user_id: senderId,
+      body: body || null,
       image_url: imageUrl || null,
-      image_type: imageType || null,
     })
     .select('*')
     .single();
@@ -163,7 +158,7 @@ export async function sendDMMessage(conversationId, senderId, body, options = {}
   // Update conversation metadata
   const previewText = body.length > 100 ? body.substring(0, 100) + '...' : body;
   const { error: updateError } = await supabaseAdmin
-    .from('dm_conversations')
+    .from('conversations')
     .update({
       last_message_text: previewText,
       last_message_at: new Date().toISOString(),
@@ -178,7 +173,7 @@ export async function sendDMMessage(conversationId, senderId, body, options = {}
 
   // Increment unread count for the recipient(s)
   const { data: conversation } = await supabaseAdmin
-    .from('dm_conversations')
+    .from('conversations')
     .select('user_a_id, user_b_id, business_b_id')
     .eq('id', conversationId)
     .single();
