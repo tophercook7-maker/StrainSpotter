@@ -59,6 +59,7 @@ import { findSeedBankEntry } from './services/seedBank.js';
 import { buildGrowProfile } from './services/buildGrowProfile.js';
 import { generateBusinessCode } from './services/businessCode.js';
 import { joinZipGroupAndSendMessage, getOrCreateDM } from './services/messaging.js';
+import { ensureZipGroup } from './services/groups.js';
 import {
   consumeScanCredits,
   ensureMonthlyBundle,
@@ -4494,6 +4495,267 @@ app.post('/api/chat/dm/send', express.json(), async (req, res) => {
   } catch (err) {
     console.error('[api/chat/dm/send] error', err);
     return res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// ========================================
+// ZIP GROUP FEED POSTS ENDPOINTS
+// ========================================
+
+// POST /api/groups/:zip/posts - Create a post in a ZIP group feed
+app.post('/api/groups/:zip/posts', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const zip = (req.params.zip || '').trim();
+    if (!zip) {
+      return res.status(400).json({ error: 'ZIP code is required' });
+    }
+
+    const { postType, title, body, imageUrl, strainSlug, scanId } = req.body || {};
+
+    // Ensure ZIP group exists
+    const groupId = await ensureZipGroup(zip, 'US');
+
+    // Check if user has a business profile
+    const { data: business, error: businessError } = await supabaseAdmin
+      .from('business_profiles')
+      .select('id, business_type, business_code, name')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (businessError) {
+      console.error('[api/groups/:zip/posts] business lookup error', businessError);
+    }
+
+    // Create post
+    const { data: post, error: postError } = await supabaseAdmin
+      .from('group_posts')
+      .insert({
+        group_id: groupId,
+        author_user_id: user.id,
+        business_id: business?.id || null,
+        post_type: postType || 'general',
+        title: title || null,
+        body: body || null,
+        image_url: imageUrl || null,
+        strain_slug: strainSlug || null,
+        scan_id: scanId || null,
+      })
+      .select(`
+        *,
+        business:business_profiles (
+          id,
+          business_type,
+          business_code,
+          name,
+          city,
+          state
+        )
+      `)
+      .single();
+
+    if (postError) {
+      console.error('[api/groups/:zip/posts] create post error', postError);
+      return res.status(500).json({ error: 'Failed to create post' });
+    }
+
+    return res.json({ post });
+  } catch (err) {
+    console.error('[api/groups/:zip/posts] error', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// GET /api/groups/:zip/feed - Get feed posts for a ZIP group
+app.get('/api/groups/:zip/feed', async (req, res) => {
+  try {
+    const zip = (req.params.zip || '').trim();
+    if (!zip) {
+      return res.status(400).json({ error: 'ZIP code is required' });
+    }
+
+    // Ensure ZIP group exists (or create it)
+    const groupId = await ensureZipGroup(zip, 'US');
+
+    // Fetch posts with business info
+    const { data: posts, error: postsError } = await supabaseAdmin
+      .from('group_posts')
+      .select(`
+        *,
+        business:business_profiles (
+          id,
+          business_type,
+          business_code,
+          name,
+          city,
+          state
+        )
+      `)
+      .eq('group_id', groupId)
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (postsError) {
+      console.error('[api/groups/:zip/feed] fetch posts error', postsError);
+      return res.status(500).json({ error: 'Failed to load feed' });
+    }
+
+    return res.json({ posts: posts || [] });
+  } catch (err) {
+    console.error('[api/groups/:zip/feed] error', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// POST /api/groups/:zip/posts/:id/pin - Pin a post (businesses only)
+app.post('/api/groups/:zip/posts/:id/pin', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const postId = req.params.id;
+    const { pinnedUntil } = req.body || {};
+
+    // Check if user has a business profile
+    const { data: business, error: businessError } = await supabaseAdmin
+      .from('business_profiles')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (businessError) {
+      console.error('[api/groups/:zip/posts/:id/pin] business lookup error', businessError);
+      return res.status(500).json({ error: 'Failed to verify business' });
+    }
+
+    if (!business?.id) {
+      return res.status(403).json({ error: 'Only businesses can pin posts' });
+    }
+
+    // Get the post
+    const { data: post, error: postFetchError } = await supabaseAdmin
+      .from('group_posts')
+      .select('id, business_id')
+      .eq('id', postId)
+      .single();
+
+    if (postFetchError || !post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Verify post belongs to this business
+    if (post.business_id !== business.id) {
+      return res.status(403).json({ error: 'Not your post to pin' });
+    }
+
+    // Calculate pinned_until (default 24 hours from now)
+    const defaultPinnedUntil = new Date(Date.now() + 86400000).toISOString();
+    const finalPinnedUntil = pinnedUntil || defaultPinnedUntil;
+
+    // Update post
+    const { data: updatedPost, error: updateError } = await supabaseAdmin
+      .from('group_posts')
+      .update({
+        is_pinned: true,
+        pinned_until: finalPinnedUntil,
+      })
+      .eq('id', postId)
+      .select(`
+        *,
+        business:business_profiles (
+          id,
+          business_type,
+          business_code,
+          name,
+          city,
+          state
+        )
+      `)
+      .single();
+
+    if (updateError) {
+      console.error('[api/groups/:zip/posts/:id/pin] update error', updateError);
+      return res.status(500).json({ error: 'Failed to pin post' });
+    }
+
+    return res.json({ post: updatedPost });
+  } catch (err) {
+    console.error('[api/groups/:zip/posts/:id/pin] error', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// POST /api/groups/:zip/posts/:id/reaction - Add/remove reaction to a post
+app.post('/api/groups/:zip/posts/:id/reaction', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const postId = req.params.id;
+    const { reactionType = 'like' } = req.body || {};
+
+    if (!['like', 'fire', 'save'].includes(reactionType)) {
+      return res.status(400).json({ error: 'Invalid reaction type' });
+    }
+
+    // Check if reaction already exists
+    const { data: existing, error: checkError } = await supabaseAdmin
+      .from('group_post_reactions')
+      .select('id')
+      .eq('post_id', postId)
+      .eq('user_id', user.id)
+      .eq('reaction_type', reactionType)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('[api/groups/:zip/posts/:id/reaction] check error', checkError);
+      return res.status(500).json({ error: 'Failed to check reaction' });
+    }
+
+    if (existing) {
+      // Remove reaction (toggle off)
+      const { error: deleteError } = await supabaseAdmin
+        .from('group_post_reactions')
+        .delete()
+        .eq('id', existing.id);
+
+      if (deleteError) {
+        console.error('[api/groups/:zip/posts/:id/reaction] delete error', deleteError);
+        return res.status(500).json({ error: 'Failed to remove reaction' });
+      }
+
+      return res.json({ reaction: null, action: 'removed' });
+    } else {
+      // Add reaction
+      const { data: reaction, error: insertError } = await supabaseAdmin
+        .from('group_post_reactions')
+        .insert({
+          post_id: postId,
+          user_id: user.id,
+          reaction_type: reactionType,
+        })
+        .select('*')
+        .single();
+
+      if (insertError) {
+        console.error('[api/groups/:zip/posts/:id/reaction] insert error', insertError);
+        return res.status(500).json({ error: 'Failed to add reaction' });
+      }
+
+      return res.json({ reaction, action: 'added' });
+    }
+  } catch (err) {
+    console.error('[api/groups/:zip/posts/:id/reaction] error', err);
+    return res.status(500).json({ error: 'Internal error' });
   }
 });
 
