@@ -5489,53 +5489,61 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    const userId = user.id;
     const groupId = req.params.groupId;
-    const { limit = 50, before } = req.query;
+    const limit = Math.min(parseInt(req.query.limit || '50', 10), 100);
+    const before = req.query.before;
 
-    // Verify user is a member
-    const { data: membership } = await supabaseAdmin
+    const { data: member, error: mErr } = await supabaseAdmin
       .from('chat_group_members')
-      .select('id')
+      .select('*')
       .eq('group_id', groupId)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .maybeSingle();
 
-    if (!membership) {
-      return res.status(403).json({ error: 'Not a member of this group' });
+    if (mErr || !member) {
+      return res.status(403).json({ error: 'Join this group to see messages' });
     }
 
-    // Fetch messages (pinned first, then by date)
+    // Fetch pinned messages separately
+    const { data: pinned, error: pinnedError } = await supabaseAdmin
+      .from('chat_group_messages')
+      .select('*')
+      .eq('group_id', groupId)
+      .eq('is_pinned', true)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (pinnedError) {
+      console.error('[api/groups/:groupId/messages] pinned fetch error', pinnedError);
+    }
+
+    // Fetch regular (non-pinned) messages
     let query = supabaseAdmin
       .from('chat_group_messages')
-      .select(`
-        *,
-        sender: sender_user_id (
-          id,
-          email
-        )
-      `)
+      .select('*')
       .eq('group_id', groupId)
-      .order('is_pinned', { ascending: false })
+      .eq('is_pinned', false)
       .order('created_at', { ascending: false })
-      .limit(Number(limit));
+      .limit(limit);
 
     if (before) {
       query = query.lt('created_at', before);
     }
 
-    const { data: messages, error: msgError } = await query;
+    const { data: messages, error } = await query;
 
-    if (msgError) {
-      console.error('[api/groups/:groupId/messages] fetch error', msgError);
+    if (error) {
+      console.error('[api/groups/:groupId/messages] fetch error', error);
       return res.status(500).json({ error: 'Failed to load messages' });
     }
 
     return res.json({
-      messages: messages || [],
-      hasMore: (messages || []).length === Number(limit),
+      pinned: pinned || [],
+      messages: (messages || []).slice().reverse(), // Reverse to show oldest → newest
     });
-  } catch (err) {
-    console.error('[api/groups/:groupId/messages] error', err);
+  } catch (e) {
+    console.error('[api/groups/:groupId/messages] error', e);
     return res.status(500).json({ error: 'Internal error' });
   }
 });
