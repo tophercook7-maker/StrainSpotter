@@ -3,6 +3,41 @@ import { supabase } from '../supabaseClient';
 import { AuthContext } from './AuthContextValue.js';
 import { API_BASE } from '../config.js';
 
+/**
+ * Check if an email belongs to a founder
+ */
+function isFounderEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  return email.toLowerCase().trim() === 'topher.cook7@gmail.com';
+}
+
+/**
+ * Augment session with founder credit status if applicable
+ */
+function augmentSession(session) {
+  if (!session?.user?.email) return session;
+  
+  const email = session.user.email;
+  
+  if (isFounderEmail(email)) {
+    return {
+      ...session,
+      user: {
+        ...session.user,
+        creditStatus: {
+          unlimited: true,
+          remainingScans: Number.POSITIVE_INFINITY,
+          membershipTier: 'founder_unlimited',
+          isMember: true,
+          canScan: true,
+        }
+      }
+    };
+  }
+  
+  return session;
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
@@ -17,8 +52,9 @@ export function AuthProvider({ children }) {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       console.log('[AuthContext] Initial session:', session?.user?.email || 'none');
-      setSession(session);
-      setUser(session?.user ?? null);
+      const augmentedSession = augmentSession(session);
+      setSession(augmentedSession);
+      setUser(augmentedSession?.user ?? null);
       setLoading(false);
     });
 
@@ -26,8 +62,9 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('[AuthContext] Auth state change:', event, session?.user?.email || 'none');
-        setSession(session);
-        setUser(session?.user ?? null);
+        const augmentedSession = augmentSession(session);
+        setSession(augmentedSession);
+        setUser(augmentedSession?.user ?? null);
         setLoading(false);
 
         // Ensure user record exists in public.users table when signed in
