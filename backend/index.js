@@ -3783,6 +3783,333 @@ app.get('/api/groups/:zip/merged-feed', async (req, res) => {
   }
 });
 
+// ========================================
+// DM THREADS + PRIVACY FLAGS
+// ========================================
+
+// Helper: Canonical user pair (always sorted)
+function canonicalUserPair(userId1, userId2) {
+  if (!userId1 || !userId2) {
+    throw new Error('canonicalUserPair: missing user ids');
+  }
+  return userId1 < userId2
+    ? { user_a: userId1, user_b: userId2 }
+    : { user_a: userId2, user_b: userId1 };
+}
+
+// Load business profile + privacy for a given user
+async function getBusinessProfileByUserId(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('business_profiles')
+    .select('user_id, business_type, business_code, name, city, state, country, zip_code, is_public_profile, allow_dms, avatar_url')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[dm] error loading business profile by user_id', { userId, error });
+    throw error;
+  }
+
+  return data;
+}
+
+// Load business profile by code (for "enter by code" flows)
+async function getBusinessProfileByCode(businessCode) {
+  const { data, error } = await supabaseAdmin
+    .from('business_profiles')
+    .select('user_id, business_type, business_code, name, city, state, country, zip_code, is_public_profile, allow_dms, avatar_url')
+    .eq('business_code', businessCode)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[dm] error loading business profile by code', { businessCode, error });
+    throw error;
+  }
+
+  return data;
+}
+
+// POST /api/dm/threads - Create or get DM thread
+app.post('/api/dm/threads', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const currentUserId = user.id;
+    const { peerUserId, peerBusinessCode } = req.body || {};
+
+    let targetUserId = peerUserId || null;
+
+    if (!targetUserId && peerBusinessCode) {
+      // Resolve the business code to a user_id
+      const bp = await getBusinessProfileByCode(peerBusinessCode);
+      if (!bp) {
+        return res.status(404).json({ error: 'Business profile not found' });
+      }
+      targetUserId = bp.user_id;
+    }
+
+    if (!targetUserId) {
+      return res.status(400).json({ error: 'Missing peerUserId or peerBusinessCode' });
+    }
+
+    if (targetUserId === currentUserId) {
+      return res.status(400).json({ error: 'Cannot DM yourself' });
+    }
+
+    // Check receiver's privacy
+    const receiverProfile = await getBusinessProfileByUserId(targetUserId);
+    if (receiverProfile) {
+      const { is_public_profile, allow_dms } = receiverProfile;
+      if (allow_dms === false || is_public_profile === false) {
+        return res.status(403).json({ error: 'This user is not accepting DMs' });
+      }
+    }
+
+    // If they don't have a business_profile row, treat as regular user allowed for now.
+    const { user_a, user_b } = canonicalUserPair(currentUserId, targetUserId);
+
+    // Upsert-like behavior: try to find existing thread first
+    const { data: existing, error: findError } = await supabaseAdmin
+      .from('dm_threads')
+      .select('id, user_a, user_b, created_at, updated_at')
+      .eq('user_a', user_a)
+      .eq('user_b', user_b)
+      .maybeSingle();
+
+    if (findError) {
+      console.error('[dm] Error checking existing thread', { user_a, user_b, findError });
+      return res.status(500).json({ error: 'Failed to check existing DM thread' });
+    }
+
+    let thread = existing;
+
+    if (!thread) {
+      const { data: inserted, error: insertError } = await supabaseAdmin
+        .from('dm_threads')
+        .insert({
+          user_a,
+          user_b,
+        })
+        .select('id, user_a, user_b, created_at, updated_at')
+        .single();
+
+      if (insertError) {
+        console.error('[dm] Error creating DM thread', { user_a, user_b, insertError });
+        return res.status(500).json({ error: 'Failed to create DM thread' });
+      }
+
+      thread = inserted;
+    }
+
+    return res.json({
+      thread,
+      peerUserId: targetUserId,
+    });
+  } catch (err) {
+    console.error('[dm] create/get thread error', {
+      message: err?.message,
+      stack: err?.stack,
+    });
+    return res.status(500).json({ error: 'Failed to create or fetch DM thread' });
+  }
+});
+
+// GET /api/dm/threads - List DM threads for current user
+app.get('/api/dm/threads', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const currentUserId = user.id;
+
+    const { data: threads, error: threadsError } = await supabaseAdmin
+      .from('dm_threads')
+      .select('id, user_a, user_b, created_at, updated_at')
+      .or(`user_a.eq.${currentUserId},user_b.eq.${currentUserId}`)
+      .order('updated_at', { ascending: false })
+      .limit(100);
+
+    if (threadsError) {
+      console.error('[dm] error listing threads', { currentUserId, threadsError });
+      return res.status(500).json({ error: 'Failed to list DM threads' });
+    }
+
+    // Determine the "other" user for each thread
+    const peerIds = Array.from(
+      new Set(
+        (threads || []).map(t =>
+          t.user_a === currentUserId ? t.user_b : t.user_a
+        )
+      )
+    ).filter(Boolean);
+
+    let profilesByUserId = {};
+
+    if (peerIds.length > 0) {
+      const { data: bps, error: bpError } = await supabaseAdmin
+        .from('business_profiles')
+        .select('user_id, business_type, business_code, name, city, state, country, zip_code, avatar_url')
+        .in('user_id', peerIds);
+
+      if (bpError) {
+        console.error('[dm] error loading business profiles for threads', { peerIds, bpError });
+      } else {
+        profilesByUserId = (bps || []).reduce((acc, bp) => {
+          acc[bp.user_id] = bp;
+          return acc;
+        }, {});
+      }
+    }
+
+    const payload = (threads || []).map(t => {
+      const peerId = t.user_a === currentUserId ? t.user_b : t.user_a;
+      return {
+        id: t.id,
+        createdAt: t.created_at,
+        updatedAt: t.updated_at,
+        peerUserId: peerId,
+        peerBusiness: profilesByUserId[peerId] || null,
+      };
+    });
+
+    return res.json({ threads: payload });
+  } catch (err) {
+    console.error('[dm] list threads error', {
+      message: err?.message,
+      stack: err?.stack,
+    });
+    return res.status(500).json({ error: 'Failed to list DM threads' });
+  }
+});
+
+// GET /api/dm/threads/:threadId/messages - List messages in a thread
+app.get('/api/dm/threads/:threadId/messages', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const currentUserId = user.id;
+    const threadId = req.params.threadId;
+
+    // Ensure user is a participant in the thread
+    const { data: thread, error: threadError } = await supabaseAdmin
+      .from('dm_threads')
+      .select('id, user_a, user_b')
+      .eq('id', threadId)
+      .maybeSingle();
+
+    if (threadError) {
+      console.error('[dm] error loading thread for messages', { threadId, threadError });
+      return res.status(500).json({ error: 'Failed to load thread' });
+    }
+
+    if (!thread || (thread.user_a !== currentUserId && thread.user_b !== currentUserId)) {
+      return res.status(403).json({ error: 'Not a participant in this DM thread' });
+    }
+
+    const { data: messages, error: msgError } = await supabaseAdmin
+      .from('dm_messages')
+      .select('id, thread_id, sender_id, body, image_url, created_at')
+      .eq('thread_id', threadId)
+      .order('created_at', { ascending: true })
+      .limit(200);
+
+    if (msgError) {
+      console.error('[dm] error loading messages', { threadId, msgError });
+      return res.status(500).json({ error: 'Failed to load messages' });
+    }
+
+    return res.json({ messages: messages || [] });
+  } catch (err) {
+    console.error('[dm] list messages error', {
+      threadId: req.params.threadId,
+      message: err?.message,
+      stack: err?.stack,
+    });
+    return res.status(500).json({ error: 'Failed to list messages' });
+  }
+});
+
+// POST /api/dm/threads/:threadId/messages - Send message in a thread
+app.post('/api/dm/threads/:threadId/messages', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const currentUserId = user.id;
+    const threadId = req.params.threadId;
+    const { body, imageUrl } = req.body || {};
+
+    if (!body && !imageUrl) {
+      return res.status(400).json({ error: 'Message must have body or imageUrl' });
+    }
+
+    // Ensure user is a participant in the thread
+    const { data: thread, error: threadError } = await supabaseAdmin
+      .from('dm_threads')
+      .select('id, user_a, user_b')
+      .eq('id', threadId)
+      .maybeSingle();
+
+    if (threadError) {
+      console.error('[dm] error loading thread for send', { threadId, threadError });
+      return res.status(500).json({ error: 'Failed to load thread' });
+    }
+
+    if (!thread || (thread.user_a !== currentUserId && thread.user_b !== currentUserId)) {
+      return res.status(403).json({ error: 'Not a participant in this DM thread' });
+    }
+
+    const { data: inserted, error: insertError } = await supabaseAdmin
+      .from('dm_messages')
+      .insert({
+        thread_id: threadId,
+        sender_id: currentUserId,
+        body: body || null,
+        image_url: imageUrl || null,
+      })
+      .select('id, thread_id, sender_id, body, image_url, created_at')
+      .single();
+
+    if (insertError) {
+      console.error('[dm] error inserting message', { threadId, insertError });
+      return res.status(500).json({ error: 'Failed to send message' });
+    }
+
+    // Update thread updated_at
+    const { error: updateThreadError } = await supabaseAdmin
+      .from('dm_threads')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', threadId);
+
+    if (updateThreadError) {
+      console.error('[dm] error updating thread timestamp', {
+        threadId,
+        updateThreadError,
+      });
+      // Non-fatal
+    }
+
+    return res.status(201).json({ message: inserted });
+  } catch (err) {
+    console.error('[dm] send message error', {
+      threadId: req.params.threadId,
+      message: err?.message,
+      stack: err?.stack,
+    });
+    return res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
 // GET /api/business/:code - Lookup grower/dispensary by code
 app.get('/api/business/:code', async (req, res) => {
   try {
