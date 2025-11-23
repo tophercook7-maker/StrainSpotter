@@ -8,7 +8,7 @@ import {
   Stack,
 } from '@mui/material';
 import CannabisLeafIcon from './CannabisLeafIcon';
-import { API_BASE, FOUNDER_EMAIL } from '../config';
+import { API_BASE, FOUNDER_EMAIL, FOUNDER_UNLIMITED_ENABLED } from '../config';
 import { useMembership } from '../membership/MembershipContext';
 import { useAuth } from '../hooks/useAuth';
 import { useCreditBalance } from '../hooks/useCreditBalance';
@@ -45,7 +45,7 @@ export default function Scanner(props) {
   const { summary: creditSummary } = useCreditBalance();
   const hasUnlimited = Boolean(creditSummary?.unlimited || creditSummary?.isUnlimited || creditSummary?.membershipTier === 'founder_unlimited' || creditSummary?.tier === 'admin');
   const email = user?.email ?? null;
-  const isFounder = email === FOUNDER_EMAIL;
+  const isFounder = FOUNDER_UNLIMITED_ENABLED && email === FOUNDER_EMAIL;
   
   // Now everyone depends on totalAvailableScans, including members.
   // Founders/admins with unlimited scans can always scan

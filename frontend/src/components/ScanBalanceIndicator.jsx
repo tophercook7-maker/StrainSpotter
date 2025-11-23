@@ -2,14 +2,14 @@ import { useMemo } from 'react';
 import { Alert, Chip, Stack, Button, CircularProgress } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import { useCreditBalance } from '../hooks/useCreditBalance';
-import { FOUNDER_EMAIL } from '../config';
+import { FOUNDER_EMAIL, FOUNDER_UNLIMITED_ENABLED } from '../config';
 import { useAuth } from '../hooks/useAuth';
 
 export default function ScanBalanceIndicator({ onBuyCredits }) {
   const { user } = useAuth();
   const { summary, loading, refresh } = useCreditBalance();
   const email = user?.email ?? null;
-  const isFounder = email === FOUNDER_EMAIL;
+  const isFounder = FOUNDER_UNLIMITED_ENABLED && email === FOUNDER_EMAIL;
   const hasUnlimited = isFounder || Boolean(summary?.unlimited || summary?.isUnlimited || summary?.membershipTier === 'founder_unlimited' || summary?.tier === 'admin');
 
   const state = useMemo(() => {

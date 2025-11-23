@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { AuthContext } from './AuthContextValue.js';
-import { API_BASE } from '../config.js';
+import { API_BASE, FOUNDER_EMAIL, FOUNDER_UNLIMITED_ENABLED } from '../config.js';
 
 /**
  * Check if an email belongs to a founder
  */
 function isFounderEmail(email) {
   if (!email || typeof email !== 'string') return false;
-  return email.toLowerCase().trim() === 'topher.cook7@gmail.com';
+  if (!FOUNDER_UNLIMITED_ENABLED) return false;
+  return email.toLowerCase().trim() === FOUNDER_EMAIL.toLowerCase();
 }
 
 /**

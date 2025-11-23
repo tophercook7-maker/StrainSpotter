@@ -27,7 +27,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useMembership } from '../membership/MembershipContext';
 import { useProMode } from '../contexts/ProModeContext';
 import { useCreditBalance } from '../hooks/useCreditBalance';
-import { API_BASE, FOUNDER_EMAIL } from '../config';
+import { API_BASE, FOUNDER_EMAIL, FOUNDER_UNLIMITED_ENABLED } from '../config';
 import { normalizeScanResult, transformScanResult } from '../utils/scanResultUtils';
 import { resizeImageToBase64 } from '../utils/resizeImageToBase64';
 // Removed deriveDisplayStrain - using transformScanResult as single source of truth
@@ -67,8 +67,17 @@ export default function ScanPage({ onBack, onNavigate }) {
   const { summary: creditSummary } = useCreditBalance();
   const hasUnlimited = Boolean(creditSummary?.unlimited || creditSummary?.isUnlimited || creditSummary?.membershipTier === 'founder_unlimited' || creditSummary?.tier === 'admin');
   const email = user?.email ?? null;
-  const isFounder = email === FOUNDER_EMAIL;
+  const isFounder = FOUNDER_UNLIMITED_ENABLED && email === FOUNDER_EMAIL;
   const isGuest = !user;
+  
+  // Debug logging for founder status
+  useEffect(() => {
+    console.log('[FounderDebug]', {
+      email,
+      FOUNDER_UNLIMITED_ENABLED,
+      isFounder: FOUNDER_UNLIMITED_ENABLED && email === FOUNDER_EMAIL,
+    });
+  }, [email]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);

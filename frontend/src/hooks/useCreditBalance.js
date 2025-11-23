@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { API_BASE, FOUNDER_EMAIL } from '../config';
+import { API_BASE, FOUNDER_EMAIL, FOUNDER_UNLIMITED_ENABLED } from '../config';
 import { useAuth } from './useAuth';
 
 /**
@@ -10,8 +10,9 @@ export function applyFounderOverride(session, creditState) {
   if (!session || !session.user) return creditState;
   
   const email = session.user.email;
+  const isFounder = FOUNDER_UNLIMITED_ENABLED && email === FOUNDER_EMAIL;
   
-  if (email === FOUNDER_EMAIL) {
+  if (isFounder) {
     return {
       ...creditState,
       canScan: true,
@@ -85,7 +86,9 @@ export function useCreditBalance() {
       setError(err.message || 'Unable to load credits');
       
       // Even on error, apply founder override if applicable
-      if (session?.user?.email === FOUNDER_EMAIL) {
+      const email = session?.user?.email;
+      const isFounder = FOUNDER_UNLIMITED_ENABLED && email === FOUNDER_EMAIL;
+      if (isFounder) {
         const founderState = applyFounderOverride(session, {
           tier: 'admin',
           creditsRemaining: Infinity,

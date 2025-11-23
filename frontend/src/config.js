@@ -42,3 +42,7 @@ export const FUNCTIONS_BASE = (functionsFromEnv || functionsFallback).replace(/\
 
 // Founder email with unlimited scans
 export const FOUNDER_EMAIL = 'topher.cook7@gmail.com';
+
+// Global toggle for founder-unlimited behavior
+// Set VITE_FOUNDER_UNLIMITED_ENABLED=true in .env.local to enable
+export const FOUNDER_UNLIMITED_ENABLED = import.meta.env.VITE_FOUNDER_UNLIMITED_ENABLED === 'true';

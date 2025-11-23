@@ -1,7 +1,7 @@
 import { Box, Chip, Tooltip, CircularProgress } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import { useCreditBalance } from '../hooks/useCreditBalance';
-import { FOUNDER_EMAIL } from '../config';
+import { FOUNDER_EMAIL, FOUNDER_UNLIMITED_ENABLED } from '../config';
 import { useAuth } from '../hooks/useAuth';
 
 /**
@@ -11,7 +11,7 @@ import { useAuth } from '../hooks/useAuth';
 export default function CreditBalance({ summary: externalSummary, loading: externalLoading }) {
   const { user } = useAuth();
   const email = user?.email ?? null;
-  const isFounder = email === FOUNDER_EMAIL;
+  const isFounder = FOUNDER_UNLIMITED_ENABLED && email === FOUNDER_EMAIL;
   const shouldUseExternal = typeof externalSummary !== 'undefined' || typeof externalLoading !== 'undefined';
   const { summary: internalSummary, loading: internalLoading } = useCreditBalance();
 
