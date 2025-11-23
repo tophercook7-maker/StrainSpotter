@@ -61,6 +61,11 @@ import { generateBusinessCode } from './services/businessCode.js';
 import { joinZipGroupAndSendMessage, getOrCreateDM } from './services/messaging.js';
 import { ensureZipGroup } from './services/groups.js';
 import {
+  ensureDefaultGroups,
+  ensureZipGroup as ensureZipChatGroup,
+  autoJoinUserToGroups,
+} from './services/groupSeeder.js';
+import {
   getOrCreateUserUserDM,
   getOrCreateUserBusinessDM,
   sendDMMessage,
