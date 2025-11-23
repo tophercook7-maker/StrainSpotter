@@ -1,16 +1,21 @@
 // frontend/src/hooks/useZipChat.js
-// Hook for ZIP-based group chat
+// Hook for ZIP-based group chat with realtime updates
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { API_BASE } from '../config';
 import { useAuth } from './useAuth';
+import { supabase } from '../supabaseClient';
 
 export function useZipChat(zipCode) {
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
+  const [conversationId, setConversationId] = useState(null);
+  const [activeUsers, setActiveUsers] = useState([]);
+  const channelRef = useRef(null);
+  const presenceChannelRef = useRef(null);
 
   const loadMessages = useCallback(async () => {
     if (!zipCode) return;
@@ -38,6 +43,14 @@ export function useZipChat(zipCode) {
 
       const data = await res.json();
       setMessages(data.messages || []);
+      
+      // Get conversation ID from first message or create subscription
+      if (data.messages && data.messages.length > 0) {
+        const firstMsg = data.messages[0];
+        if (firstMsg.conversation_id) {
+          setConversationId(firstMsg.conversation_id);
+        }
+      }
     } catch (err) {
       console.error('[useZipChat] loadMessages error', err);
       setError(err?.message || 'Failed to load messages');
@@ -45,6 +58,96 @@ export function useZipChat(zipCode) {
       setLoading(false);
     }
   }, [zipCode, session]);
+
+  // Realtime subscription for new messages
+  useEffect(() => {
+    if (!conversationId || !supabase) return;
+
+    // Clean up previous channel
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+
+    const channel = supabase
+      .channel(`conversation-${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          if (payload?.new) {
+            setMessages((prev) => {
+              // Avoid duplicates
+              const exists = prev.some((m) => m.id === payload.new.id);
+              if (exists) return prev;
+              return [payload.new, ...prev];
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [conversationId]);
+
+  // Presence subscription for online users
+  useEffect(() => {
+    if (!conversationId || !user?.id || !supabase) return;
+
+    // Clean up previous presence channel
+    if (presenceChannelRef.current) {
+      supabase.removeChannel(presenceChannelRef.current);
+    }
+
+    const presenceChannel = supabase.channel(`presence-${conversationId}`, {
+      config: {
+        presence: {
+          key: user.id,
+        },
+      },
+    });
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        const userIds = Object.keys(state);
+        setActiveUsers(userIds);
+      })
+      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+        console.log('[useZipChat] User joined', key, newPresences);
+      })
+      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+        console.log('[useZipChat] User left', key, leftPresences);
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({
+            online_at: new Date().toISOString(),
+            user_id: user.id,
+          });
+        }
+      });
+
+    presenceChannelRef.current = presenceChannel;
+
+    return () => {
+      if (presenceChannelRef.current) {
+        presenceChannelRef.current.unsubscribe();
+        presenceChannelRef.current = null;
+      }
+    };
+  }, [conversationId, user?.id]);
 
   const sendMessage = useCallback(
     async (body) => {
@@ -75,7 +178,13 @@ export function useZipChat(zipCode) {
 
         const data = await res.json();
         if (data.message) {
-          setMessages((prev) => [data.message, ...prev]);
+          setConversationId(data.conversationId || conversationId);
+          // Message will be added via realtime subscription, but add it here too for immediate feedback
+          setMessages((prev) => {
+            const exists = prev.some((m) => m.id === data.message.id);
+            if (exists) return prev;
+            return [data.message, ...prev];
+          });
         }
       } catch (err) {
         console.error('[useZipChat] sendMessage error', err);
@@ -99,6 +208,8 @@ export function useZipChat(zipCode) {
     error,
     sendMessage,
     reload: loadMessages,
+    conversationId,
+    activeUsers,
   };
 }
 

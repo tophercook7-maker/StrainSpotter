@@ -58,7 +58,7 @@ import { normalizeMatchConfidence } from './services/matchUtils.js';
 import { findSeedBankEntry } from './services/seedBank.js';
 import { buildGrowProfile } from './services/buildGrowProfile.js';
 import { generateBusinessCode } from './services/businessCode.js';
-import { joinZipGroupAndSendMessage } from './services/messaging.js';
+import { joinZipGroupAndSendMessage, getOrCreateDM } from './services/messaging.js';
 import {
   consumeScanCredits,
   ensureMonthlyBundle,
@@ -4339,6 +4339,161 @@ app.get('/api/chat/zip/:zipCode', async (req, res) => {
   } catch (err) {
     console.error('[api/chat/zip/:zipCode] error', err);
     return res.status(500).json({ error: 'Failed to load messages' });
+  }
+});
+
+// POST /api/chat/upload - Upload image/media attachment for chat
+app.post('/api/chat/upload', express.raw({ type: 'image/*', limit: '10mb' }), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversationId = req.headers['x-conversation-id'] || req.query.conversationId;
+    if (!conversationId) {
+      return res.status(400).json({ error: 'conversationId is required' });
+    }
+
+    if (!req.body || req.body.length === 0) {
+      return res.status(400).json({ error: 'No file data provided' });
+    }
+
+    // Determine content type from headers or default to image/jpeg
+    const contentType = req.headers['content-type'] || 'image/jpeg';
+    const fileExtension = contentType.includes('png') ? 'png' : contentType.includes('gif') ? 'gif' : 'jpg';
+    const fileName = `messages/${conversationId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
+
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+      .from('chat-media')
+      .upload(fileName, req.body, {
+        contentType,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error('[api/chat/upload] storage upload error', uploadError);
+      return res.status(500).json({ error: 'Upload failed' });
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabaseAdmin.storage
+      .from('chat-media')
+      .getPublicUrl(fileName);
+
+    // Create message with attachment
+    const { data: msg, error: msgError } = await supabaseAdmin
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        body: '',
+        attachment_url: publicUrl,
+        attachment_type: contentType,
+      })
+      .select('id, attachment_url, attachment_type, created_at, sender_id, conversation_id')
+      .single();
+
+    if (msgError) {
+      console.error('[api/chat/upload] message insert error', msgError);
+      return res.status(500).json({ error: 'Failed to create message' });
+    }
+
+    return res.json({
+      message: msg,
+      attachmentUrl: publicUrl,
+    });
+  } catch (err) {
+    console.error('[api/chat/upload] error', err);
+    return res.status(500).json({ error: 'Failed to upload attachment' });
+  }
+});
+
+// POST /api/chat/dm/create - Create or get DM conversation between two users
+app.post('/api/chat/dm/create', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { peerUserId } = req.body || {};
+    if (!peerUserId) {
+      return res.status(400).json({ error: 'peerUserId is required' });
+    }
+
+    if (peerUserId === user.id) {
+      return res.status(400).json({ error: 'Cannot create DM with yourself' });
+    }
+
+    const conversationId = await getOrCreateDM(user.id, peerUserId);
+
+    return res.json({
+      conversationId,
+    });
+  } catch (err) {
+    console.error('[api/chat/dm/create] error', err);
+    return res.status(500).json({ error: 'Failed to create DM conversation' });
+  }
+});
+
+// POST /api/chat/dm/send - Send a message in a DM conversation
+app.post('/api/chat/dm/send', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { conversationId, body, attachmentUrl, attachmentType, strainSlug, scanId } = req.body || {};
+    if (!conversationId || !body) {
+      return res.status(400).json({ error: 'conversationId and body are required' });
+    }
+
+    // Verify user is a member of this conversation
+    const { data: membership, error: membershipError } = await supabaseAdmin
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (membershipError) {
+      console.error('[api/chat/dm/send] membership check error', membershipError);
+      return res.status(500).json({ error: 'Failed to verify membership' });
+    }
+
+    if (!membership) {
+      return res.status(403).json({ error: 'Not a member of this conversation' });
+    }
+
+    // Insert message
+    const { data: msg, error: msgError } = await supabaseAdmin
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        body,
+        attachment_url: attachmentUrl || null,
+        attachment_type: attachmentType || null,
+        strain_slug: strainSlug || null,
+        scan_id: scanId || null,
+      })
+      .select('id, body, sender_id, created_at, attachment_url, attachment_type, strain_slug, scan_id')
+      .single();
+
+    if (msgError) {
+      console.error('[api/chat/dm/send] message insert error', msgError);
+      return res.status(500).json({ error: 'Failed to send message' });
+    }
+
+    return res.json({
+      message: msg,
+    });
+  } catch (err) {
+    console.error('[api/chat/dm/send] error', err);
+    return res.status(500).json({ error: 'Failed to send message' });
   }
 });
 

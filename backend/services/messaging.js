@@ -147,3 +147,79 @@ export async function joinZipGroupAndSendMessage({ zipCode, country = 'US', user
   return { conversationId, message: msg };
 }
 
+/**
+ * Get or create a DM conversation between two users
+ * @param {object} params
+ * @param {string} params.user1 - First user ID
+ * @param {string} params.user2 - Second user ID
+ * @returns {Promise<string>} conversation_id
+ */
+export async function getOrCreateDM(user1, user2) {
+  if (!user1 || !user2) {
+    throw new Error('Both user1 and user2 are required for DM');
+  }
+
+  const members = [user1, user2].sort();
+  const slug = `dm-${members[0]}-${members[1]}`;
+
+  // Check if DM conversation already exists
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from('conversations')
+    .select('id')
+    .eq('slug', slug)
+    .eq('is_group', false)
+    .maybeSingle();
+
+  if (existingError) {
+    console.error('[messaging] getOrCreateDM lookup error', existingError);
+    throw existingError;
+  }
+
+  if (existing?.id) {
+    return existing.id;
+  }
+
+  // Create new DM conversation
+  const { data: conv, error: convError } = await supabaseAdmin
+    .from('conversations')
+    .insert({
+      is_group: false,
+      slug,
+      title: null,
+      description: null,
+      created_by: members[0],
+    })
+    .select('id')
+    .single();
+
+  if (convError) {
+    console.error('[messaging] create DM conversation error', convError);
+    throw convError;
+  }
+
+  const conversationId = conv.id;
+
+  // Add both users as members
+  const { error: membersError } = await supabaseAdmin
+    .from('conversation_members')
+    .insert([
+      {
+        conversation_id: conversationId,
+        user_id: members[0],
+        role: 'member',
+      },
+      {
+        conversation_id: conversationId,
+        user_id: members[1],
+        role: 'member',
+      },
+    ]);
+
+  if (membersError) {
+    console.error('[messaging] add DM members error', membersError);
+    throw membersError;
+  }
+
+  return conversationId;
+}
+
