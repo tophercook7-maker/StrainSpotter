@@ -73,6 +73,7 @@ import {
   findOrCreateConversationForUserUser,
   findOrCreateConversationForUserBusiness,
 } from './services/dmConversations.js';
+import { updateTyping, getTypingUsers, cleanupStaleTyping } from './services/chatTyping.js';
 import {
   consumeScanCredits,
   ensureMonthlyBundle,
@@ -5022,7 +5023,7 @@ app.get('/api/dm/:conversationId/messages', async (req, res) => {
       .select('*')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .limit(limit + 1); // Fetch one extra to check if there are more
 
     if (before) {
       query = query.lt('created_at', before);
@@ -5035,6 +5036,13 @@ app.get('/api/dm/:conversationId/messages', async (req, res) => {
       return res.status(500).json({ error: 'Failed to load messages' });
     }
 
+    // Check if there are more messages
+    const hasMore = messages && messages.length > limit;
+    const messagesToReturn = hasMore ? messages.slice(0, limit) : (messages || []);
+    const nextCursor = messagesToReturn.length > 0 
+      ? messagesToReturn[messagesToReturn.length - 1].created_at 
+      : null;
+
     // Mark messages from the other side as read
     await supabaseAdmin
       .from('conversation_messages')
@@ -5043,7 +5051,11 @@ app.get('/api/dm/:conversationId/messages', async (req, res) => {
       .neq('sender_user_id', user.id)
       .eq('is_read', false);
 
-    return res.json({ messages: messages || [] });
+    return res.json({ 
+      messages: messagesToReturn || [],
+      hasMore: hasMore || false,
+      nextCursor,
+    });
   } catch (e) {
     console.error('[api/dm/:conversationId/messages] error', e);
     return res.status(500).json({ error: e?.message || 'Internal error' });
@@ -5587,7 +5599,7 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
       .eq('group_id', groupId)
       .eq('is_pinned', false)
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .limit(limit + 1); // Fetch one extra to check if there are more
 
     if (before) {
       query = query.lt('created_at', before);
@@ -5597,16 +5609,27 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
 
     if (error) {
       console.error('[api/groups/:groupId/messages] fetch error', error);
-      return res.status(500).json({ error: 'Failed to load messages' });
+      // Don't 500 on empty table or missing column - return empty array instead
+      return res.status(200).json({ messages: [], pinned: [], hasMore: false, error: 'unavailable' });
     }
+
+    // Check if there are more messages
+    const hasMore = messages && messages.length > limit;
+    const messagesToReturn = hasMore ? messages.slice(0, limit) : (messages || []);
+    const nextCursor = messagesToReturn.length > 0 
+      ? messagesToReturn[messagesToReturn.length - 1].created_at 
+      : null;
 
     return res.json({
       pinned: pinned || [],
-      messages: (messages || []).slice().reverse(), // Reverse to show oldest → newest
+      messages: messagesToReturn.slice().reverse(), // Reverse to show oldest → newest
+      hasMore: hasMore || false,
+      nextCursor,
     });
   } catch (e) {
     console.error('[api/groups/:groupId/messages] error', e);
-    return res.status(500).json({ error: 'Internal error' });
+    // Never 500 - return empty array to keep frontend alive
+    return res.status(200).json({ messages: [], pinned: [], hasMore: false, error: 'unavailable' });
   }
 });
 
@@ -5620,9 +5643,9 @@ app.post('/api/groups/:groupId/messages', express.json(), async (req, res) => {
 
     const userId = user.id;
     const groupId = req.params.groupId;
-    const { body, imageUrl, pin } = req.body || {};
+    const { body, imageUrl, pin, attachments, reply_to_id } = req.body || {};
 
-    if (!body && !imageUrl) {
+    if (!body && !imageUrl && (!attachments || attachments.length === 0)) {
       return res.status(400).json({ error: 'Message is empty' });
     }
 
@@ -5648,15 +5671,26 @@ app.post('/api/groups/:groupId/messages', express.json(), async (req, res) => {
       isBusinessUser = !!biz;
     }
 
+    // Handle attachments: if attachments array provided, use first image URL as image_url for backward compatibility
+    // Also store full attachments JSONB if column exists
+    const firstImageUrl = imageUrl || (attachments && attachments.length > 0 && attachments[0].type === 'image' ? attachments[0].url : null);
+    
+    const insertPayload = {
+      group_id: groupId,
+      sender_user_id: userId,
+      body: body || null,
+      image_url: firstImageUrl || null,
+      is_pinned: pin && isBusinessUser ? true : false,
+    };
+    
+    // Add attachments as JSONB if column exists (will be ignored if column doesn't exist)
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      insertPayload.attachments = attachments;
+    }
+
     const { data: message, error: msgErr } = await supabaseAdmin
       .from('chat_group_messages')
-      .insert({
-        group_id: groupId,
-        sender_user_id: userId,
-        body: body || null,
-        image_url: imageUrl || null,
-        is_pinned: pin && isBusinessUser ? true : false,
-      })
+      .insert(insertPayload)
       .select('*')
       .single();
 
@@ -6109,8 +6143,334 @@ app.get('/api/chat/list', async (req, res) => {
   }
 });
 
+// ============================================
+// DM SYSTEM V2 ENDPOINTS (dm_conversations + dm_messages)
+// ============================================
+
+// GET /api/dm - List all DM conversations for current user
+app.get('/api/dm', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversations = await listConversations(user.id);
+    return res.json({ conversations });
+  } catch (e) {
+    console.error('[api/dm] error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
+// POST /api/dm/open - Open or create a DM conversation
+app.post('/api/dm/open', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { userId: otherUserId } = req.body || {};
+
+    if (!otherUserId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    if (otherUserId === user.id) {
+      return res.status(400).json({ error: 'Cannot DM yourself' });
+    }
+
+    const conversation = await getOrCreateConversation(user.id, otherUserId);
+    return res.json({ conversation });
+  } catch (e) {
+    console.error('[api/dm/open] error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
+// GET /api/dm/:conversationId/messages - Get messages in a DM conversation
+app.get('/api/dm/:conversationId/messages', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversationId = req.params.conversationId;
+    const limit = Math.min(parseInt(req.query.limit || '50', 10), 100);
+    const before = req.query.before || null;
+
+    // Verify user is a participant
+    const { data: conv, error: convError } = await supabaseAdmin
+      .from('dm_conversations')
+      .select('participant_a, participant_b')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    if (convError || !conv) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    if (conv.participant_a !== user.id && conv.participant_b !== user.id) {
+      return res.status(403).json({ error: 'Not a participant in this conversation' });
+    }
+
+    const result = await listMessages(conversationId, before, limit);
+
+    // Mark messages as read when fetching
+    await supabaseAdmin
+      .from('dm_messages')
+      .update({ is_read: true })
+      .eq('conversation_id', conversationId)
+      .neq('sender_id', user.id)
+      .eq('is_read', false);
+
+    return res.json(result);
+  } catch (e) {
+    console.error('[api/dm/:conversationId/messages] error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
+// POST /api/dm/:conversationId/messages - Send a message in a DM conversation
+app.post('/api/dm/:conversationId/messages', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversationId = req.params.conversationId;
+    const { text, attachments } = req.body || {};
+
+    if (!text && (!attachments || attachments.length === 0)) {
+      return res.status(400).json({ error: 'text or attachments is required' });
+    }
+
+    // Verify user is a participant
+    const { data: conv, error: convError } = await supabaseAdmin
+      .from('dm_conversations')
+      .select('participant_a, participant_b')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    if (convError || !conv) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    if (conv.participant_a !== user.id && conv.participant_b !== user.id) {
+      return res.status(403).json({ error: 'Not a participant in this conversation' });
+    }
+
+    const message = await sendDM(conversationId, user.id, { text, attachments });
+    return res.json({ message });
+  } catch (e) {
+    console.error('[api/dm/:conversationId/messages] POST error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
+// ============================================
+// TYPING INDICATORS
+// ============================================
+
+// POST /api/chat/typing - Update typing status
+app.post('/api/chat/typing', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { scope, id, isTyping } = req.body || {};
+
+    if (!scope || !id || typeof isTyping !== 'boolean') {
+      return res.status(400).json({ error: 'scope, id, and isTyping are required' });
+    }
+
+    if (!['group', 'dm'].includes(scope)) {
+      return res.status(400).json({ error: 'scope must be "group" or "dm"' });
+    }
+
+    await updateTyping(scope, id, user.id, isTyping);
+
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[api/chat/typing] error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
+// GET /api/dm - List all DM conversations for current user
+app.get('/api/dm', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversations = await listConversations(user.id);
+    return res.json({ conversations });
+  } catch (e) {
+    console.error('[api/dm] error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
+// POST /api/dm/open - Open or create a DM conversation
+app.post('/api/dm/open', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { userId: otherUserId } = req.body || {};
+
+    if (!otherUserId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    if (otherUserId === user.id) {
+      return res.status(400).json({ error: 'Cannot DM yourself' });
+    }
+
+    const conversation = await getOrCreateConversation(user.id, otherUserId);
+    return res.json({ conversation });
+  } catch (e) {
+    console.error('[api/dm/open] error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
+// GET /api/dm/:conversationId/messages - Get messages in a DM conversation
+app.get('/api/dm/:conversationId/messages', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversationId = req.params.conversationId;
+    const limit = Math.min(parseInt(req.query.limit || '50', 10), 100);
+    const before = req.query.before || null;
+
+    // Verify user is a participant
+    const { data: conv, error: convError } = await supabaseAdmin
+      .from('dm_conversations')
+      .select('participant_a, participant_b')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    if (convError || !conv) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    if (conv.participant_a !== user.id && conv.participant_b !== user.id) {
+      return res.status(403).json({ error: 'Not a participant in this conversation' });
+    }
+
+    const result = await listMessages(conversationId, before, limit);
+
+    // Mark messages as read when fetching
+    await supabaseAdmin
+      .from('dm_messages')
+      .update({ is_read: true })
+      .eq('conversation_id', conversationId)
+      .neq('sender_id', user.id)
+      .eq('is_read', false);
+
+    return res.json(result);
+  } catch (e) {
+    console.error('[api/dm/:conversationId/messages] error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
+// POST /api/dm/:conversationId/messages - Send a message in a DM conversation
+app.post('/api/dm/:conversationId/messages', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversationId = req.params.conversationId;
+    const { text, attachments } = req.body || {};
+
+    if (!text && (!attachments || attachments.length === 0)) {
+      return res.status(400).json({ error: 'text or attachments is required' });
+    }
+
+    // Verify user is a participant
+    const { data: conv, error: convError } = await supabaseAdmin
+      .from('dm_conversations')
+      .select('participant_a, participant_b')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    if (convError || !conv) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    if (conv.participant_a !== user.id && conv.participant_b !== user.id) {
+      return res.status(403).json({ error: 'Not a participant in this conversation' });
+    }
+
+    const message = await sendDM(conversationId, user.id, { text, attachments });
+    return res.json({ message });
+  } catch (e) {
+    console.error('[api/dm/:conversationId/messages] POST error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
+// GET /api/chat/typing - Get currently typing users
+app.get('/api/chat/typing', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { scope, id } = req.query || {};
+
+    if (!scope || !id) {
+      return res.status(400).json({ error: 'scope and id query params are required' });
+    }
+
+    const typingUsers = await getTypingUsers(scope, id);
+
+    // Filter out current user
+    const otherTypingUsers = typingUsers.filter(u => u.id !== user.id);
+
+    return res.json({ users: otherTypingUsers });
+  } catch (e) {
+    console.error('[api/chat/typing] GET error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
+// Periodic cleanup of stale typing records (optional, can be called manually or via cron)
+app.post('/api/chat/typing/cleanup', async (req, res) => {
+  try {
+    await cleanupStaleTyping();
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[api/chat/typing/cleanup] error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
   app.listen(PORT, () => {
     console.log(`[strainspotter] backend listening on http://localhost:${PORT}`);
+    // Clean up stale typing records every 5 minutes
+    setInterval(() => {
+      cleanupStaleTyping().catch(err => {
+        console.error('[cleanup] Stale typing cleanup error', err);
+      });
+    }, 5 * 60 * 1000);
   });
 }
 

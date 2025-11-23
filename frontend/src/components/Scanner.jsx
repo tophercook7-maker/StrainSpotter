@@ -8,7 +8,7 @@ import {
   Stack,
 } from '@mui/material';
 import CannabisLeafIcon from './CannabisLeafIcon';
-import { API_BASE, FOUNDER_EMAIL, FOUNDER_UNLIMITED_ENABLED } from '../config';
+import { API_BASE } from '../config';
 import { useMembership } from '../membership/MembershipContext';
 import { useAuth } from '../hooks/useAuth';
 import { useCreditBalance } from '../hooks/useCreditBalance';
@@ -42,15 +42,17 @@ export default function Scanner(props) {
   } = useMembership();
 
   // Check for unlimited scans from credit balance API
-  const { summary: creditSummary } = useCreditBalance();
-  const hasUnlimited = Boolean(creditSummary?.unlimited || creditSummary?.isUnlimited || creditSummary?.membershipTier === 'founder_unlimited' || creditSummary?.tier === 'admin');
-  const email = user?.email ?? null;
-  const isFounder = FOUNDER_UNLIMITED_ENABLED && email === FOUNDER_EMAIL;
+  const { summary: creditSummary, isFounder: ctxIsFounder } = useCreditBalance?.() ?? {};
+  
+  // Safe isFounder check with typeof guard
+  const isFounderSafe = typeof ctxIsFounder !== 'undefined' ? Boolean(ctxIsFounder) : false;
+  
+  const hasUnlimited = isFounderSafe || Boolean(creditSummary?.unlimited || creditSummary?.isUnlimited || creditSummary?.membershipTier === 'founder_unlimited' || creditSummary?.tier === 'admin');
   
   // Now everyone depends on totalAvailableScans, including members.
   // Founders/admins with unlimited scans can always scan
-  const canScan = isFounder || hasUnlimited || totalAvailableScans > 0;
-  const lowCredits = !isFounder && !hasUnlimited && totalAvailableScans > 0 && totalAvailableScans <= 5;
+  const canScan = isFounderSafe || hasUnlimited || totalAvailableScans > 0;
+  const lowCredits = !isFounderSafe && !hasUnlimited && totalAvailableScans > 0 && totalAvailableScans <= 5;
 
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];

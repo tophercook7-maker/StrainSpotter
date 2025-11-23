@@ -44,6 +44,28 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Founder detection - compute from current session/user
+  // CRITICAL: Always compute isFounder to ensure it's never undefined
+  const FOUNDER_EMAILS = [
+    'topher.cook7@gmail.com',
+    // add any other founder emails here
+  ];
+  
+  // Safely get email from session or user, with fallback to empty string
+  const email = (session?.user?.email || user?.email || '').toLowerCase().trim();
+  const isFounder = email ? FOUNDER_EMAILS.includes(email) : false;
+  
+  // Optional debug log
+  useEffect(() => {
+    if (email) {
+      console.log('[FounderDebug]', {
+        email,
+        FOUNDER_UNLIMITED_ENABLED,
+        isFounder,
+      });
+    }
+  }, [email, isFounder]);
+
   useEffect(() => {
     if (!supabase) {
       setLoading(false);
@@ -102,7 +124,10 @@ export function AuthProvider({ children }) {
     user,
     session,
     loading,
-    signOut
+    signOut,
+    // Founder flags — exposed for hooks to use
+    isFounder: Boolean(isFounder),
+    FOUNDER_UNLIMITED_ENABLED: Boolean(FOUNDER_UNLIMITED_ENABLED),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

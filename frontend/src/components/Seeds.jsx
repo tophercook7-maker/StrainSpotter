@@ -2,7 +2,8 @@ import { useNavigate } from "react-router-dom";
 import CannabisLeafIcon from "./CannabisLeafIcon";
 import React, { useEffect, useState } from 'react';
 import { API_BASE } from '../config';
-import { Card, CardContent, Typography, Grid, CircularProgress, Alert, Button, Stack, Container, Box } from '@mui/material';
+import { Card, CardContent, Typography, Grid, CircularProgress, Alert, Button, Stack, Container, Box, IconButton } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 export default function Seeds({ onBack }) {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ export default function Seeds({ onBack }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    let cancelled = false;
     const fallbackSeeds = [
       { id: 'ilgm', name: 'I Love Growing Marijuana (ILGM)', breeder: 'ILGM', type: 'seed bank', description: 'Premium cannabis seeds with germination guarantee. Feminized, autoflower, and regular seeds available.', url: 'https://ilgm.com' },
       { id: 'seedsman', name: 'Seedsman', breeder: 'Seedsman', type: 'seed bank', description: 'One of the oldest and most trusted online seed banks. Huge selection from top breeders worldwide.', url: 'https://www.seedsman.com' },
@@ -19,108 +21,176 @@ export default function Seeds({ onBack }) {
       { id: 'growers-choice', name: 'Growers Choice Seeds', breeder: 'Growers Choice', type: 'seed bank', description: 'US-based seed company with 90% germination guarantee. Fast domestic shipping.', url: 'https://growerschoiceseeds.com' },
       { id: 'homegrown', name: 'Homegrown Cannabis Co.', breeder: 'Homegrown', type: 'seed bank', description: 'Premium genetics with expert growing advice. Free seeds with every order.', url: 'https://homegrowncannabisco.com' }
     ];
-    fetch(`${API_BASE}/api/seeds`)
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to load seeds');
-        return res.json();
-      })
-      .then(data => {
+    
+    async function fetchVendors() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`${API_BASE}/api/seeds`);
+        if (!res.ok) {
+          throw new Error(`Failed to load seeds: ${res.status}`);
+        }
+        const data = await res.json();
+        if (cancelled) return;
+        
         // Merge API and fallback, deduplicate by id
-        const allSeeds = [...data, ...fallbackSeeds].filter((seed, idx, arr) =>
+        const allSeeds = [...(Array.isArray(data) ? data : []), ...fallbackSeeds].filter((seed, idx, arr) =>
           arr.findIndex(s => s.id === seed.id) === idx
         );
         setSeeds(allSeeds);
-      })
-      .catch(e => {
-        console.error('[Seeds] Error:', e);
-        setSeeds(fallbackSeeds);
-        setError(null);
-      })
-      .finally(() => setLoading(false));
+      } catch (e) {
+        console.error('[Seeds] Error loading vendors:', e);
+        if (!cancelled) {
+          setError('Unable to load seed vendors right now.');
+          setSeeds(fallbackSeeds); // Use fallback on error
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+    
+    fetchVendors();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
 
   // Show placeholder only if truly empty
   const showPlaceholder = !seeds || seeds.length === 0;
 
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    } else {
+      navigate("/");
+    }
+  };
+
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }}>
-        <button
-          style={{
-            position: "absolute",
-            top: 16,
-            left: 16,
-            zIndex: 100,
-            background: "rgba(34, 139, 34, 0.25)",
-            border: "1px solid #228B22",
-            borderRadius: 12,
-            boxShadow: "0 2px 12px rgba(34,139,34,0.15)",
-            backdropFilter: "blur(8px)",
-            color: "#228B22",
-            padding: "8px 16px",
-            display: "flex",
-            alignItems: "center",
-            fontWeight: 600,
-            fontSize: 18,
-          }}
-          onClick={() => navigate("/")}
+    <Box
+      sx={{
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Header (fixed) */}
+      <Box
+        sx={{
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          p: 2,
+          gap: 1.5,
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          bgcolor: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(10px)',
+          zIndex: 1,
+        }}
+      >
+        <IconButton
+          edge="start"
+          onClick={handleBack}
+          sx={{ color: '#fff' }}
         >
-          <CannabisLeafIcon style={{ marginRight: 8, height: 24 }} />
-          Home
-        </button>
-      {onBack && (
-        <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: '#7CB342', color: 'white', textTransform: 'none', fontWeight: 700, borderRadius: 999, mb: 2, '&:hover': { bgcolor: '#689f38' } }}>← Back to Garden</Button>
-      )}
-      <Typography variant="h4" gutterBottom sx={{ color: 'white' }}>Seeds & Genetics</Typography>
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff', flex: 1 }}>
+          Seed Vendors
+        </Typography>
+      </Box>
 
-      {loading && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress />
-        </Box>
-      )}
+      {/* Scrollable content */}
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
+        <Container maxWidth="lg" sx={{ py: 3 }}>
+          {loading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          )}
 
-  {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      {!loading && !error && showPlaceholder && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          Our seed catalog is being populated. In the meantime, browse strains to research genetics or check back soon for sellers and breeders.
-        </Alert>
-      )}
+          {error && (
+            <Alert 
+              severity="warning" 
+              sx={{ mb: 2 }}
+              action={
+                <Button color="inherit" size="small" onClick={() => window.location.reload()}>
+                  Retry
+                </Button>
+              }
+            >
+              {error}
+            </Alert>
+          )}
 
-      {!loading && !error && !showPlaceholder && (
-        <Grid container spacing={2}>
-          {seeds.map(seed => (
-            <Grid item size={{ xs: 12, sm: 6, md: 4 }} key={seed.id}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6">{seed.name}</Typography>
-                  <Typography variant="body2">{seed.breeder}</Typography>
-                  <Typography variant="body2">Type: {seed.type}</Typography>
-                  <Typography variant="body2">THC: {seed.thc || 'N/A'}%</Typography>
-                  <Typography variant="body2">CBD: {seed.cbd || 'N/A'}%</Typography>
-                  {seed.description && (
-                    <Typography variant="body2" sx={{ mt: 1 }}>{seed.description}</Typography>
-                  )}
-                  {seed.url && (
-                    <Stack direction="row" sx={{ mt: 1 }}>
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="primary"
-                        href={seed.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        View Seller
-                      </Button>
-                    </Stack>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-      )}
-    </Container>
+          {!loading && !error && showPlaceholder && (
+            <Box sx={{ padding: '16px', textAlign: 'center', opacity: 0.7 }}>
+              <Typography variant="h6" sx={{ color: '#fff', mb: 1 }}>
+                Seed vendors coming soon
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#fff' }}>
+                We're still wiring up live seed vendors. Check back in a bit!
+              </Typography>
+            </Box>
+          )}
+
+          {!loading && !error && !showPlaceholder && (
+            Array.isArray(seeds) && seeds.length > 0 ? (
+              <Grid container spacing={2}>
+                {seeds.map(seed => (
+                  <Grid item size={{ xs: 12, sm: 6, md: 4 }} key={seed.id}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="h6">{seed.name}</Typography>
+                        <Typography variant="body2">{seed.breeder}</Typography>
+                        <Typography variant="body2">Type: {seed.type}</Typography>
+                        <Typography variant="body2">THC: {seed.thc || 'N/A'}%</Typography>
+                        <Typography variant="body2">CBD: {seed.cbd || 'N/A'}%</Typography>
+                        {seed.description && (
+                          <Typography variant="body2" sx={{ mt: 1 }}>{seed.description}</Typography>
+                        )}
+                        {seed.url && (
+                          <Stack direction="row" sx={{ mt: 1 }}>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="primary"
+                              href={seed.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              View Seller
+                            </Button>
+                          </Stack>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            ) : (
+              <Box sx={{ padding: '16px', textAlign: 'center', opacity: 0.7 }}>
+                <Typography variant="body1" sx={{ color: '#fff' }}>
+                  No seed vendors found yet for this area. Try adjusting your filters.
+                </Typography>
+              </Box>
+            )
+          )}
+        </Container>
+      </Box>
+    </Box>
   );
 }

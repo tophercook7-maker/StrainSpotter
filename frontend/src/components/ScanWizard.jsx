@@ -12,6 +12,7 @@ import FeedbackIcon from '@mui/icons-material/Feedback';
 import { supabase, SUPABASE_ANON_KEY } from '../supabaseClient';
 import { API_BASE, FUNCTIONS_BASE } from '../config';
 import { normalizeScanResult, getScanKindLabel, cleanCandidateName } from '../utils/scanResultUtils';
+import { useCanScan } from '../hooks/useCanScan';
 
 const ConfidenceCallout = ({ confidence }) => {
   if (confidence == null) return null;
@@ -72,6 +73,9 @@ export default function ScanWizard({ onBack }) {
     { credits: 200, price: '$9.99' },
     { credits: 500, price: '$19.99' }
   ];
+
+  // Use shared canScan hook for founder checks
+  const { canScan: canScanFromHook, isFounder: isFounderFromHook, remainingScans: remainingScansFromHook } = useCanScan();
 
   const membershipTier = (currentUser?.user_metadata?.membership || currentUser?.user_metadata?.tier || '').toString().toLowerCase();
   const metadataMembershipActive = ['club', 'full-access', 'pro', 'owner', 'admin', 'garden', 'member'].some((token) => membershipTier.includes(token));
@@ -460,34 +464,40 @@ export default function ScanWizard({ onBack }) {
           });
 
           if (processResp.status === 402) {
-            let errorPayload = {};
-            try {
-              errorPayload = await processResp.json();
-            } catch (err) {
-              console.warn('[ScanWizard] Could not parse credit error payload:', err);
+            // If user is founder, they should never hit 402 - log warning and continue
+            if (isFounderFromHook) {
+              console.warn('[ScanWizard] Founder account hit 402 - backend may not be recognizing founder status. Continuing anyway.');
+              // Continue anyway - founders should bypass credit checks
+            } else {
+              let errorPayload = {};
+              try {
+                errorPayload = await processResp.json();
+              } catch (err) {
+                console.warn('[ScanWizard] Could not parse credit error payload:', err);
+              }
+
+              // New credit system V2 error handling
+              const tier = errorPayload.tier || 'free';
+              const needsUpgrade = errorPayload.needsUpgrade || false;
+
+              let message = errorPayload.message || 'No scan credits remaining.';
+
+              if (needsUpgrade) {
+                message = '🎯 You\'ve used all 10 free scans! Unlock StrainSpotter (20 scans) or join Monthly Member ($4.99/mo) for 200 scans/month. Top-up packs (50 • 200 • 500) are also available.';
+              } else if (tier === 'member' || tier === 'monthly_member') {
+                message = '📊 You\'ve used all 200 scans this month! Add a top-up pack (50 • 200 • 500 scans) or wait for your next monthly refresh.';
+              } else if (tier === 'premium') {
+                message = '🚀 You\'ve used the legacy premium allotment. Grab a top-up pack (50 • 200 • 500 scans) to keep scanning.';
+              }
+
+              setAlertMsg(message);
+              setAlertOpen(true);
+              setTopUpMessage(message);
+              setShowTopUpDialog(true);
+              setScanStatus('Out of credits');
+              await loadCredits();
+              return;
             }
-
-            // New credit system V2 error handling
-            const tier = errorPayload.tier || 'free';
-            const needsUpgrade = errorPayload.needsUpgrade || false;
-
-            let message = errorPayload.message || 'No scan credits remaining.';
-
-            if (needsUpgrade) {
-              message = '🎯 You\'ve used all 10 free scans! Unlock StrainSpotter (20 scans) or join Monthly Member ($4.99/mo) for 200 scans/month. Top-up packs (50 • 200 • 500) are also available.';
-            } else if (tier === 'member' || tier === 'monthly_member') {
-              message = '📊 You\'ve used all 200 scans this month! Add a top-up pack (50 • 200 • 500 scans) or wait for your next monthly refresh.';
-            } else if (tier === 'premium') {
-              message = '🚀 You\'ve used the legacy premium allotment. Grab a top-up pack (50 • 200 • 500 scans) to keep scanning.';
-            }
-
-            setAlertMsg(message);
-            setAlertOpen(true);
-            setTopUpMessage(message);
-            setShowTopUpDialog(true);
-            setScanStatus('Out of credits');
-            await loadCredits();
-            return;
           }
 
           if (!processResp.ok) {

@@ -31,23 +31,28 @@ export function applyFounderOverride(session, creditState) {
 }
 
 export function useCreditBalance() {
-  const { session } = useAuth();
+  // Get founder flags from AuthContext - this ensures isFounder is always defined
+  const { session, isFounder: isFounderFromContext, FOUNDER_UNLIMITED_ENABLED: FOUNDER_UNLIMITED_ENABLED_FROM_CONTEXT } = useAuth();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Define founder check at hook level so it's available everywhere
+  // Use founder flags from context, with fallback to local calculation for safety
   const email = session?.user?.email ?? null;
   const FOUNDER_EMAILS = [FOUNDER_EMAIL];
-  const isFounder = email ? FOUNDER_EMAILS.includes(email.toLowerCase()) : false;
-  const effectiveUnlimited = FOUNDER_UNLIMITED_ENABLED && isFounder;
+  const isFounderLocal = email ? FOUNDER_EMAILS.includes(email.toLowerCase()) : false;
+  // Prefer context value, fallback to local calculation
+  const isFounder = isFounderFromContext !== undefined ? Boolean(isFounderFromContext) : isFounderLocal;
+  const FOUNDER_UNLIMITED_ENABLED_VALUE = FOUNDER_UNLIMITED_ENABLED_FROM_CONTEXT !== undefined ? Boolean(FOUNDER_UNLIMITED_ENABLED_FROM_CONTEXT) : FOUNDER_UNLIMITED_ENABLED;
+  const effectiveUnlimited = FOUNDER_UNLIMITED_ENABLED_VALUE && isFounder;
 
   const fetchSummary = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     // If founder, set unlimited credits immediately and skip API call
-    if (effectiveUnlimited && session) {
+    // This short-circuits all credit checks for founders
+    if (isFounder && session) {
       const founderState = applyFounderOverride(session, {
         tier: 'admin',
         creditsRemaining: Infinity,
@@ -114,7 +119,8 @@ export function useCreditBalance() {
       setError(err.message || 'Unable to load credits');
       
       // Even on error, apply founder override if applicable
-      if (effectiveUnlimited && session) {
+      // Founders should always have unlimited credits, even if API fails
+      if (isFounder && session) {
         const founderState = applyFounderOverride(session, {
           tier: 'admin',
           creditsRemaining: Infinity,
@@ -137,7 +143,7 @@ export function useCreditBalance() {
     } finally {
       setLoading(false);
     }
-  }, [session, effectiveUnlimited]);
+  }, [session, isFounder, FOUNDER_UNLIMITED_ENABLED_VALUE, email]);
 
   useEffect(() => {
     fetchSummary();
@@ -147,7 +153,9 @@ export function useCreditBalance() {
     summary,
     loading,
     error,
-    refresh: fetchSummary
+    refresh: fetchSummary,
+    isFounder, // Export isFounder so components can use it
+    canScan: isFounder || (summary?.canScan ?? false) // Short-circuit: founders can always scan
   };
 }
 

@@ -27,7 +27,8 @@ import { useAuth } from '../hooks/useAuth';
 import { useMembership } from '../membership/MembershipContext';
 import { useProMode } from '../contexts/ProModeContext';
 import { useCreditBalance } from '../hooks/useCreditBalance';
-import { API_BASE, FOUNDER_EMAIL, FOUNDER_UNLIMITED_ENABLED } from '../config';
+import { useCanScan } from '../hooks/useCanScan';
+import { API_BASE } from '../config';
 import { normalizeScanResult, transformScanResult } from '../utils/scanResultUtils';
 import { resizeImageToBase64 } from '../utils/resizeImageToBase64';
 // Removed deriveDisplayStrain - using transformScanResult as single source of truth
@@ -64,20 +65,23 @@ export default function ScanPage({ onBack, onNavigate }) {
     registerScanConsumed,
   } = useMembership();
   const { proRole, proEnabled } = useProMode();
-  const { summary: creditSummary } = useCreditBalance();
-  const hasUnlimited = Boolean(creditSummary?.unlimited || creditSummary?.isUnlimited || creditSummary?.membershipTier === 'founder_unlimited' || creditSummary?.tier === 'admin');
+  // Use shared canScan hook for consistent founder checks
+  const { canScan: canScanFromHook, isFounder, remainingScans: remainingScansFromHook } = useCanScan();
+  const { summary: creditSummary } = useCreditBalance?.() ?? {};
+  
+  const hasUnlimited = isFounder || Boolean(creditSummary?.unlimited || creditSummary?.isUnlimited || creditSummary?.membershipTier === 'founder_unlimited' || creditSummary?.tier === 'admin');
   const email = user?.email ?? null;
-  const isFounder = FOUNDER_UNLIMITED_ENABLED && email === FOUNDER_EMAIL;
   const isGuest = !user;
   
   // Debug logging for founder status
   useEffect(() => {
     console.log('[FounderDebug]', {
       email,
-      FOUNDER_UNLIMITED_ENABLED,
-      isFounder: FOUNDER_UNLIMITED_ENABLED && email === FOUNDER_EMAIL,
+      isFounder,
+      canScan: canScanFromHook,
+      remainingScans: remainingScansFromHook,
     });
-  }, [email]);
+  }, [email, isFounder, canScanFromHook, remainingScansFromHook]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -95,9 +99,9 @@ export default function ScanPage({ onBack, onNavigate }) {
   const [multiAngleMode, setMultiAngleMode] = useState(false); // Toggle for multi-angle mode
   const MAX_FRAMES = 3;
   
-  // Now everyone depends on totalAvailableScans, including members.
-  // Founders/admins with unlimited scans can always scan
-  const canScan = isFounder || hasUnlimited || totalAvailableScans > 0;
+  // Use canScan from hook (includes founder check)
+  // Fallback to local calculation if hook fails
+  const canScan = canScanFromHook ?? (isFounder || hasUnlimited || totalAvailableScans > 0);
   const [scanPhase, setScanPhase] = useState('camera-loading'); // 'camera-loading' | 'ready' | 'capturing' | 'uploading' | 'processing' | 'done' | 'error'
   const [statusMessage, setStatusMessage] = useState('Opening scanner…');
   
@@ -119,9 +123,10 @@ export default function ScanPage({ onBack, onNavigate }) {
   const [lastPhotoUrl, setLastPhotoUrl] = useState(null);
   const [framePulsing, setFramePulsing] = useState(false);
   
-  // View state management
-  const [activeView, setActiveView] = useState('scanner'); // 'scanner' | 'result'
+  // View state management - unified scan flow state machine
+  const [activeScanView, setActiveScanView] = useState('scanner'); // 'scanner' | 'result' | 'history'
   const [completedScan, setCompletedScan] = useState(null); // holds the scan record / payload for the result page
+  const [selectedScanId, setSelectedScanId] = useState(null); // ID of the scan to show in result view
   
   // Track processed scan IDs to avoid duplicate /process calls
   const processedScanIdsRef = useRef(new Set());
@@ -198,8 +203,9 @@ export default function ScanPage({ onBack, onNavigate }) {
     setScanResult(null);
     setIsUploading(false);
     setIsPolling(false);
-    setActiveView('scanner');
+    setActiveScanView('scanner');
     setCompletedScan(null);
+    setSelectedScanId(null); // Clear selected scan ID
     setHasCompletedScan(false); // Reset completion flag
     setCurrentScanId(null);
     hasCompletedScanRef.current = false; // Reset ref flag
@@ -242,19 +248,34 @@ export default function ScanPage({ onBack, onNavigate }) {
   };
 
   const handleBackToHome = () => {
-    // Prefer using the onBack prop if provided by App/Home
-    if (typeof onBack === 'function') {
-      onBack();
-      return;
-    }
-    // Fallback: hard reset SPA to home
-    if (onNavigate && typeof onNavigate === 'function') {
-      onNavigate('home');
-      return;
-    }
-    // Last resort: reload
-    window.location.href = '/';
+    // Go back to scanner view within the same component
+    // Don't navigate away - stay in the scanner flow
+    setActiveScanView('scanner');
+    // Optionally reset scan state if user wants a fresh start
+    // resetScan(); // Uncomment if you want to clear everything
   };
+
+  // Unified handler for scan completion - ALWAYS routes to result page, NEVER to history
+  const handleScanCompleted = React.useCallback(
+    (scan) => {
+      if (!scan || !scan.id) {
+        console.warn('[SCAN] handleScanCompleted called with invalid scan', scan);
+        return;
+      }
+
+      console.log('[SCAN] Completed, going to result page', scan.id);
+
+      // Remember in local state
+      setSelectedScanId(scan.id);
+
+      // Make results the active view (for tabbed UI)
+      setActiveScanView('result');
+
+      // Note: This app uses internal state navigation, not React Router
+      // The result view is rendered when activeScanView === 'result' && completedScan
+    },
+    [] // No dependencies needed
+  );
 
   // Helper function to start a scan for a given file
   const startScanForFile = async (file) => {
@@ -887,7 +908,11 @@ export default function ScanPage({ onBack, onNavigate }) {
           // Store transformed result for ScanResultCard (single source of truth)
           transformed: transformed || null,
         });
-        setActiveView('result');
+        
+        // CRITICAL: Use unified handler to route to result page (NOT history)
+        if (scan.status === 'completed' && scan.id) {
+          handleScanCompleted(scan);
+        }
         
         // Count successful scans (only for non-members)
         if (!isMember) {
@@ -1155,7 +1180,7 @@ export default function ScanPage({ onBack, onNavigate }) {
 
   // Show loading state if camera is not ready (for future camera integration)
   // RESULT MODE
-  if (activeView === 'result' && completedScan) {
+  if (activeScanView === 'result' && completedScan) {
     return (
       <Stack
         direction="column"
@@ -1194,7 +1219,7 @@ export default function ScanPage({ onBack, onNavigate }) {
               variant="subtitle2"
               sx={{ color: '#A5D6A7', fontWeight: 500 }}
             >
-              Back to home
+              Back to scanner
             </Typography>
           </Box>
 
@@ -1358,7 +1383,7 @@ export default function ScanPage({ onBack, onNavigate }) {
                 },
               }}
             >
-              Back home
+              Back to scanner
             </Button>
             <Button
               variant="contained"
@@ -1795,7 +1820,7 @@ export default function ScanPage({ onBack, onNavigate }) {
                 fullWidth
                 size="large"
                 onClick={selectedFile ? handleStartScan : handleChoosePhotoClick}
-                disabled={(!selectedFile && isChoosingFile) || isUploading || isPolling}
+                disabled={(!selectedFile && isChoosingFile) || isUploading || isPolling || (previewUrl && (isUploading || isPolling))}
               sx={{
                 textTransform: 'none',
                 fontWeight: 700,
@@ -1889,6 +1914,56 @@ export default function ScanPage({ onBack, onNavigate }) {
                   : 'Clear, close-up photos of labels or flowers give the best results.'}
               </Typography>
             </Stack>
+
+            {/* Photo Preview - Show when photo is selected */}
+            {(previewUrl || selectedFile) && (
+              <Box
+                sx={{
+                  mt: 2,
+                  mb: 1,
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  border: '1px solid',
+                  borderColor: 'rgba(124, 179, 66, 0.3)',
+                  bgcolor: 'rgba(0, 0, 0, 0.3)',
+                }}
+              >
+                <Box
+                  component="img"
+                  src={previewUrl || (selectedFile ? URL.createObjectURL(selectedFile) : null)}
+                  alt="Selected photo"
+                  sx={{
+                    width: '100%',
+                    height: 220,
+                    objectFit: 'cover',
+                    display: 'block'
+                  }}
+                />
+                <Box sx={{ p: 1.5, borderTop: '1px solid rgba(124, 179, 66, 0.2)' }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    {(isUploading || isPolling) && (
+                      <CircularProgress size={16} sx={{ color: '#9CCC65' }} />
+                    )}
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: isUploading || isPolling
+                          ? 'rgba(156, 204, 101, 0.9)'
+                          : 'rgba(224, 242, 241, 0.7)',
+                        fontSize: 12,
+                        fontWeight: isUploading || isPolling ? 600 : 400,
+                      }}
+                    >
+                      {isUploading
+                        ? 'Uploading photo…'
+                        : isPolling
+                        ? 'Processing scan… this may take a few seconds.'
+                        : 'Photo selected. Ready to scan.'}
+                    </Typography>
+                  </Stack>
+                </Box>
+              </Box>
+            )}
 
             {/* Status bar */}
             <Box

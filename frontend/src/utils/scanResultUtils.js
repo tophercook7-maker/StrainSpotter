@@ -238,8 +238,8 @@ export function getPrimaryNameForResult(result) {
  * Transform scan result using canonical strain from backend.
  * CRITICAL: Frontend now consumes canonicalStrain as single source of truth.
  * 
- * @param {Object} scan - Backend scan object (should include canonicalStrain)
- * @returns {Object} Transformed result with strainName, strainSource, effectsTags, flavorTags
+ * @param {Object} scan - Backend scan object (should include canonicalStrain, seedBank, growProfile)
+ * @returns {Object} Transformed result with strainName, strainSource, effectsTags, flavorTags, seedBank, growProfile
  */
 export function transformScanResult(scan) {
   if (!scan) return null;
@@ -248,25 +248,40 @@ export function transformScanResult(scan) {
   const pkg = scan.packaging_insights || {};
   const label = scan.label_insights || {};
   const visual = scan.result?.visualMatches?.[0] || null;
+  const result = scan.result || {};
 
-  const isPackaged = !!pkg.strainName || !!label.strainName;
-
-  const packagingStrain =
-    pkg.strainName ||
-    label.strainName ||
+  // CRITICAL: Read canonical strain from new backend fields
+  // Priority: scan.canonicalStrain > result.canonicalStrain > legacy fields
+  const canonicalStrain = 
+    scan.canonicalStrain || 
+    result.canonicalStrain || 
     null;
 
-  const visualStrain =
-    visual?.name && visual.confidence >= 0.8
-      ? visual.name
-      : null;
+  // Read seedBank and growProfile from result
+  const seedBank = result.seedBank || null;
+  const growProfile = result.growProfile || null;
 
-  const finalStrain = isPackaged
-    ? packagingStrain
-    : visualStrain;
+  // Determine if this is a packaged product
+  const isPackaged = !!pkg.strainName || !!label.strainName || canonicalStrain?.source === 'packaging';
 
-  const isPackagedKnown = isPackaged && !!packagingStrain;
-  const isBudUnknown = !isPackaged && !visualStrain;
+  // Use canonical strain name if available, otherwise fall back to legacy fields
+  let finalStrain = null;
+  if (canonicalStrain && canonicalStrain.name && canonicalStrain.name !== 'Cannabis (strain unknown)') {
+    finalStrain = canonicalStrain.name;
+  } else {
+    // Fallback to legacy fields for backward compatibility
+    const packagingStrain = pkg.strainName || label.strainName || null;
+    const visualStrain = visual?.name && visual.confidence >= 0.8 ? visual.name : null;
+    finalStrain = isPackaged ? packagingStrain : visualStrain;
+  }
+
+  // For packaged products with canonical.confidence === 1, we know the strain for sure
+  const isPackagedKnown = isPackaged && (
+    (canonicalStrain && canonicalStrain.confidence === 1) || 
+    !!pkg.strainName || 
+    !!label.strainName
+  );
+  const isBudUnknown = !isPackaged && !finalStrain;
 
   // Extract THC/CBD from packaging or label insights (needed for PackagedProductCard)
   const potency = pkg.potency || {};
@@ -332,12 +347,33 @@ export function transformScanResult(scan) {
     }
   }
 
+  // For packaged products with canonical.confidence === 1, use canonical name only
+  // Don't show "strain unknown" or "strain estimate" copy
+  let displayStrainName = finalStrain || 'Cannabis (strain unknown)';
+  if (isPackaged && canonicalStrain && canonicalStrain.confidence === 1 && canonicalStrain.name) {
+    displayStrainName = canonicalStrain.name;
+  }
+
+  // Get hero image URL - prefer strain hero image, fallback to scan image
+  const strainHeroImageUrl = 
+    result.strainHeroImageUrl ||
+    canonicalStrain?.heroImageUrl ||
+    canonicalStrain?.image_url ||
+    null;
+  
+  const scanImageUrl = scan.image_url || null;
+  
+  const heroImageUrl = strainHeroImageUrl || scanImageUrl || null;
+
   return {
-    strainName: finalStrain || 'Cannabis (strain unknown)',
+    strainName: displayStrainName,
+    canonicalStrain, // Include canonical strain object
+    seedBank, // Include seedBank data
+    growProfile, // Include growProfile data
     isPackagedProduct: isPackaged,
     isPackagedKnown,
     isBudUnknown,
-    matchConfidence: visualConfidence,
+    matchConfidence: canonicalStrain?.confidence ?? visualConfidence,
     thc,
     cbd,
     effectsTags,
@@ -348,6 +384,8 @@ export function transformScanResult(scan) {
     warnings: aiWarnings,
     summary: aiSummaryText,
     aromaTags: aiAromas, // New field for aromas
+    heroImageUrl, // Hero image URL (strain hero or scan image)
+    scanImageUrl, // Original scan image URL
     // Keep old field names for backward compatibility
     aiIntensity,
     aiSummaryText,

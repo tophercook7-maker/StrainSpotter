@@ -107,26 +107,59 @@ export default function JournalPage({ onBack }) {
   );
 
   return (
-    <Box sx={{ minHeight: '100vh', py: 4 }}>
-      <Container maxWidth="md">
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <LibraryBooksIcon sx={{ color: '#7CB342' }} />
-            <Typography variant="h5" fontWeight={800}>
-              Journal
-            </Typography>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Fixed header */}
+      <Box
+        sx={{
+          flexShrink: 0,
+          py: 2,
+          px: 2,
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          bgcolor: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(10px)',
+          zIndex: 1,
+        }}
+      >
+        <Container maxWidth="md">
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" spacing={1} alignItems="center">
+              <LibraryBooksIcon sx={{ color: '#7CB342' }} />
+              <Typography variant="h5" fontWeight={800} sx={{ color: '#fff' }}>
+                Journal
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={1}>
+              {onBack && (
+                <Button variant="outlined" onClick={onBack} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.3)' }}>
+                  Back
+                </Button>
+              )}
+              <Button variant="contained" onClick={() => { setDialogDefaults(null); setDialogOpen(true); }}>
+                New entry
+              </Button>
+            </Stack>
           </Stack>
-          <Stack direction="row" spacing={1}>
-            <Button variant="outlined" onClick={onBack}>
-              Back
-            </Button>
-            <Button variant="contained" onClick={() => { setDialogDefaults(null); setDialogOpen(true); }}>
-              New entry
-            </Button>
-          </Stack>
-        </Stack>
+        </Container>
+      </Box>
 
-        {loading && (
+      {/* Scrollable content */}
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
+        <Container maxWidth="md" sx={{ py: 4 }}>
+          {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
             <CircularProgress />
           </Box>
@@ -184,8 +217,9 @@ export default function JournalPage({ onBack }) {
               ))}
             </Stack>
           </>
-        )}
-      </Container>
+          )}
+        </Container>
+      </Box>
       <JournalDialog
         open={dialogOpen}
         defaults={dialogDefaults}

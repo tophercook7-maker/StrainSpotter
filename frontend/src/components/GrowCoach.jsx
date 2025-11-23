@@ -945,33 +945,56 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
   };
 
   return (
-    <Container
-      maxWidth="md"
+    <Box
       sx={{
-        pt: 'calc(env(safe-area-inset-top) + 40px)',
-        pb: 3,
-        px: { xs: 2, sm: 3 },
-        background: 'rgba(248,252,248,0.96)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        border: '1px solid rgba(0,0,0,0.12)',
-        boxShadow: '0 20px 40px rgba(18,36,18,0.18)',
-        minHeight: '100vh',
-        position: 'relative',
-        zIndex: 2
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        overflow: 'hidden',
       }}
     >
-      {onBack && (
-        <Button
-          onClick={onBack}
-          startIcon={<ArrowBack />}
-          sx={{ mb: 1, textTransform: 'none', fontWeight: 700, color: '#000' }}
-        >
-          Back to Garden
-        </Button>
-      )}
+      {/* Fixed header */}
+      <Box
+        sx={{
+          flexShrink: 0,
+          pt: 'calc(env(safe-area-inset-top) + 20px)',
+          pb: 2,
+          px: { xs: 2, sm: 3 },
+          background: 'rgba(248,252,248,0.96)',
+          backdropFilter: 'blur(20px)',
+          borderBottom: '1px solid rgba(0,0,0,0.12)',
+          zIndex: 2
+        }}
+      >
+        {onBack && (
+          <Button
+            onClick={onBack}
+            startIcon={<ArrowBack />}
+            sx={{ mb: 1, textTransform: 'none', fontWeight: 700, color: '#000' }}
+          >
+            Back to Garden
+          </Button>
+        )}
+      </Box>
 
-      <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }}>
+      {/* Scrollable content */}
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
+        <Container
+          maxWidth="md"
+          sx={{
+            py: 3,
+            px: { xs: 2, sm: 3 },
+            background: 'rgba(248,252,248,0.96)',
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }}>
         {/* Hero Image Icon */}
         <Box
           sx={{
@@ -1034,7 +1057,9 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
         Use this coach in tandem with StrainSpotter Grow Logs. Capture photos, enter metrics, and ask AI follow-up questions whenever something looks unfamiliar.
       </Alert>
 
-      {renderContent()}
-    </Container>
+          {renderContent()}
+        </Container>
+      </Box>
+    </Box>
   );
 }

@@ -1,7 +1,6 @@
 import { Box, Chip, Tooltip, CircularProgress } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import { useCreditBalance } from '../hooks/useCreditBalance';
-import { FOUNDER_EMAIL, FOUNDER_UNLIMITED_ENABLED } from '../config';
 import { useAuth } from '../hooks/useAuth';
 
 /**
@@ -10,10 +9,11 @@ import { useAuth } from '../hooks/useAuth';
  */
 export default function CreditBalance({ summary: externalSummary, loading: externalLoading }) {
   const { user } = useAuth();
-  const email = user?.email ?? null;
-  const isFounder = FOUNDER_UNLIMITED_ENABLED && email === FOUNDER_EMAIL;
   const shouldUseExternal = typeof externalSummary !== 'undefined' || typeof externalLoading !== 'undefined';
-  const { summary: internalSummary, loading: internalLoading } = useCreditBalance();
+  const { summary: internalSummary, loading: internalLoading, isFounder: ctxIsFounder } = useCreditBalance?.() ?? {};
+
+  // Safe isFounder check with typeof guard
+  const isFounderSafe = typeof ctxIsFounder !== 'undefined' ? Boolean(ctxIsFounder) : false;
 
   const summary = shouldUseExternal ? externalSummary : internalSummary;
   const loading = shouldUseExternal ? !!externalLoading : internalLoading;
@@ -25,7 +25,7 @@ export default function CreditBalance({ summary: externalSummary, loading: exter
   const rawTier = summary?.tier ?? 'free';
   const tier = tierAliases[rawTier] || rawTier;
   const credits = summary?.creditsRemaining ?? null;
-  const hasUnlimited = isFounder || Boolean(summary?.unlimited || summary?.isUnlimited || summary?.membershipTier === 'founder_unlimited' || tier === 'admin');
+  const hasUnlimited = isFounderSafe || Boolean(summary?.unlimited || summary?.isUnlimited || summary?.membershipTier === 'founder_unlimited' || tier === 'admin');
 
   if (loading) {
     return (
@@ -54,7 +54,7 @@ export default function CreditBalance({ summary: externalSummary, loading: exter
 
   const getTooltip = () => {
     if (hasUnlimited) {
-      if (summary?.membershipTier === 'founder_unlimited') {
+      if (isFounderSafe || summary?.membershipTier === 'founder_unlimited') {
         return 'Unlimited scans (Founder)';
       }
       return 'Unlimited scans (Admin)';

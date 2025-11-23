@@ -40,21 +40,43 @@ import ProfileSetupDialog from './ProfileSetupDialog.jsx';
 import { API_BASE } from '../config';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../hooks/useAuth.js';
+import { useInfiniteMessages } from '../hooks/useInfiniteMessages.js';
+import { useTypingIndicator } from '../hooks/useTypingIndicator.js';
+import GroupList from './groups/GroupList.jsx';
+import GroupMessages from './groups/GroupMessages.jsx';
+import GroupHeader from './groups/GroupHeader.jsx';
+import ChatInput from './groups/ChatInput.jsx';
+import { useMediaQuery, useTheme } from '@mui/material';
 
 export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   const { user: authUser } = useAuth(); // Get user from global context
+  const theme = useTheme();
+  const isMobile = useMediaQuery('(max-width:900px)');
   const [groups, setGroups] = useState([]);
   const [userId, setUserId] = useState(userIdProp || authUser?.id || null);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [members, setMembers] = useState([]);
-  const [messages, setMessages] = useState([]); // Group messages
-  const [pinnedMessages, setPinnedMessages] = useState([]); // Pinned messages
+  // Group messages now handled by useInfiniteMessages hook
+  const groupMessagesHook = useInfiniteMessages({ 
+    mode: 'group', 
+    id: selectedGroup?.id || null 
+  });
+  
+  // Typing indicator for group chat
+  const groupTypingHook = useTypingIndicator({
+    scope: 'group',
+    id: selectedGroup?.id || null,
+    currentUserId: userId,
+  });
+  const [messages, setMessages] = useState([]); // Legacy - will be replaced
+  const [pinnedMessages, setPinnedMessages] = useState([]); // Legacy - will be replaced
   const [userRole, setUserRole] = useState('consumer'); // Current user's role
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const [replyTo, setReplyTo] = useState(null); // Message being replied to
+  const [pendingAttachments, setPendingAttachments] = useState([]); // For photo uploads
   const [loading, setLoading] = useState(true);
 
   // Direct Messages state
@@ -62,8 +84,14 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   const [directChats, setDirectChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
   const [chatDialogOpen, setChatDialogOpen] = useState(false);
+  const [dmConversationId, setDmConversationId] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
-  const [directMessages, setDirectMessages] = useState([]); // Direct messages (separate from group messages)
+  // DM messages now handled by useInfiniteMessages hook
+  const dmMessagesHook = useInfiniteMessages({ 
+    mode: 'dm', 
+    id: dmConversationId || null 
+  });
+  const [directMessages, setDirectMessages] = useState([]); // Legacy - will be replaced
   const [usersError, setUsersError] = useState(null); // Error loading users
   const [loadingUsers, setLoadingUsers] = useState(false); // Loading state for users
   const [userSearchTerm, setUserSearchTerm] = useState('');
@@ -306,39 +334,36 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
 
   // Auto-refresh messages when a group is selected
   useEffect(() => {
-    if (!selectedGroup || !groupDialogOpen) return;
+    if (!selectedGroup || !groupDialogOpen) {
+      // Clear messages when dialog closes or group changes
+      setMessages([]);
+      return;
+    }
 
     console.log('🔄 Starting auto-refresh for group:', selectedGroup.id);
 
     // Refresh messages every 3 seconds
     const interval = setInterval(() => {
       console.log('🔄 Auto-refreshing messages...');
-      loadMessages(selectedGroup.id);
+      if (selectedGroup?.id && groupDialogOpen) {
+        loadMessages(selectedGroup.id);
+      }
     }, 3000);
 
     return () => {
       console.log('🛑 Stopping auto-refresh');
       clearInterval(interval);
+      // Clear messages on cleanup
+      setMessages([]);
     };
-  }, [selectedGroup, groupDialogOpen]);
+  }, [selectedGroup?.id, groupDialogOpen, loadMessages]);
 
-  // Auto-refresh direct messages when a chat is selected
+  // Sync DM messages hook data to local state for compatibility
   useEffect(() => {
-    if (!selectedChat || !chatDialogOpen) return;
-
-    console.log('🔄 Starting auto-refresh for direct chat:', selectedChat.user_id);
-
-    // Refresh messages every 3 seconds
-    const interval = setInterval(() => {
-      console.log('🔄 Auto-refreshing direct messages...');
-      loadDirectMessages(selectedChat.user_id);
-    }, 3000);
-
-    return () => {
-      console.log('🛑 Stopping direct chat auto-refresh');
-      clearInterval(interval);
-    };
-  }, [selectedChat, chatDialogOpen]);
+    if (chatDialogOpen && selectedChat) {
+      setDirectMessages(dmMessagesHook.messages.map(m => m.raw || m));
+    }
+  }, [dmMessagesHook.messages, chatDialogOpen, selectedChat]);
 
   // Load users and direct chats when switching to DM tab
   useEffect(() => {
@@ -595,6 +620,29 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     setSelectedChat(otherUser);
     setDirectMessages([]); // Clear previous messages
     setChatDialogOpen(true);
+    
+    // Get or create conversation ID
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (token && userId) {
+        const res = await fetch(`${API_BASE}/api/dm/start`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ userId: otherUser.user_id }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setDmConversationId(data.conversation_id || data.id);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to get conversation ID:', e);
+    }
+    
     await loadDirectMessages(otherUser.user_id);
 
     // Mark messages from this user as read
@@ -682,10 +730,10 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         setDirectMessages(prev => prev.filter(m => m.id !== optimisticId));
 
         if (responseData && responseData.id) {
-          setDirectMessages(prev => [...prev, responseData]);
+          dmMessagesHook.onNewMessage(responseData);
         } else {
           setTimeout(async () => {
-            await loadDirectMessages(selectedChat.user_id);
+            // Hook will auto-refresh via useEffect
           }, 500);
         }
 
@@ -864,10 +912,12 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       console.log('👤 User ID:', userId);
 
       const payload = {
-        content: messageToSend.trim(),
+        content: messageToSend.trim() || null,
         user_id: userId,
         // Include reply_to_id if backend supports it (will be ignored if not)
-        reply_to_id: replyToId
+        reply_to_id: replyToId,
+        // Include attachments if provided
+        attachments: attachments || null,
       };
 
       const res = await fetch(apiUrl, {
@@ -893,27 +943,15 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         // Remove optimistic message
         setMessages(prev => prev.filter(m => m.id !== optimisticId));
 
-        // If backend returns the message, add it immediately
+        // If backend returns the message, add it via hook
         if (responseData && responseData.id) {
           console.log('📨 Adding message from response:', responseData);
-          const displayName = responseData?.users?.display_name
-            || responseData?.users?.username
-            || currentUserName
-            || `Member ${String(userId || '').slice(0, 8)}`;
-
-          setMessages(prev => [...prev, {
-            ...responseData,
-            users: {
-              ...responseData.users,
-              display_name: displayName,
-              username: responseData?.users?.username || displayName
-            }
-          }]);
+          groupMessagesHook.onNewMessage(responseData);
         } else {
           // Otherwise wait a moment for backend to save, then reload
           console.log('📨 No message in response, reloading...');
           setTimeout(async () => {
-            await loadMessages(selectedGroup.id);
+            // Hook will auto-refresh via useEffect
           }, 500);
         }
 
@@ -930,14 +968,19 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         const errorMsg = body?.error || body?.hint || `Send failed (${res.status})`;
         console.error('❌ Server error response:', errorMsg);
         
-        setMessages(prev => prev.filter(m => m.id !== optimisticId));
+        // Remove optimistic message via hook if possible
+        // (Hook will handle cleanup on next fetch)
+        
         setSendError(errorMsg);
         
         // Restore input and reply if send failed
-        setInput(messageToSend);
+        if (contentOverride === null) {
+          setInput(messageToSend);
+        }
         if (replyToId) {
-          // Try to restore replyTo from messages
-          const originalReply = messages.find(m => m.id === replyToId);
+          // Try to restore replyTo from current messages
+          const currentMessages = groupMessagesHook.messages || [];
+          const originalReply = currentMessages.find(m => m.id === replyToId || m.raw?.id === replyToId);
           if (originalReply) setReplyTo(originalReply);
         }
       }
@@ -1087,15 +1130,143 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     return message.user_id === adminUserId;
   };
 
+  // Show modern two-pane layout on desktop, single-pane on mobile
+  if (!isMobile && selectedGroup && groupDialogOpen) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          height: '100vh',
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        {/* Left: Group List Sidebar */}
+        <Box
+          sx={{
+            width: 320,
+            borderRight: '1px solid rgba(255,255,255,0.08)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            backgroundColor: 'rgba(0,0,0,0.3)',
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <Box sx={{ p: 2, borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#CDDC39' }}>
+              Groups
+            </Typography>
+          </Box>
+          <GroupList
+            groups={sortedGroups}
+            selectedGroupId={selectedGroup?.id}
+            onSelectGroup={(g) => {
+              setSelectedGroup(g);
+              setGroupDialogOpen(true);
+            }}
+            isLoading={loading}
+          />
+        </Box>
+
+        {/* Right: Active Chat */}
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          <GroupHeader
+            group={selectedGroup}
+            memberCount={members.length}
+            onBack={() => {
+              setGroupDialogOpen(false);
+              setSelectedGroup(null);
+            }}
+            isMobile={isMobile}
+          />
+
+          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {!guidelinesAccepted && (
+              <Alert
+                severity="warning"
+                icon={false}
+                sx={{
+                  background: 'rgba(255,193,7,0.25)',
+                  color: '#CDDC39',
+                  border: '1px solid rgba(255,193,7,0.5)',
+                  flexShrink: 0,
+                  m: 1,
+                  mb: 0,
+                }}
+              >
+                By participating, you agree to our{' '}
+                <MuiLink
+                  component="button"
+                  onClick={() => onNavigate && onNavigate('guidelines')}
+                  sx={{ fontWeight: 700, color: '#fff', textDecoration: 'underline' }}
+                >
+                  Community Guidelines
+                </MuiLink>.
+              </Alert>
+            )}
+
+            <GroupMessages
+              messages={groupMessagesHook.messages}
+              pinnedMessages={groupMessagesHook.pinnedMessages}
+              isLoadingInitial={groupMessagesHook.isLoadingInitial}
+              isLoadingMore={groupMessagesHook.isLoadingMore}
+              hasMore={groupMessagesHook.hasMore}
+              onLoadMore={groupMessagesHook.loadMore}
+              scrollContainerRef={groupMessagesHook.scrollContainerRef}
+              scrollToBottomRef={groupMessagesHook.scrollToBottomRef}
+              onScroll={groupMessagesHook.handleScroll}
+              currentUserId={userId}
+            />
+          </Box>
+
+          {isMember ? (
+            <ChatInput
+              value={input}
+              onChange={setInput}
+              onSend={sendMessage}
+              disabled={sending || !guidelinesAccepted}
+              sending={sending}
+              placeholder={guidelinesAccepted ? 'Type a message…' : 'Accept guidelines to send messages'}
+            />
+          ) : (
+            <Box sx={{ p: 2, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <Button
+                variant="contained"
+                onClick={() => joinGroup()}
+                sx={{
+                  bgcolor: 'rgba(124,179,66,0.9)',
+                  color: '#fff',
+                  '&:hover': {
+                    bgcolor: 'rgba(156,204,101,1)'
+                  }
+                }}
+              >
+                Join Group to Send Messages
+              </Button>
+            </Box>
+          )}
+        </Box>
+      </Box>
+    );
+  }
+
   return (
     <Box
       sx={{
-        position: 'relative',
-        minHeight: '100vh',
-        py: { xs: 3, md: 6 },
-        px: { xs: 1.5, md: 4 },
         display: 'flex',
-        justifyContent: 'center'
+        flexDirection: 'column',
+        height: '100vh',
+        overflow: 'hidden',
+        position: 'relative'
       }}
     >
       <Box
@@ -1131,155 +1302,176 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           }
         }}
       />
-      <Container
-        maxWidth="lg"
-        sx={{
-          position: 'relative',
-          zIndex: 1,
-          color: '#f5f5f5',
-          pt: 'calc(env(safe-area-inset-top, 0px) + 64px)',
-          pb: 3
-        }}
-      >
-        <ProfileSetupDialog
-          open={profileDialogOpen}
-          email={profileInfo?.email || authUser?.email || ''}
-          initialDisplayName={profileInfo?.display_name || currentUserName}
-          initialUsername={profileInfo?.username || ''}
-          saving={profileSaving}
-          error={profileError}
-          onSave={handleProfileSave}
-          onClose={handleProfileDialogClose}
-        />
-
-        <Button
-          onClick={onBack || (() => window.history.back())}
-          size="small"
-          variant="contained"
+      {/* Header */}
+      <Box sx={{ flexShrink: 0, position: 'relative', zIndex: 1 }}>
+        <Container
+          maxWidth="lg"
           sx={{
-            bgcolor: 'rgba(124, 179, 66, 0.9)',
-            color: '#fff',
-            textTransform: 'none',
-            fontWeight: 700,
-            borderRadius: 999,
-            mb: 2,
-            boxShadow: '0 4px 12px rgba(124, 179, 66, 0.4)',
-            '&:hover': {
-              bgcolor: 'rgba(156, 204, 101, 1)',
-              boxShadow: '0 6px 16px rgba(124, 179, 66, 0.6)',
-              transform: 'translateY(-2px)'
-            }
+            pt: 'calc(env(safe-area-inset-top, 0px) + 16px)',
+            pb: 2,
+            px: { xs: 1.5, md: 4 }
           }}
         >
-          ← Back to Garden
-        </Button>
+          <ProfileSetupDialog
+            open={profileDialogOpen}
+            email={profileInfo?.email || authUser?.email || ''}
+            initialDisplayName={profileInfo?.display_name || currentUserName}
+            initialUsername={profileInfo?.username || ''}
+            saving={profileSaving}
+            error={profileError}
+            onSave={handleProfileSave}
+            onClose={handleProfileDialogClose}
+          />
 
-        {/* Hero Image Icon */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-          <Box
-            sx={{
-              width: 60,
-              height: 60,
-              borderRadius: '50%',
-              background: 'transparent',
-              border: '2px solid rgba(124, 179, 66, 0.5)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)',
-              overflow: 'hidden',
-              flexShrink: 0
-            }}
-          >
-            <img
-              src="/hero.png?v=13"
-              alt="StrainSpotter"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          </Box>
-          <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.25rem', color: '#CDDC39' }}>
-            Groups & Chat
-          </Typography>
-        </Box>
-
-        <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
-          <Typography variant="body2" sx={{ color: '#9CCC65', flex: 1 }}>
-            Signed in as {currentUserName}
-          </Typography>
           <Button
+            onClick={onBack || (() => window.history.back())}
             size="small"
-            variant="outlined"
-            onClick={() => {
-              setProfilePromptDismissed(false);
-              setProfileDialogOpen(true);
-            }}
+            variant="contained"
             sx={{
-              color: '#CDDC39',
-              borderColor: 'rgba(124,179,66,0.4)',
+              bgcolor: 'rgba(124, 179, 66, 0.9)',
+              color: '#fff',
               textTransform: 'none',
-              fontWeight: 600,
+              fontWeight: 700,
+              borderRadius: 999,
+              mb: 2,
+              boxShadow: '0 4px 12px rgba(124, 179, 66, 0.4)',
               '&:hover': {
-                borderColor: 'rgba(124,179,66,0.7)',
-                bgcolor: 'rgba(124,179,66,0.15)'
+                bgcolor: 'rgba(156, 204, 101, 1)',
+                boxShadow: '0 6px 16px rgba(124, 179, 66, 0.6)',
+                transform: 'translateY(-2px)'
               }
             }}
           >
-            Edit Profile
+            ← Back to Garden
           </Button>
-        </Stack>
 
-        {/* Tabs for Groups and Direct Messages */}
-        <Card sx={{
-          bgcolor: 'rgba(255,255,255,0.08)',
-          color: '#CDDC39',
-          boxShadow: '0 12px 30px rgba(0,0,0,0.4)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderRadius: 3,
-          border: '1px solid rgba(124,179,66,0.3)'
-        }}>
-          <Tabs
-            value={activeTab}
-            onChange={(e, newValue) => setActiveTab(newValue)}
-            sx={{
-              borderBottom: '1px solid rgba(124,179,66,0.3)',
-              '& .MuiTab-root': {
-                color: '#9CCC65',
-                '&.Mui-selected': {
-                  color: '#CDDC39'
+          {/* Hero Image Icon */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+            <Box
+              sx={{
+                width: 60,
+                height: 60,
+                borderRadius: '50%',
+                background: 'transparent',
+                border: '2px solid rgba(124, 179, 66, 0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)',
+                overflow: 'hidden',
+                flexShrink: 0
+              }}
+            >
+              <img
+                src="/hero.png?v=13"
+                alt="StrainSpotter"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            </Box>
+            <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.25rem', color: '#CDDC39' }}>
+              Groups & Chat
+            </Typography>
+          </Box>
+
+          <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
+            <Typography variant="body2" sx={{ color: '#9CCC65', flex: 1 }}>
+              Signed in as {currentUserName}
+            </Typography>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => {
+                setProfilePromptDismissed(false);
+                setProfileDialogOpen(true);
+              }}
+              sx={{
+                color: '#CDDC39',
+                borderColor: 'rgba(124,179,66,0.4)',
+                textTransform: 'none',
+                fontWeight: 600,
+                '&:hover': {
+                  borderColor: 'rgba(124,179,66,0.7)',
+                  bgcolor: 'rgba(124,179,66,0.15)'
                 }
-              },
-              '& .MuiTabs-indicator': {
-                backgroundColor: '#CDDC39'
-              }
-            }}
-          >
-            <Tab icon={<GroupsIcon />} label="Groups" iconPosition="start" />
-            <Tab
-              icon={
-                <Badge
-                  badgeContent={directChats.reduce((sum, chat) => sum + (chat.unread_count || 0), 0)}
-                  color="error"
-                  sx={{
-                    '& .MuiBadge-badge': {
-                      bgcolor: '#FF5252',
-                      color: '#fff',
-                      fontWeight: 700,
-                      fontSize: '0.65rem',
-                      minWidth: '18px',
-                      height: '18px'
-                    }
-                  }}
-                >
-                  <ChatIcon />
-                </Badge>
-              }
-              label="Direct Messages"
-              iconPosition="start"
-            />
-          </Tabs>
+              }}
+            >
+              Edit Profile
+            </Button>
+          </Stack>
+        </Container>
+      </Box>
 
-          <CardContent sx={{ p: 2 }}>
+      {/* Scrollable Body */}
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          position: 'relative',
+          zIndex: 1
+        }}
+      >
+        <Container
+          maxWidth="lg"
+          sx={{
+            px: { xs: 1.5, md: 4 },
+            py: 2,
+            pb: 'calc(env(safe-area-inset-bottom, 0px) + 80px)'
+          }}
+        >
+          {/* Tabs for Groups and Direct Messages */}
+          <Card sx={{
+            bgcolor: 'rgba(255,255,255,0.08)',
+            color: '#CDDC39',
+            boxShadow: '0 12px 30px rgba(0,0,0,0.4)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderRadius: 3,
+            border: '1px solid rgba(124,179,66,0.3)'
+          }}>
+            <Tabs
+              value={activeTab}
+              onChange={(e, newValue) => setActiveTab(newValue)}
+              sx={{
+                borderBottom: '1px solid rgba(124,179,66,0.3)',
+                '& .MuiTab-root': {
+                  color: '#9CCC65',
+                  '&.Mui-selected': {
+                    color: '#CDDC39'
+                  }
+                },
+                '& .MuiTabs-indicator': {
+                  backgroundColor: '#CDDC39'
+                }
+              }}
+            >
+              <Tab icon={<GroupsIcon />} label="Groups" iconPosition="start" />
+              <Tab
+                icon={
+                  <Badge
+                    badgeContent={directChats.reduce((sum, chat) => sum + (chat.unread_count || 0), 0)}
+                    color="error"
+                    sx={{
+                      '& .MuiBadge-badge': {
+                        bgcolor: '#FF5252',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '0.65rem',
+                        minWidth: '18px',
+                        height: '18px'
+                      }
+                    }}
+                  >
+                    <ChatIcon />
+                  </Badge>
+                }
+                label="Direct Messages"
+                iconPosition="start"
+              />
+            </Tabs>
+
+            <CardContent sx={{ p: 2 }}>
             {/* Groups Tab */}
             {activeTab === 0 && (
               <Stack spacing={1.5}>
@@ -1553,82 +1745,95 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             )}
           </CardContent>
         </Card>
+        </Container>
+      </Box>
 
-      {/* Group Chat Dialog */}
-      <Dialog
-        open={groupDialogOpen}
-        onClose={closeGroupDialog}
-        maxWidth="md"
-        fullWidth
-        fullScreen
-        PaperProps={{
-          sx: {
-            background: 'rgba(0, 0, 0, 0.3)',
-            backdropFilter: 'blur(30px)',
-            WebkitBackdropFilter: 'blur(30px)',
-            m: 0,
-            maxHeight: '100vh',
+      {/* Group Chat - Modern Layout */}
+      <>
+      {groupDialogOpen && selectedGroup && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1300,
             display: 'flex',
             flexDirection: 'column',
-            border: '1px solid rgba(124,179,66,0.3)'
-          }
-        }}
-      >
-        <DialogTitle sx={{
-          borderBottom: '2px solid rgba(124,179,66,0.4)',
-          background: 'rgba(124,179,66,0.1)',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          p: { xs: 1.5, md: 2.5 },
-          pt: { xs: 'calc(env(safe-area-inset-top, 0px) + 16px)', md: 3 },
-          boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-          gap: 2
-        }}>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
-            <Button
-              startIcon={<ArrowBackIosNewIcon fontSize="small" />}
-              onClick={closeGroupDialog}
-              sx={{
-                color: '#CDDC39',
-                textTransform: 'none',
-                fontWeight: 600,
-                '&:hover': { bgcolor: 'rgba(124,179,66,0.2)' }
-              }}
-            >
-              Back
-            </Button>
-            <Typography
-              variant="h6"
-              noWrap
-              sx={{ fontWeight: 700, color: '#CDDC39', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}
-            >
-              {selectedGroup?.name}
-            </Typography>
-          </Stack>
-          <Stack direction="row" spacing={1}>
-            {isMember ? (
-              <Button
-                size="small"
-                variant="outlined"
-                color="error"
-                onClick={leaveGroup}
+            backgroundColor: 'rgba(0,0,0,0.95)',
+            backdropFilter: 'blur(20px)',
+          }}
+        >
+          {/* Header */}
+          <GroupHeader
+            group={selectedGroup}
+            memberCount={members.length}
+            onBack={closeGroupDialog}
+            isMobile={isMobile}
+            typingUsers={groupTypingHook.typingUsers}
+          />
+
+          {/* Messages Area */}
+          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {!guidelinesAccepted && (
+              <Alert
+                severity="warning"
+                icon={false}
                 sx={{
-                  borderColor: 'rgba(244,67,54,0.6)',
-                  color: '#ff6b6b',
-                  '&:hover': {
-                    borderColor: '#ff6b6b',
-                    bgcolor: 'rgba(244,67,54,0.1)'
-                  }
+                  background: 'rgba(255,193,7,0.25)',
+                  color: '#CDDC39',
+                  border: '1px solid rgba(255,193,7,0.5)',
+                  flexShrink: 0,
+                  m: 1,
+                  mb: 0,
                 }}
               >
-                Leave
-              </Button>
-            ) : (
+                By participating, you agree to our{' '}
+                <MuiLink
+                  component="button"
+                  onClick={() => onNavigate && onNavigate('guidelines')}
+                  sx={{ fontWeight: 700, color: '#fff', textDecoration: 'underline' }}
+                >
+                  Community Guidelines
+                </MuiLink>.
+              </Alert>
+            )}
+
+            <GroupMessages
+              messages={groupMessagesHook.messages}
+              pinnedMessages={groupMessagesHook.pinnedMessages}
+              isLoadingInitial={groupMessagesHook.isLoadingInitial}
+              isLoadingMore={groupMessagesHook.isLoadingMore}
+              hasMore={groupMessagesHook.hasMore}
+              onLoadMore={groupMessagesHook.loadMore}
+              scrollContainerRef={groupMessagesHook.scrollContainerRef}
+              scrollToBottomRef={groupMessagesHook.scrollToBottomRef}
+              onScroll={groupMessagesHook.handleScroll}
+              currentUserId={userId}
+            />
+          </Box>
+
+          {/* Input Composer */}
+          {isMember ? (
+            <ChatInput
+              value={input}
+              onChange={setInput}
+              onSend={(text, attachments) => {
+                sendMessage(text, attachments);
+              }}
+              disabled={sending || !guidelinesAccepted}
+              sending={sending}
+              placeholder={guidelinesAccepted ? 'Type a message…' : 'Accept guidelines to send messages'}
+              replyToMessage={replyTo}
+              onCancelReply={() => setReplyTo(null)}
+              notifyTyping={groupTypingHook.notifyTyping}
+              scope="group"
+              channelId={selectedGroup?.id || null}
+            />
+          ) : (
+            <Box sx={{ p: 2, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
               <Button
-                size="small"
                 variant="contained"
                 onClick={() => joinGroup()}
                 sx={{
@@ -1639,31 +1844,42 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                   }
                 }}
               >
-                Join
+                Join Group to Send Messages
               </Button>
-            )}
-            <Button
-              size="small"
-              onClick={closeGroupDialog}
-              sx={{
-                color: '#CDDC39',
-                '&:hover': {
-                  bgcolor: 'rgba(124,179,66,0.2)'
-                }
-              }}
-            >
-              Close
-            </Button>
-          </Stack>
-        </DialogTitle>
+            </Box>
+          )}
+        </Box>
+      )}
 
-        <DialogContent sx={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: { xs: 'column', md: 'row' },
-          p: 0,
-          overflow: 'hidden'
-        }}>
+      {/* Legacy Dialog for backward compatibility - hidden but kept for structure */}
+      {false && (
+        <Dialog
+          open={false}
+          onClose={closeGroupDialog}
+          maxWidth="md"
+          fullWidth
+          fullScreen
+          PaperProps={{
+            sx: {
+              background: 'rgba(0, 0, 0, 0.3)',
+              backdropFilter: 'blur(30px)',
+              WebkitBackdropFilter: 'blur(30px)',
+              m: 0,
+              maxHeight: '100vh',
+              display: 'flex',
+              flexDirection: 'column',
+              border: '1px solid rgba(124,179,66,0.3)'
+            }
+          }}
+        >
+          <DialogContent sx={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            p: 0,
+            overflow: 'hidden'
+          }}>
           {/* User List Sidebar - Facebook Style */}
           <Box sx={{
             width: { xs: '100%', md: '280px' },
@@ -1693,7 +1909,9 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             {/* Scrollable User List */}
             <Box sx={{
               flex: 1,
-              overflow: 'auto',
+              minHeight: 0,
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
               p: 1
             }}>
               <Stack spacing={0.5}>
@@ -1898,20 +2116,55 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             </Alert>
 
             {/* Messages - Scrollable */}
-            <Box sx={{
-              flex: 1,
-              overflow: 'auto',
-              minHeight: 0,
-              border: '2px solid rgba(124,179,66,0.4)',
-              borderRadius: 2,
-              p: 2,
-              background: 'rgba(0,0,0,0.2)',
-              backdropFilter: 'blur(15px)',
-              WebkitBackdropFilter: 'blur(15px)',
-              boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.3)'
-            }}>
+            <Box 
+              ref={groupMessagesHook.scrollContainerRef}
+              onScroll={groupMessagesHook.handleScroll}
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                border: '2px solid rgba(124,179,66,0.4)',
+                borderRadius: 2,
+                p: 2,
+                background: 'rgba(0,0,0,0.2)',
+                backdropFilter: 'blur(15px)',
+                WebkitBackdropFilter: 'blur(15px)',
+                boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.3)'
+              }}
+            >
+              {/* Load older messages button */}
+              {groupMessagesHook.hasMore && (
+                <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+                  <Button
+                    onClick={groupMessagesHook.loadMore}
+                    disabled={groupMessagesHook.isLoadingMore}
+                    variant="outlined"
+                    size="small"
+                    sx={{
+                      color: '#9CCC65',
+                      borderColor: 'rgba(124,179,66,0.4)',
+                      '&:hover': {
+                        borderColor: 'rgba(124,179,66,0.6)',
+                        bgcolor: 'rgba(124,179,66,0.1)'
+                      }
+                    }}
+                  >
+                    {groupMessagesHook.isLoadingMore ? 'Loading…' : 'Load earlier messages'}
+                  </Button>
+                </Box>
+              )}
+
+              {groupMessagesHook.isLoadingInitial && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                  <Typography variant="body2" sx={{ color: '#9CCC65' }}>
+                    Loading messages...
+                  </Typography>
+                </Box>
+              )}
+
               <List sx={{ p: 0 }}>
-                {messages.length === 0 ? (
+                {!groupMessagesHook.isLoadingInitial && groupMessagesHook.messages.length === 0 ? (
                   <ListItem>
                     <ListItemText
                       secondary={
@@ -1923,7 +2176,10 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                   </ListItem>
                 ) : (
                   // Filter out pinned messages from regular list (they're shown in pinned bar)
-                  messages.filter(m => !m.pinned_at).map((m) => (
+                  groupMessagesHook.messages.filter(m => !m.isPinned).map((m) => {
+                    // Use raw message for compatibility with existing render logic
+                    const msg = m.raw || m;
+                    return (
                     <ListItem
                       key={m.id}
                       alignItems="flex-start"
@@ -2008,9 +2264,13 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                         }
                       />
                     </ListItem>
-                  ))
+                    );
+                  })
                 )}
               </List>
+              
+              {/* Scroll anchor for auto-scroll */}
+              <div ref={groupMessagesHook.scrollToBottomRef} />
             </Box>
 
             {/* Message Composer - Fixed at bottom */}
@@ -2189,6 +2449,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           </Stack>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* Direct Chat Dialog */}
       <Dialog
@@ -2257,6 +2518,8 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         </DialogTitle>
 
         <DialogContent sx={{
+          flex: 1,
+          minHeight: 0,
           p: 0,
           display: 'flex',
           flexDirection: 'column',
@@ -2291,20 +2554,55 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             </Alert>
 
             {/* Messages - Scrollable */}
-            <Box sx={{
-              flex: 1,
-              overflow: 'auto',
-              minHeight: 0,
-              border: '2px solid rgba(124,179,66,0.4)',
-              borderRadius: 2,
-              p: 2,
-              background: 'rgba(0,0,0,0.2)',
-              backdropFilter: 'blur(15px)',
-              WebkitBackdropFilter: 'blur(15px)',
-              boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.3)'
-            }}>
+            <Box 
+              ref={dmMessagesHook.scrollContainerRef}
+              onScroll={dmMessagesHook.handleScroll}
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                border: '2px solid rgba(124,179,66,0.4)',
+                borderRadius: 2,
+                p: 2,
+                background: 'rgba(0,0,0,0.2)',
+                backdropFilter: 'blur(15px)',
+                WebkitBackdropFilter: 'blur(15px)',
+                boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.3)'
+              }}
+            >
+              {/* Load older messages button */}
+              {dmMessagesHook.hasMore && (
+                <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+                  <Button
+                    onClick={dmMessagesHook.loadMore}
+                    disabled={dmMessagesHook.isLoadingMore}
+                    variant="outlined"
+                    size="small"
+                    sx={{
+                      color: '#9CCC65',
+                      borderColor: 'rgba(124,179,66,0.4)',
+                      '&:hover': {
+                        borderColor: 'rgba(124,179,66,0.6)',
+                        bgcolor: 'rgba(124,179,66,0.1)'
+                      }
+                    }}
+                  >
+                    {dmMessagesHook.isLoadingMore ? 'Loading…' : 'Load earlier messages'}
+                  </Button>
+                </Box>
+              )}
+
+              {dmMessagesHook.isLoadingInitial && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                  <Typography variant="body2" sx={{ color: '#9CCC65' }}>
+                    Loading messages...
+                  </Typography>
+                </Box>
+              )}
+
               <List sx={{ p: 0 }}>
-                {directMessages.length === 0 ? (
+                {!dmMessagesHook.isLoadingInitial && dmMessagesHook.messages.length === 0 ? (
                   <ListItem>
                     <ListItemText
                       secondary={
@@ -2315,7 +2613,9 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                     />
                   </ListItem>
                 ) : (
-                  directMessages.map((m, idx) => {
+                  dmMessagesHook.messages.map((m, idx) => {
+                    // Use raw message for compatibility
+                    const msg = m.raw || m;
                     const isCurrentUser = m.sender_id === userId;
                     const senderName = isCurrentUser
                       ? 'You'
@@ -2328,7 +2628,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
 
                     return (
                       <ListItem
-                        key={m.id || idx}
+                        key={msg.id || idx}
                         sx={{
                           flexDirection: isCurrentUser ? 'row-reverse' : 'row',
                           alignItems: 'flex-start',
@@ -2358,11 +2658,11 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                           boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
                         }}>
                           <Typography variant="body2" sx={{ color: '#CDDC39', wordBreak: 'break-word' }}>
-                            {m.content}
+                            {msg.body || msg.text || msg.content}
                           </Typography>
                           <Typography variant="caption" sx={{ color: '#9CCC65', display: 'block', mt: 0.5 }}>
-                            {senderName} • {new Date(m.created_at).toLocaleString()}
-                            {m.optimistic ? ' • sending…' : ''}
+                            {senderName} • {new Date(msg.created_at || msg.createdAt).toLocaleString()}
+                            {msg.optimistic ? ' • sending…' : ''}
                           </Typography>
                         </Box>
                       </ListItem>
@@ -2370,6 +2670,9 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                   })
                 )}
               </List>
+              
+              {/* Scroll anchor for auto-scroll */}
+              <div ref={dmMessagesHook.scrollToBottomRef} />
             </Box>
 
             {/* Message Input - Fixed at bottom */}
@@ -2423,6 +2726,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           </Stack>
         </DialogContent>
       </Dialog>
+      </>
 
       {/* Report Dialog */}
       <Dialog open={reportDialogOpen} onClose={() => setReportDialogOpen(false)} maxWidth="sm" fullWidth>
@@ -2535,7 +2839,6 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </Container>
-  </Box>
+    </Box>
   );
 }

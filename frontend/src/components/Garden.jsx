@@ -257,20 +257,36 @@ export default function Garden({ onBack, onNavigate }) {
     }
   };
 
+  // Detect if running in Capacitor (mobile app)
+  const isCapacitor = typeof window !== 'undefined' && 
+    (window.Capacitor || window.location.protocol === 'capacitor:' || 
+     /iPhone|iPad|iPod|Android/i.test(window.navigator.userAgent));
+  const GARDEN_TOP_PAD = isCapacitor ? 'calc(env(safe-area-inset-top) + 20px)' : '20px';
+
   const renderWithNav = (content, navActive = navValue) => (
-    <Box sx={{ minHeight: '100vh', pb: 'calc(env(safe-area-inset-bottom) + 72px)' }}>
-      {content}
-      <GardenNavBar
-        value={navActive}
-        onChange={handleNavChange}
-        items={[
-          { value: 'home', label: 'Garden', icon: <SpaIcon /> },
-          { value: 'scan', label: 'Scan', icon: <CameraAltIcon /> },
-          { value: 'groups', label: 'Groups', icon: <GroupsIcon /> },
-          { value: 'dispensaries', label: 'Shops', icon: <StoreIcon /> },
-          { value: 'growers', label: 'Growers', icon: <PeopleIcon /> }
-        ]}
-      />
+    <Box sx={{ 
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      overflow: 'hidden',
+      backgroundColor: 'background.default',
+    }}>
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        {content}
+      </Box>
+      <Box sx={{ flexShrink: 0 }}>
+        <GardenNavBar
+          value={navActive}
+          onChange={handleNavChange}
+          items={[
+            { value: 'home', label: 'Garden', icon: <SpaIcon /> },
+            { value: 'scan', label: 'Scan', icon: <CameraAltIcon /> },
+            { value: 'groups', label: 'Groups', icon: <GroupsIcon /> },
+            { value: 'dispensaries', label: 'Shops', icon: <StoreIcon /> },
+            { value: 'growers', label: 'Growers', icon: <PeopleIcon /> }
+          ]}
+        />
+      </Box>
     </Box>
   );
 
@@ -312,28 +328,32 @@ export default function Garden({ onBack, onNavigate }) {
 
   return renderWithNav(
     <Box sx={{
-      minHeight: '100vh',
-      paddingTop: '120px',  // Fixed padding to clear the notch
-      pb: 'calc(env(safe-area-inset-bottom) + 12px)',
-      px: 2,
-      background: 'none',
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center'
+      height: '100%',
+      overflow: 'hidden',
+      backgroundColor: 'background.default',
     }}>
-      {/* Expired Membership Warning */}
-      {isExpired && (
-        <Alert
-          severity="error"
-          icon={<WarningIcon />}
-          sx={{ mb: 1.5, py: 0.5, fontSize: '0.75rem', width: '100%', maxWidth: '600px' }}
-        >
-          Payment overdue. Update payment to continue.
-        </Alert>
-      )}
+      {/* Fixed header */}
+      <Box sx={{
+        flexShrink: 0,
+        paddingTop: GARDEN_TOP_PAD,
+        px: 2,
+        pb: 1,
+      }}>
+        {/* Expired Membership Warning */}
+        {isExpired && (
+          <Alert
+            severity="error"
+            icon={<WarningIcon />}
+            sx={{ mb: 1.5, py: 0.5, fontSize: '0.75rem', width: '100%', maxWidth: '600px' }}
+          >
+            Payment overdue. Update payment to continue.
+          </Alert>
+        )}
 
-      {/* Premium Glassmorphism Header */}
-      <Paper sx={{
+        {/* Premium Glassmorphism Header */}
+        <Paper sx={{
         p: 1.5,
         mb: 1.5,
         background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.15) 0%, rgba(156, 204, 101, 0.1) 100%)',
@@ -442,9 +462,21 @@ export default function Garden({ onBack, onNavigate }) {
           </Stack>
         </Stack>
       </Paper>
+      </Box>
 
-      {/* Welcome & Info Section */}
-      <Paper sx={{
+      {/* Scrollable content */}
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          px: 2,
+          pb: 3,
+        }}
+      >
+        {/* Welcome & Info Section */}
+        <Paper sx={{
         p: 2,
         mb: 2,
         background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.08) 0%, rgba(156, 204, 101, 0.05) 100%)',
@@ -477,9 +509,9 @@ export default function Garden({ onBack, onNavigate }) {
         </Typography>
       </Paper>
 
-      {/* Premium Feature Tiles - 2 per row, compact */}
-      <Grid container spacing={1.5} sx={{ width: '100%', maxWidth: '600px', justifyContent: 'center' }}>
-        {tiles.map((tile) => (
+        {/* Premium Feature Tiles - 2 per row, compact */}
+        <Grid container spacing={1.5} sx={{ width: '100%', maxWidth: '600px', justifyContent: 'center', mx: 'auto' }}>
+          {tiles.map((tile) => (
           <Grid item xs={6} key={tile.nav} sx={{ display: 'flex', justifyContent: 'center' }}>
             <Paper
               onClick={() => handleFeatureClick(tile.title, tile.nav)}
@@ -590,22 +622,23 @@ export default function Garden({ onBack, onNavigate }) {
               </Typography>
             </Paper>
           </Grid>
-        ))}
-      </Grid>
+          ))}
+        </Grid>
 
-      <Paper
-        sx={{
-          p: 1.5,
-          mt: 1.5,
-          background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.12) 0%, rgba(156, 204, 101, 0.08) 100%)',
-          backdropFilter: 'blur(15px)',
-          border: '1.5px solid rgba(124, 179, 66, 0.3)',
-          borderRadius: 3,
-          boxShadow: '0 2px 12px rgba(124, 179, 66, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-          width: '100%',
-          maxWidth: '600px'
-        }}
-      >
+        <Paper
+          sx={{
+            p: 1.5,
+            mt: 1.5,
+            background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.12) 0%, rgba(156, 204, 101, 0.08) 100%)',
+            backdropFilter: 'blur(15px)',
+            border: '1.5px solid rgba(124, 179, 66, 0.3)',
+            borderRadius: 3,
+            boxShadow: '0 2px 12px rgba(124, 179, 66, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+            width: '100%',
+            maxWidth: '600px',
+            mx: 'auto'
+          }}
+        >
         <Stack spacing={1}>
           <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
             <Typography
@@ -652,7 +685,8 @@ export default function Garden({ onBack, onNavigate }) {
             </Button>
           </Stack>
         </Stack>
-      </Paper>
+        </Paper>
+      </Box>
 
       {/* Logout Warning Dialog */}
       <Dialog

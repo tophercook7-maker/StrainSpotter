@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
+import { ProModeProvider } from './contexts/ProModeContext';
 import MobileOnlyGuard from './components/MobileOnlyGuard';
 import AgeGate from './components/AgeGate';
 import Auth from './components/Auth';
@@ -145,8 +146,9 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <MembershipProvider>
-          <MobileOnlyGuard>
+        <ProModeProvider>
+          <MembershipProvider>
+            <MobileOnlyGuard>
           {/* Global background layer - restored, no dark filter or overlay */}
           <div style={{
             position: 'fixed', inset: 0, zIndex: 0,
@@ -299,7 +301,8 @@ function App() {
       </ErrorBoundary>
         </MobileOnlyGuard>
         <BuyScansModal open={showGlobalBuyScans} onClose={() => setShowGlobalBuyScans(false)} />
-        </MembershipProvider>
+          </MembershipProvider>
+        </ProModeProvider>
       </AuthProvider>
     </ThemeProvider>
   );

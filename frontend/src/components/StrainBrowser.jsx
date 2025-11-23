@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Box, TextField, Grid, Card, CardContent, Typography, Chip, Stack, Button,
   InputAdornment, Select, MenuItem, FormControl, InputLabel, CircularProgress,
   Dialog, DialogTitle, DialogContent, IconButton, Tabs, Tab, Paper, List,
-  ListItem, ListItemText, ListItemIcon, Slider, Tooltip, Snackbar, Alert
+  ListItem, ListItemText, ListItemIcon, Slider, Tooltip, Snackbar, Alert, Container
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LocalFloristIcon from '@mui/icons-material/LocalFlorist';
 import StoreIcon from '@mui/icons-material/Store';
 import SpaIcon from '@mui/icons-material/Spa';
@@ -58,6 +59,9 @@ export default function StrainBrowser({ onBack }) {
   const [showingFavorites, setShowingFavorites] = useState(false);
   const [journalDialogOpen, setJournalDialogOpen] = useState(false);
   const [journalDefaults, setJournalDefaults] = useState(null);
+  
+  // Pagination state - limit rendering to prevent freeze with 35k strains
+  const [maxToShow, setMaxToShow] = useState(300); // Start with 300 to keep it snappy
 
   const observerTarget = useRef(null);
 
@@ -281,11 +285,18 @@ export default function StrainBrowser({ onBack }) {
     filterStrains();
   }, [filterStrains]);
 
+  // Use maxToShow to limit visible strains and prevent freeze
+  const visibleStrains = useMemo(
+    () => (Array.isArray(displayedStrains) ? displayedStrains.slice(0, maxToShow) : []),
+    [displayedStrains, maxToShow]
+  );
+
   // Reset displayed strains when filtered strains change
   useEffect(() => {
     setDisplayedStrains(filteredStrains.slice(0, STRAINS_PER_PAGE));
     setPage(0);
     setHasMore(filteredStrains.length > STRAINS_PER_PAGE);
+    setMaxToShow(300); // Reset to initial limit when filters change
   }, [filteredStrains]);
 
   // Infinite scroll observer - load more displayed strains from filtered list
@@ -698,19 +709,63 @@ export default function StrainBrowser({ onBack }) {
     );
   }
 
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    } else {
+      // Fallback: go back in history if available
+      if (window.history.length > 1) {
+        window.history.back();
+      }
+    }
+  };
+
   return (
-    <Box sx={{
-      minHeight: '100vh',
-      pt: 'calc(env(safe-area-inset-top) + 60px)',
-      px: 2,
-      pb: 2,
-      background: 'none'
-    }}>
-      {onBack && (
-        <Button size="small" variant="outlined" onClick={onBack} sx={{ color: '#fff', borderColor: 'rgba(124, 179, 66, 0.6)', fontSize: '0.875rem', mb: 2, '&:hover': { borderColor: 'rgba(124, 179, 66, 1)', bgcolor: 'rgba(124, 179, 66, 0.1)' } }}>
-          ← Back
-        </Button>
-      )}
+    <Box
+      sx={{
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden', // Important so only the inner area scrolls
+        pt: 'env(safe-area-inset-top)', // Account for iOS safe area
+      }}
+    >
+      {/* Header (fixed) */}
+      <Box
+        sx={{
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          p: 2,
+          gap: 1.5,
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          bgcolor: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(10px)',
+          zIndex: 1,
+        }}
+      >
+        <IconButton
+          edge="start"
+          onClick={handleBack}
+          sx={{ color: '#fff' }}
+        >
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff', flex: 1 }}>
+          Strain Browser
+        </Typography>
+      </Box>
+
+      {/* Scrollable content */}
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0, // CRITICAL for flex scrolling
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch', // iOS momentum scroll
+        }}
+      >
+        <Container maxWidth="md" sx={{ py: 2 }}>
 
       {/* Hero Section */}
       <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
@@ -933,7 +988,7 @@ export default function StrainBrowser({ onBack }) {
       ) : (
         <>
           <Stack spacing={1}>
-            {displayedStrains.map((strain) => {
+            {visibleStrains.map((strain) => {
               const indicaPercent = strain.type === 'indica' ? 100 : strain.type === 'sativa' ? 0 : 50;
               const sativaPercent = 100 - indicaPercent;
               const typeColor = strain.type === 'indica' ? '#7b1fa2' : strain.type === 'sativa' ? '#f57c00' : '#00897b';
@@ -958,6 +1013,54 @@ export default function StrainBrowser({ onBack }) {
                     }
                   }}
                 >
+                  {/* Strain Image */}
+                  <Box
+                    sx={{
+                      width: '100%',
+                      aspectRatio: '16/9',
+                      overflow: 'hidden',
+                      borderRadius: 1,
+                      mb: 1,
+                      bgcolor: 'rgba(0,0,0,0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: 120
+                    }}
+                  >
+                    {strain.image_url ? (
+                      <img
+                        src={strain.image_url}
+                        alt={strain.name}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
+                        }}
+                        loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          // Show placeholder if image fails
+                          const placeholder = e.currentTarget.parentElement;
+                          if (placeholder) {
+                            placeholder.innerHTML = '<div style="padding: 20px; text-align: center; color: rgba(255,255,255,0.5); font-size: 12px;">No strain photo yet</div>';
+                          }
+                        }}
+                      />
+                    ) : (
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: 'rgba(255,255,255,0.5)',
+                          fontSize: 12,
+                          textAlign: 'center',
+                          px: 2
+                        }}
+                      >
+                        No strain photo yet
+                      </Typography>
+                    )}
+                  </Box>
                   <Stack direction="row" alignItems="center" spacing={1}>
                     {/* Strain Number */}
                     <Typography variant="caption" sx={{
@@ -1053,6 +1156,27 @@ export default function StrainBrowser({ onBack }) {
               );
             })}
           </Stack>
+
+          {/* Load more button if there are more strains than maxToShow */}
+          {Array.isArray(displayedStrains) && displayedStrains.length > maxToShow && (
+            <Box sx={{ textAlign: 'center', padding: '16px 0' }}>
+              <Button
+                type="button"
+                onClick={() => setMaxToShow((prev) => prev + 300)}
+                variant="contained"
+                sx={{
+                  padding: '10px 18px',
+                  borderRadius: 999,
+                  fontWeight: 600,
+                  fontSize: 14,
+                  bgcolor: '#7cb342',
+                  '&:hover': { bgcolor: '#689f38' }
+                }}
+              >
+                Load 300 more strains
+              </Button>
+            </Box>
+          )}
 
           {/* Infinite scroll trigger */}
           <Box ref={observerTarget} sx={{ py: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
@@ -1166,6 +1290,8 @@ export default function StrainBrowser({ onBack }) {
           setSnackbar({ open: true, message: 'Journal entry saved.', severity: 'success' });
         }}
       />
+        </Container>
+      </Box>
     </Box>
   );
 }

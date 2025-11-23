@@ -1,5 +1,6 @@
 import { Box, Container, Typography, Card, CardContent, Stack, Button, Alert, ButtonBase } from '@mui/material';
 import CannabisLeafIcon from './CannabisLeafIcon';
+import { ProModeGate } from './ProModeGate';
 
 export default function Help({ onNavigate, onBack }) {
   const tiles = [
@@ -165,8 +166,11 @@ export default function Help({ onNavigate, onBack }) {
             Questions or suggestions? Use the Feedback tile to send us a message.
           </Alert>
 
+          {/* Pro Mode Gate */}
+          <ProModeGate />
+
           <Typography variant="caption" color="text.secondary">
-            For privacy, login isn’t required. Select scans may be used to improve the service.
+            For privacy, login isn't required. Select scans may be used to improve the service.
           </Typography>
         </Stack>
       </Container>

@@ -91,33 +91,80 @@ function ScanHistory({ onBack }) {
     setStrainDetails(null);
   };
 
+  // Detect if running in Capacitor (mobile app)
+  const isCapacitor = typeof window !== 'undefined' && 
+    (window.Capacitor || window.location.protocol === 'capacitor:' || 
+     /iPhone|iPad|iPod|Android/i.test(window.navigator.userAgent));
+  const GARDEN_TOP_PAD = isCapacitor ? 'calc(env(safe-area-inset-top) + 20px)' : '20px';
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    } else if (navigate) {
+      navigate('/garden');
+    } else {
+      window.history.back();
+    }
+  };
+
   return (
-    <Box sx={{ minHeight: '100vh', py: 4 }}>
-      <Container maxWidth="md">
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <CannabisLeafIcon style={{ height: 28 }} />
-            <Typography variant="h5" fontWeight={700}>
-              Scan History
-            </Typography>
-          </Stack>
-          <Stack direction="row" spacing={1}>
-            {onBack && (
-              <Button variant="outlined" onClick={onBack}>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Fixed header */}
+      <Box
+        sx={{
+          flexShrink: 0,
+          pt: GARDEN_TOP_PAD,
+          px: 2,
+          pb: 1,
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          bgcolor: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(10px)',
+          zIndex: 1,
+        }}
+      >
+        <Container maxWidth="md">
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" spacing={1} alignItems="center">
+              <CannabisLeafIcon style={{ height: 28, color: '#7cb342' }} />
+              <Typography variant="h5" fontWeight={700} sx={{ color: '#fff' }}>
+                Scan History
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={1}>
+              <Button variant="outlined" onClick={handleBack} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.3)' }}>
                 Back
               </Button>
-            )}
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<CannabisLeafIcon style={{ height: 20 }} />}
-              onClick={() => navigate('/')}
-              sx={{ textTransform: 'none' }}
-            >
-              Home
-            </Button>
+              <Button
+                variant="contained"
+                color="success"
+                startIcon={<CannabisLeafIcon style={{ height: 20 }} />}
+                onClick={() => navigate('/garden')}
+                sx={{ textTransform: 'none' }}
+              >
+                Garden
+              </Button>
+            </Stack>
           </Stack>
-        </Stack>
+        </Container>
+      </Box>
+
+      {/* Scrollable content */}
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
+        <Container maxWidth="md" sx={{ py: 4 }}>
 
         {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -183,7 +230,8 @@ function ScanHistory({ onBack }) {
             ))}
           </Stack>
         )}
-      </Container>
+        </Container>
+      </Box>
 
       <Dialog
         open={Boolean(selectedScan)}
