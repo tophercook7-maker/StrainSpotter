@@ -65,6 +65,8 @@ import {
   getOrCreateUserBusinessDM,
   sendDMMessage,
   markDMConversationAsRead,
+  findOrCreateConversationForUserUser,
+  findOrCreateConversationForUserBusiness,
 } from './services/dmConversations.js';
 import {
   consumeScanCredits,
@@ -4768,6 +4770,41 @@ app.post('/api/groups/:zip/posts/:id/reaction', express.json(), async (req, res)
 // ========================================
 // DIRECT MESSAGING (DM) ENDPOINTS
 // ========================================
+
+// POST /api/dm/start - Start or get a DM conversation
+app.post('/api/dm/start', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { targetUserId, targetBusinessId } = req.body || {};
+
+    if (!targetUserId && !targetBusinessId) {
+      return res.status(400).json({ error: 'Missing target' });
+    }
+
+    let conversation;
+
+    if (targetUserId) {
+      conversation = await findOrCreateConversationForUserUser(
+        user.id,
+        targetUserId
+      );
+    } else {
+      conversation = await findOrCreateConversationForUserBusiness(
+        user.id,
+        targetBusinessId
+      );
+    }
+
+    return res.json({ conversation });
+  } catch (e) {
+    console.error('[api/dm/start] error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
 
 // GET /api/dm/conversations - List all DM conversations for current user
 app.get('/api/dm/conversations', async (req, res) => {
