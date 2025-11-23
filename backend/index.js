@@ -5722,6 +5722,331 @@ app.post('/api/groups/ensure-defaults', async (req, res) => {
   }
 });
 
+// ========================================
+// UNIFIED CHAT SYSTEM ENDPOINTS
+// ========================================
+
+// POST /api/chat/start - Start a DM or return existing DM conversation
+app.post('/api/chat/start', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { userId } = req.body || {};
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    if (userId === user.id) {
+      return res.status(400).json({ error: 'Cannot start DM with yourself' });
+    }
+
+    // Check if DM conversation already exists
+    const { data: existingConvs } = await supabaseAdmin
+      .from('chat_conversation_members')
+      .select('conversation_id')
+      .eq('user_id', user.id);
+
+    const userConvIds = (existingConvs || []).map((c) => c.conversation_id);
+
+    if (userConvIds.length > 0) {
+      const { data: peerConvs } = await supabaseAdmin
+        .from('chat_conversation_members')
+        .select('conversation_id')
+        .eq('user_id', userId)
+        .in('conversation_id', userConvIds);
+
+      const peerConvIds = (peerConvs || []).map((c) => c.conversation_id);
+
+      // Find intersection (conversation where both users are members)
+      const sharedConvId = userConvIds.find((id) => peerConvIds.includes(id));
+
+      if (sharedConvId) {
+        const { data: conv } = await supabaseAdmin
+          .from('chat_conversations')
+          .select('*')
+          .eq('id', sharedConvId)
+          .eq('is_group', false)
+          .single();
+
+        if (conv) {
+          return res.json({ conversation_id: conv.id });
+        }
+      }
+    }
+
+    // Create new DM conversation
+    const { data: newConv, error: convError } = await supabaseAdmin
+      .from('chat_conversations')
+      .insert({
+        is_group: false,
+        name: null,
+        created_by: user.id,
+      })
+      .select('id')
+      .single();
+
+    if (convError) {
+      console.error('[api/chat/start] create conversation error', convError);
+      return res.status(500).json({ error: 'Failed to create conversation' });
+    }
+
+    // Add both users as members
+    const { error: membersError } = await supabaseAdmin
+      .from('chat_conversation_members')
+      .insert([
+        { conversation_id: newConv.id, user_id: user.id, is_admin: false },
+        { conversation_id: newConv.id, user_id: userId, is_admin: false },
+      ]);
+
+    if (membersError) {
+      console.error('[api/chat/start] add members error', membersError);
+      return res.status(500).json({ error: 'Failed to add members' });
+    }
+
+    return res.json({ conversation_id: newConv.id });
+  } catch (e) {
+    console.error('[api/chat/start] error', e);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// POST /api/chat/send - Send a message in a conversation
+app.post('/api/chat/send', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { conversationId, messageText, imageBase64 } = req.body || {};
+
+    if (!conversationId) {
+      return res.status(400).json({ error: 'conversationId is required' });
+    }
+
+    if (!messageText && !imageBase64) {
+      return res.status(400).json({ error: 'messageText or imageBase64 is required' });
+    }
+
+    // Verify user is a member
+    const { data: member } = await supabaseAdmin
+      .from('chat_conversation_members')
+      .select('user_id')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!member) {
+      return res.status(403).json({ error: 'Not a member of this conversation' });
+    }
+
+    let imageUrl = null;
+
+    // Handle image upload if provided
+    if (imageBase64) {
+      try {
+        // Decode base64
+        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+
+        // Generate filename
+        const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
+        const storagePath = `chat/${conversationId}/${filename}`;
+
+        // Upload to Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+          .from('chat-media')
+          .upload(storagePath, buffer, {
+            contentType: 'image/jpeg',
+            upsert: false,
+          });
+
+        if (uploadError) {
+          console.error('[api/chat/send] upload error', uploadError);
+          return res.status(500).json({ error: 'Failed to upload image' });
+        }
+
+        // Get public URL
+        const { data: { publicUrl } } = supabaseAdmin.storage
+          .from('chat-media')
+          .getPublicUrl(storagePath);
+
+        imageUrl = publicUrl;
+      } catch (imgErr) {
+        console.error('[api/chat/send] image processing error', imgErr);
+        return res.status(500).json({ error: 'Failed to process image' });
+      }
+    }
+
+    // Insert message
+    const { data: message, error: msgError } = await supabaseAdmin
+      .from('chat_messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        message_text: messageText || null,
+        image_url: imageUrl,
+        read_by: [],
+      })
+      .select('*')
+      .single();
+
+    if (msgError) {
+      console.error('[api/chat/send] insert message error', msgError);
+      return res.status(500).json({ error: 'Failed to send message' });
+    }
+
+    return res.json({ message });
+  } catch (e) {
+    console.error('[api/chat/send] error', e);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// GET /api/chat/history/:conversationId - Get message history
+app.get('/api/chat/history/:conversationId', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversationId = req.params.conversationId;
+
+    // Verify user is a member
+    const { data: member } = await supabaseAdmin
+      .from('chat_conversation_members')
+      .select('user_id')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!member) {
+      return res.status(403).json({ error: 'Not a member of this conversation' });
+    }
+
+    // Fetch last 100 messages, sorted ASC (oldest first)
+    const { data: messages, error: msgError } = await supabaseAdmin
+      .from('chat_messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true })
+      .limit(100);
+
+    if (msgError) {
+      console.error('[api/chat/history/:conversationId] fetch error', msgError);
+      return res.status(500).json({ error: 'Failed to load messages' });
+    }
+
+    return res.json({ messages: messages || [] });
+  } catch (e) {
+    console.error('[api/chat/history/:conversationId] error', e);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// GET /api/chat/list - List all conversations for logged-in user
+app.get('/api/chat/list', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Get all conversations user is a member of
+    const { data: memberships, error: membershipError } = await supabaseAdmin
+      .from('chat_conversation_members')
+      .select(`
+        conversation_id,
+        is_admin,
+        joined_at,
+        conversation: chat_conversations (*)
+      `)
+      .eq('user_id', user.id);
+
+    if (membershipError) {
+      console.error('[api/chat/list] fetch memberships error', membershipError);
+      return res.status(500).json({ error: 'Failed to load conversations' });
+    }
+
+    const conversationIds = (memberships || []).map((m) => m.conversation_id);
+
+    if (conversationIds.length === 0) {
+      return res.json({ conversations: [] });
+    }
+
+    // Get last message for each conversation
+    const { data: lastMessages } = await supabaseAdmin
+      .from('chat_messages')
+      .select('conversation_id, message_text, image_url, created_at, sender_id')
+      .in('conversation_id', conversationIds)
+      .order('created_at', { ascending: false });
+
+    // Group by conversation_id and get the most recent
+    const lastMessageByConv = {};
+    (lastMessages || []).forEach((msg) => {
+      if (!lastMessageByConv[msg.conversation_id]) {
+        lastMessageByConv[msg.conversation_id] = msg;
+      }
+    });
+
+    // Get unread counts (messages not read by user)
+    const { data: allMessages } = await supabaseAdmin
+      .from('chat_messages')
+      .select('conversation_id, read_by')
+      .in('conversation_id', conversationIds)
+      .neq('sender_id', user.id);
+
+    const unreadCounts = {};
+    (allMessages || []).forEach((msg) => {
+      if (!msg.read_by || !msg.read_by.includes(user.id)) {
+        unreadCounts[msg.conversation_id] = (unreadCounts[msg.conversation_id] || 0) + 1;
+      }
+    });
+
+    // Get other members for each conversation
+    const { data: allMembers } = await supabaseAdmin
+      .from('chat_conversation_members')
+      .select('conversation_id, user_id')
+      .in('conversation_id', conversationIds)
+      .neq('user_id', user.id);
+
+    const membersByConv = {};
+    (allMembers || []).forEach((m) => {
+      if (!membersByConv[m.conversation_id]) {
+        membersByConv[m.conversation_id] = [];
+      }
+      membersByConv[m.conversation_id].push(m.user_id);
+    });
+
+    // Format response
+    const conversations = (memberships || []).map((m) => ({
+      id: m.conversation_id,
+      ...m.conversation,
+      is_admin: m.is_admin,
+      joined_at: m.joined_at,
+      last_message: lastMessageByConv[m.conversation_id] || null,
+      unread_count: unreadCounts[m.conversation_id] || 0,
+      members: membersByConv[m.conversation_id] || [],
+    }));
+
+    // Sort by last message time (most recent first)
+    conversations.sort((a, b) => {
+      const timeA = a.last_message?.created_at || a.joined_at;
+      const timeB = b.last_message?.created_at || b.joined_at;
+      return new Date(timeB) - new Date(timeA);
+    });
+
+    return res.json({ conversations });
+  } catch (e) {
+    console.error('[api/chat/list] error', e);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
   app.listen(PORT, () => {
     console.log(`[strainspotter] backend listening on http://localhost:${PORT}`);
   });
