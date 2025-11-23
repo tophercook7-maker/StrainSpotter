@@ -1429,7 +1429,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
     if (scanOwnerId) {
       console.log('[scan/process] Checking credits for user:', scanOwnerId);
 
-      // Check if user has credits
+      // Check if user has credits (founders always pass)
       const hasAvailableCredits = await scanCreditsV2.hasCredits(scanOwnerId);
 
       if (!hasAvailableCredits) {
@@ -1448,7 +1448,7 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
         });
       }
 
-      // Deduct credit
+      // Deduct credit (founders skip deduction)
       const deductResult = await scanCreditsV2.deductCredit(scanOwnerId);
 
       if (!deductResult.success) {
@@ -1459,7 +1459,11 @@ app.post('/api/scans/:id/process', scanProcessLimiter, async (req, res, next) =>
         });
       }
 
-      console.log(`[scan/process] Credit deducted. Remaining: ${deductResult.creditsRemaining}`);
+      if (deductResult.unlimited) {
+        console.log(`[scan/process] Founder scan - unlimited credits`);
+      } else {
+        console.log(`[scan/process] Credit deducted. Remaining: ${deductResult.creditsRemaining}`);
+      }
       creditConsumed = true;
     } else {
       // Guest scan - no credit enforcement

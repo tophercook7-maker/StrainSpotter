@@ -19,12 +19,64 @@ const db = supabaseAdmin ?? supabase;
 
 const VALID_TIERS = ['free', 'app_purchase', 'monthly_member', 'admin'];
 
+// Founder emails with unlimited scans
+const FOUNDER_EMAILS = [
+  'topher.cook7@gmail.com',
+];
+
+/**
+ * Check if an email belongs to a founder
+ */
+function isFounderEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  return FOUNDER_EMAILS.includes(email.toLowerCase().trim());
+}
+
+/**
+ * Get user email from userId
+ */
+async function getUserEmail(userId) {
+  if (!userId) return null;
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (error || !user) return null;
+    return user.email || null;
+  } catch (e) {
+    console.error('[scanCreditsV2] Error fetching user email:', e);
+    return null;
+  }
+}
+
+/**
+ * Check if user is a founder
+ */
+async function isFounder(userId) {
+  if (!userId) return false;
+  const email = await getUserEmail(userId);
+  return isFounderEmail(email);
+}
+
 /**
  * Get user's credit balance and tier info
  */
 export async function getCreditBalance(userId) {
   if (!userId) {
     throw new Error('User ID required');
+  }
+
+  // Check if founder - return unlimited balance
+  const founder = await isFounder(userId);
+  if (founder) {
+    return {
+      tier: 'admin',
+      creditsRemaining: 999999,
+      monthlyLimit: 999999,
+      lifetimeCredits: 999999,
+      usedThisMonth: 0,
+      lifetimeScansUsed: 0,
+      resetAt: null,
+      unlimited: true
+    };
   }
 
   const { data, error } = await db
@@ -57,6 +109,12 @@ export async function hasCredits(userId) {
     return false;
   }
 
+  // Founders always have credits
+  const founder = await isFounder(userId);
+  if (founder) {
+    return true;
+  }
+
   try {
     const { data, error } = await db.rpc('has_scan_credits', {
       p_user_id: userId
@@ -80,6 +138,19 @@ export async function hasCredits(userId) {
 export async function deductCredit(userId) {
   if (!userId) {
     throw new Error('User ID required');
+  }
+
+  // Founders: skip deduction, return success
+  const founder = await isFounder(userId);
+  if (founder) {
+    console.log('[scanCreditsV2] Founder scan - skipping credit deduction');
+    const balance = await getCreditBalance(userId);
+    return {
+      success: true,
+      creditsRemaining: balance.creditsRemaining,
+      tier: balance.tier,
+      unlimited: true
+    };
   }
 
   try {
@@ -224,6 +295,7 @@ export async function getCreditSummary(userId) {
   try {
     const balance = await getCreditBalance(userId);
     const hasAvailableCredits = await hasCredits(userId);
+    const founder = await isFounder(userId);
 
     const baseSummary = {
       tier: balance.tier,
@@ -234,8 +306,9 @@ export async function getCreditSummary(userId) {
       resetAt: balance.resetAt,
       bonusCredits: balance.bonusCredits ?? balance.lifetimeCredits ?? 0,
       hasCredits: hasAvailableCredits,
-      isUnlimited: balance.tier === 'admin',
-      needsUpgrade: !hasAvailableCredits && (balance.tier === 'free' || balance.tier === 'app_purchase')
+      isUnlimited: founder || balance.tier === 'admin' || balance.unlimited === true,
+      unlimited: founder || balance.unlimited === true,
+      needsUpgrade: !founder && !hasAvailableCredits && (balance.tier === 'free' || balance.tier === 'app_purchase')
     };
 
     return baseSummary;
@@ -280,6 +353,13 @@ export async function requireCredits(req, res, next) {
   }
 
   try {
+    // Founders always pass
+    const founder = await isFounder(userId);
+    if (founder) {
+      req.creditInfo = await getCreditBalance(userId);
+      return next();
+    }
+
     const hasAvailableCredits = await hasCredits(userId);
 
     if (!hasAvailableCredits) {
