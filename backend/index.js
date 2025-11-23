@@ -3683,6 +3683,106 @@ app.post('/api/direct-messages/mark-read', express.json(), async (req, res) => {
   }
 });
 
+// ========================================
+// CROSS-ZIP GROUP MERGED FEED
+// ========================================
+
+// Helper: Get merged group feed for a ZIP code and its neighbors
+async function getMergedGroupFeed(zipCode, radiusKm = 25) {
+  // 1. Find neighboring zip codes within the radius
+  const { data: neighbors, error: neighborsError } = await supabaseAdmin
+    .from('geo_group_neighbors')
+    .select('neighbor_zip, distance_km')
+    .eq('zip_code', zipCode)
+    .lte('distance_km', radiusKm);
+
+  if (neighborsError) {
+    console.error('[groups] Error loading neighbors', { zipCode, neighborsError });
+    throw neighborsError;
+  }
+
+  const nearbyZips = neighbors?.map(n => n.neighbor_zip) || [];
+
+  // Always include the primary zip itself
+  const allZips = Array.from(new Set([zipCode, ...nearbyZips]));
+
+  // 2. Load messages for all these zips
+  const { data: messages, error: messagesError } = await supabaseAdmin
+    .from('geo_group_messages')
+    .select('id, zip_code, user_id, message, image_url, created_at')
+    .in('zip_code', allZips)
+    .order('created_at', { ascending: false })
+    .limit(200);
+
+  if (messagesError) {
+    console.error('[groups] Error loading messages', { allZips, messagesError });
+    throw messagesError;
+  }
+
+  // 3. Optionally join with business_profiles so we can show badges
+  const userIds = Array.from(new Set((messages || []).map(m => m.user_id).filter(Boolean)));
+  let businessProfilesByUser = {};
+
+  if (userIds.length > 0) {
+    const { data: businessProfiles, error: businessError } = await supabaseAdmin
+      .from('business_profiles')
+      .select('user_id, business_type, business_code, name, city, state, country')
+      .in('user_id', userIds);
+
+    if (businessError) {
+      console.error('[groups] Error loading business_profiles', { userIds, businessError });
+      // Non-fatal: continue without business metadata
+    } else {
+      businessProfilesByUser = (businessProfiles || []).reduce((acc, bp) => {
+        acc[bp.user_id] = bp;
+        return acc;
+      }, {});
+    }
+  }
+
+  const mergedMessages = (messages || []).map(m => ({
+    id: m.id,
+    zip: m.zip_code,
+    userId: m.user_id,
+    message: m.message,
+    imageUrl: m.image_url,
+    createdAt: m.created_at,
+    business: businessProfilesByUser[m.user_id] || null,
+  }));
+
+  return {
+    zip: zipCode,
+    nearbyZips,
+    zips: allZips,
+    messages: mergedMessages,
+  };
+}
+
+// GET /api/groups/:zip/merged-feed - Get merged feed for ZIP and neighbors
+app.get('/api/groups/:zip/merged-feed', async (req, res) => {
+  const zip = (req.params.zip || '').trim();
+  const radiusKmParam = req.query.radiusKm;
+  const radiusKm = radiusKmParam ? Number(radiusKmParam) : 25;
+
+  if (!zip) {
+    return res.status(400).json({ error: 'Missing zip parameter' });
+  }
+
+  try {
+    console.log('[groups] merged-feed request', { zip, radiusKm });
+    const payload = await getMergedGroupFeed(zip, radiusKm);
+    return res.json(payload);
+  } catch (err) {
+    console.error('[groups] merged-feed error', {
+      zip,
+      radiusKm,
+      message: err?.message,
+      stack: err?.stack,
+    });
+    return res.status(500).json({ error: 'Failed to load merged group feed' });
+  }
+});
+
 // GET /api/business/:code - Lookup grower/dispensary by code
 app.get('/api/business/:code', async (req, res) => {
   try {
