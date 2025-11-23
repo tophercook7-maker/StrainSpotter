@@ -4316,7 +4316,7 @@ app.get('/api/chat/zip/:zipCode', async (req, res) => {
 
     let query = supabaseAdmin
       .from('messages')
-      .select('id, body, sender_id, created_at')
+      .select('id, body, sender_id, created_at, attachment_url, attachment_type, strain_slug, scan_id')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: false })
       .limit(Number(limit));
