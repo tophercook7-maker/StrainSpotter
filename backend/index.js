@@ -5323,6 +5323,391 @@ app.post('/api/dm/conversations/:id/read', async (req, res) => {
   }
 });
 
+// ========================================
+// GROUP CHAT ENDPOINTS
+// ========================================
+
+// GET /api/groups - List all available groups (filtered by type, zip, etc.)
+app.get('/api/groups', async (req, res) => {
+  try {
+    const { type, zipCode } = req.query || {};
+
+    let query = supabaseAdmin
+      .from('chat_groups')
+      .select('*')
+      .eq('is_public', true)
+      .order('created_at', { ascending: false });
+
+    if (type && ['zip', 'global', 'interest'].includes(type)) {
+      query = query.eq('group_type', type);
+    }
+
+    if (zipCode) {
+      query = query.eq('zip_code', zipCode);
+    }
+
+    const { data: groups, error: groupsError } = await query;
+
+    if (groupsError) {
+      console.error('[api/groups] fetch error', groupsError);
+      return res.status(500).json({ error: 'Failed to load groups' });
+    }
+
+    return res.json({ groups: groups || [] });
+  } catch (err) {
+    console.error('[api/groups] error', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// GET /api/groups/:groupId - Get group details
+app.get('/api/groups/:groupId', async (req, res) => {
+  try {
+    const groupId = req.params.groupId;
+
+    const { data: group, error: groupError } = await supabaseAdmin
+      .from('chat_groups')
+      .select('*')
+      .eq('id', groupId)
+      .single();
+
+    if (groupError || !group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Get member count
+    const { count: memberCount } = await supabaseAdmin
+      .from('chat_group_members')
+      .select('*', { count: 'exact', head: true })
+      .eq('group_id', groupId);
+
+    return res.json({
+      group: {
+        ...group,
+        member_count: memberCount || 0,
+      },
+    });
+  } catch (err) {
+    console.error('[api/groups/:groupId] error', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// POST /api/groups/:groupId/join - Join a group
+app.post('/api/groups/:groupId/join', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const groupId = req.params.groupId;
+
+    // Verify group exists and is public
+    const { data: group, error: groupError } = await supabaseAdmin
+      .from('chat_groups')
+      .select('*')
+      .eq('id', groupId)
+      .single();
+
+    if (groupError || !group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    if (!group.is_public) {
+      return res.status(403).json({ error: 'Group is not public' });
+    }
+
+    // Check if already a member
+    const { data: existing } = await supabaseAdmin
+      .from('chat_group_members')
+      .select('id')
+      .eq('group_id', groupId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (existing) {
+      return res.json({ success: true, already_member: true });
+    }
+
+    // Join group
+    const { data: membership, error: joinError } = await supabaseAdmin
+      .from('chat_group_members')
+      .insert({
+        group_id: groupId,
+        user_id: user.id,
+        role: 'member',
+      })
+      .select('*')
+      .single();
+
+    if (joinError) {
+      console.error('[api/groups/:groupId/join] join error', joinError);
+      return res.status(500).json({ error: 'Failed to join group' });
+    }
+
+    return res.json({ success: true, membership });
+  } catch (err) {
+    console.error('[api/groups/:groupId/join] error', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// GET /api/groups/:groupId/messages - Get messages in a group
+app.get('/api/groups/:groupId/messages', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const groupId = req.params.groupId;
+    const { limit = 50, before } = req.query;
+
+    // Verify user is a member
+    const { data: membership } = await supabaseAdmin
+      .from('chat_group_members')
+      .select('id')
+      .eq('group_id', groupId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!membership) {
+      return res.status(403).json({ error: 'Not a member of this group' });
+    }
+
+    // Fetch messages (pinned first, then by date)
+    let query = supabaseAdmin
+      .from('chat_group_messages')
+      .select(`
+        *,
+        sender: sender_user_id (
+          id,
+          email
+        )
+      `)
+      .eq('group_id', groupId)
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(Number(limit));
+
+    if (before) {
+      query = query.lt('created_at', before);
+    }
+
+    const { data: messages, error: msgError } = await query;
+
+    if (msgError) {
+      console.error('[api/groups/:groupId/messages] fetch error', msgError);
+      return res.status(500).json({ error: 'Failed to load messages' });
+    }
+
+    return res.json({
+      messages: messages || [],
+      hasMore: (messages || []).length === Number(limit),
+    });
+  } catch (err) {
+    console.error('[api/groups/:groupId/messages] error', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// POST /api/groups/:groupId/messages - Send a message in a group
+app.post('/api/groups/:groupId/messages', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const groupId = req.params.groupId;
+    const { body, imageUrl } = req.body || {};
+
+    if (!body && !imageUrl) {
+      return res.status(400).json({ error: 'body or imageUrl is required' });
+    }
+
+    // Verify user is a member
+    const { data: membership } = await supabaseAdmin
+      .from('chat_group_members')
+      .select('id')
+      .eq('group_id', groupId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!membership) {
+      return res.status(403).json({ error: 'Not a member of this group' });
+    }
+
+    // Check if group is business-only
+    const { data: group } = await supabaseAdmin
+      .from('chat_groups')
+      .select('business_only')
+      .eq('id', groupId)
+      .single();
+
+    if (group?.business_only) {
+      // Verify user has a business profile
+      const { data: business } = await supabaseAdmin
+        .from('business_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!business) {
+        return res.status(403).json({ error: 'Only businesses can post in this group' });
+      }
+    }
+
+    // Insert message
+    const { data: message, error: msgError } = await supabaseAdmin
+      .from('chat_group_messages')
+      .insert({
+        group_id: groupId,
+        sender_user_id: user.id,
+        body: body || null,
+        image_url: imageUrl || null,
+        is_pinned: false,
+      })
+      .select(`
+        *,
+        sender: sender_user_id (
+          id,
+          email
+        )
+      `)
+      .single();
+
+    if (msgError) {
+      console.error('[api/groups/:groupId/messages] insert error', msgError);
+      return res.status(500).json({ error: 'Failed to send message' });
+    }
+
+    // Update group updated_at
+    await supabaseAdmin
+      .from('chat_groups')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', groupId);
+
+    return res.json({ message });
+  } catch (err) {
+    console.error('[api/groups/:groupId/messages] error', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// POST /api/groups/:groupId/messages/:messageId/pin - Pin a message (businesses/moderators only)
+app.post('/api/groups/:groupId/messages/:messageId/pin', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { groupId, messageId } = req.params;
+
+    // Verify user is a member
+    const { data: membership } = await supabaseAdmin
+      .from('chat_group_members')
+      .select('role')
+      .eq('group_id', groupId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!membership) {
+      return res.status(403).json({ error: 'Not a member of this group' });
+    }
+
+    // Check if user is moderator/owner or has business profile
+    const isModerator = ['owner', 'moderator'].includes(membership.role);
+    const { data: business } = await supabaseAdmin
+      .from('business_profiles')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!isModerator && !business) {
+      return res.status(403).json({ error: 'Only businesses and moderators can pin messages' });
+    }
+
+    // Verify message exists and belongs to this group
+    const { data: message } = await supabaseAdmin
+      .from('chat_group_messages')
+      .select('id, is_pinned')
+      .eq('id', messageId)
+      .eq('group_id', groupId)
+      .single();
+
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    // Toggle pin status
+    const { data: updatedMessage, error: updateError } = await supabaseAdmin
+      .from('chat_group_messages')
+      .update({ is_pinned: !message.is_pinned })
+      .eq('id', messageId)
+      .select('*')
+      .single();
+
+    if (updateError) {
+      console.error('[api/groups/:groupId/messages/:messageId/pin] update error', updateError);
+      return res.status(500).json({ error: 'Failed to pin/unpin message' });
+    }
+
+    return res.json({ message: updatedMessage });
+  } catch (err) {
+    console.error('[api/groups/:groupId/messages/:messageId/pin] error', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// GET /api/groups/my - Get groups user is a member of
+app.get('/api/groups/my', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { data: memberships, error: membershipError } = await supabaseAdmin
+      .from('chat_group_members')
+      .select(`
+        *,
+        group: chat_groups (*)
+      `)
+      .eq('user_id', user.id)
+      .order('joined_at', { ascending: false });
+
+    if (membershipError) {
+      console.error('[api/groups/my] fetch error', membershipError);
+      return res.status(500).json({ error: 'Failed to load groups' });
+    }
+
+    const groups = (memberships || []).map((m) => ({
+      ...m.group,
+      role: m.role,
+      joined_at: m.joined_at,
+    }));
+
+    return res.json({ groups });
+  } catch (err) {
+    console.error('[api/groups/my] error', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// POST /api/groups/ensure-defaults - Ensure default groups exist (admin/startup)
+app.post('/api/groups/ensure-defaults', async (req, res) => {
+  try {
+    await ensureDefaultGroups();
+    return res.json({ success: true, message: 'Default groups ensured' });
+  } catch (err) {
+    console.error('[api/groups/ensure-defaults] error', err);
+    return res.status(500).json({ error: 'Failed to ensure default groups' });
+  }
+});
+
   app.listen(PORT, () => {
     console.log(`[strainspotter] backend listening on http://localhost:${PORT}`);
   });
