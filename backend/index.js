@@ -5582,20 +5582,21 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
     // Fetch pinned messages separately
     const { data: pinned, error: pinnedError } = await supabaseAdmin
       .from('chat_group_messages')
-      .select('*')
+      .select('id, group_id, sender_id, text, attachments, created_at, is_pinned, pinned_at')
       .eq('group_id', groupId)
       .eq('is_pinned', true)
       .order('created_at', { ascending: false })
       .limit(20);
 
     if (pinnedError) {
-      console.error('[api/groups/:groupId/messages] pinned fetch error', pinnedError);
+      console.error('[api/groups/:groupId/messages] pinned fetch error', { groupId, error: pinnedError });
     }
 
     // Fetch regular (non-pinned) messages
+    // Use explicit column list to avoid errors if columns don't exist yet
     let query = supabaseAdmin
       .from('chat_group_messages')
-      .select('*')
+      .select('id, group_id, sender_id, text, attachments, created_at, is_pinned, pinned_at')
       .eq('group_id', groupId)
       .eq('is_pinned', false)
       .order('created_at', { ascending: false })
@@ -5608,7 +5609,7 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
     const { data: messages, error } = await query;
 
     if (error) {
-      console.error('[api/groups/:groupId/messages] fetch error', error);
+      console.error('[api/groups/:groupId/messages] Supabase error', { groupId, error });
       // Don't 500 on empty table or missing column - return empty array instead
       return res.status(200).json({ messages: [], pinned: [], hasMore: false, error: 'unavailable' });
     }

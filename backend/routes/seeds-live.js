@@ -231,7 +231,18 @@ router.get('/', async (req, res) => {
 
   } catch (error) {
     console.error('[seeds-live] Search failed:', error);
-    res.status(500).json({ error: 'Search failed', message: error.message });
+    // Always return 200 with empty results instead of 500
+    res.json({
+      total: 0,
+      results: [],
+      sources: {
+        database: 0,
+        google_search: 0,
+        popular: 0
+      },
+      error: 'Seeds live temporarily unavailable',
+      message: error.message
+    });
   }
 });
 
