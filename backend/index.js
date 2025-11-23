@@ -5426,54 +5426,33 @@ app.post('/api/groups/:groupId/join', express.json(), async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    const userId = user.id;
     const groupId = req.params.groupId;
 
-    // Verify group exists and is public
-    const { data: group, error: groupError } = await supabaseAdmin
+    const { data: group, error: gErr } = await supabaseAdmin
       .from('chat_groups')
       .select('*')
       .eq('id', groupId)
-      .single();
+      .maybeSingle();
 
-    if (groupError || !group) {
+    if (gErr || !group) {
       return res.status(404).json({ error: 'Group not found' });
     }
 
-    if (!group.is_public) {
-      return res.status(403).json({ error: 'Group is not public' });
-    }
-
-    // Check if already a member
-    const { data: existing } = await supabaseAdmin
+    const { error: insertErr } = await supabaseAdmin
       .from('chat_group_members')
-      .select('id')
-      .eq('group_id', groupId)
-      .eq('user_id', user.id)
+      .insert({ group_id: groupId, user_id: userId })
+      .select('*')
       .maybeSingle();
 
-    if (existing) {
-      return res.json({ success: true, already_member: true });
-    }
-
-    // Join group
-    const { data: membership, error: joinError } = await supabaseAdmin
-      .from('chat_group_members')
-      .insert({
-        group_id: groupId,
-        user_id: user.id,
-        role: 'member',
-      })
-      .select('*')
-      .single();
-
-    if (joinError) {
-      console.error('[api/groups/:groupId/join] join error', joinError);
+    if (insertErr && !insertErr.message.includes('duplicate key')) {
+      console.error('[api/groups/:groupId/join] join error', insertErr);
       return res.status(500).json({ error: 'Failed to join group' });
     }
 
-    return res.json({ success: true, membership });
-  } catch (err) {
-    console.error('[api/groups/:groupId/join] error', err);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[api/groups/:groupId/join] error', e);
     return res.status(500).json({ error: 'Internal error' });
   }
 });
