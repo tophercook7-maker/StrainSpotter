@@ -36,14 +36,42 @@ export function useCreditBalance() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Define founder check at hook level so it's available everywhere
+  const email = session?.user?.email ?? null;
+  const FOUNDER_EMAILS = [FOUNDER_EMAIL];
+  const isFounder = email ? FOUNDER_EMAILS.includes(email.toLowerCase()) : false;
+  const effectiveUnlimited = FOUNDER_UNLIMITED_ENABLED && isFounder;
+
   const fetchSummary = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
+    // If founder, set unlimited credits immediately and skip API call
+    if (effectiveUnlimited && session) {
+      const founderState = applyFounderOverride(session, {
+        tier: 'admin',
+        creditsRemaining: Infinity,
+        monthlyLimit: 999999,
+        usedThisMonth: 0,
+        lifetimeScansUsed: 0,
+        resetAt: null,
+        bonusCredits: 0,
+        isUnlimited: true,
+        unlimited: true,
+        membershipTier: 'founder_unlimited',
+        needsUpgrade: false,
+        canScan: true,
+        remainingScans: Infinity
+      });
+      setSummary(founderState);
+      setLoading(false);
+      return;
+    }
 
-      if (!session) {
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+
+      if (!currentSession) {
         setSummary(null);
         setLoading(false);
         return;
@@ -51,7 +79,7 @@ export function useCreditBalance() {
 
       const response = await fetch(`${API_BASE}/api/credits/balance`, {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${currentSession.access_token}`
         }
       });
 
@@ -79,16 +107,14 @@ export function useCreditBalance() {
       };
       
       // Apply founder override
-      const finalState = applyFounderOverride(session, creditState);
+      const finalState = applyFounderOverride(currentSession, creditState);
       setSummary(finalState);
     } catch (err) {
       console.error('useCreditBalance error:', err);
       setError(err.message || 'Unable to load credits');
       
       // Even on error, apply founder override if applicable
-      const email = session?.user?.email;
-      const isFounder = FOUNDER_UNLIMITED_ENABLED && email === FOUNDER_EMAIL;
-      if (isFounder) {
+      if (effectiveUnlimited && session) {
         const founderState = applyFounderOverride(session, {
           tier: 'admin',
           creditsRemaining: Infinity,
@@ -111,7 +137,7 @@ export function useCreditBalance() {
     } finally {
       setLoading(false);
     }
-  }, [session]);
+  }, [session, effectiveUnlimited]);
 
   useEffect(() => {
     fetchSummary();
