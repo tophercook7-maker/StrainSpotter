@@ -5556,78 +5556,56 @@ app.post('/api/groups/:groupId/messages', express.json(), async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    const userId = user.id;
     const groupId = req.params.groupId;
-    const { body, imageUrl } = req.body || {};
+    const { body, imageUrl, pin } = req.body || {};
 
     if (!body && !imageUrl) {
-      return res.status(400).json({ error: 'body or imageUrl is required' });
+      return res.status(400).json({ error: 'Message is empty' });
     }
 
-    // Verify user is a member
-    const { data: membership } = await supabaseAdmin
+    const { data: member } = await supabaseAdmin
       .from('chat_group_members')
-      .select('id')
+      .select('*')
       .eq('group_id', groupId)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .maybeSingle();
 
-    if (!membership) {
-      return res.status(403).json({ error: 'Not a member of this group' });
+    if (!member) {
+      return res.status(403).json({ error: 'Join this group before sending messages' });
     }
 
-    // Check if group is business-only
-    const { data: group } = await supabaseAdmin
-      .from('chat_groups')
-      .select('business_only')
-      .eq('id', groupId)
-      .single();
-
-    if (group?.business_only) {
-      // Verify user has a business profile
-      const { data: business } = await supabaseAdmin
+    let isBusinessUser = false;
+    if (pin) {
+      const { data: biz } = await supabaseAdmin
         .from('business_profiles')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .maybeSingle();
 
-      if (!business) {
-        return res.status(403).json({ error: 'Only businesses can post in this group' });
-      }
+      isBusinessUser = !!biz;
     }
 
-    // Insert message
-    const { data: message, error: msgError } = await supabaseAdmin
+    const { data: message, error: msgErr } = await supabaseAdmin
       .from('chat_group_messages')
       .insert({
         group_id: groupId,
-        sender_user_id: user.id,
+        sender_user_id: userId,
         body: body || null,
         image_url: imageUrl || null,
-        is_pinned: false,
+        is_pinned: pin && isBusinessUser ? true : false,
       })
-      .select(`
-        *,
-        sender: sender_user_id (
-          id,
-          email
-        )
-      `)
+      .select('*')
       .single();
 
-    if (msgError) {
-      console.error('[api/groups/:groupId/messages] insert error', msgError);
+    if (msgErr) {
+      console.error('[api/groups/:groupId/messages] insert error', msgErr);
       return res.status(500).json({ error: 'Failed to send message' });
     }
 
-    // Update group updated_at
-    await supabaseAdmin
-      .from('chat_groups')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', groupId);
-
     return res.json({ message });
-  } catch (err) {
-    console.error('[api/groups/:groupId/messages] error', err);
+  } catch (e) {
+    console.error('[api/groups/:groupId/messages] error', e);
     return res.status(500).json({ error: 'Internal error' });
   }
 });
