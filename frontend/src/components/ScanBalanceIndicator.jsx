@@ -2,11 +2,15 @@ import { useMemo } from 'react';
 import { Alert, Chip, Stack, Button, CircularProgress } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import { useCreditBalance } from '../hooks/useCreditBalance';
+import { FOUNDER_EMAIL } from '../config';
+import { useAuth } from '../hooks/useAuth';
 
 export default function ScanBalanceIndicator({ onBuyCredits }) {
+  const { user } = useAuth();
   const { summary, loading, refresh } = useCreditBalance();
-
-  const hasUnlimited = Boolean(summary?.unlimited || summary?.isUnlimited || summary?.membershipTier === 'founder_unlimited' || summary?.tier === 'admin');
+  const email = user?.email ?? null;
+  const isFounder = email === FOUNDER_EMAIL;
+  const hasUnlimited = isFounder || Boolean(summary?.unlimited || summary?.isUnlimited || summary?.membershipTier === 'founder_unlimited' || summary?.tier === 'admin');
 
   const state = useMemo(() => {
     if (!summary) return null;
@@ -32,7 +36,7 @@ export default function ScanBalanceIndicator({ onBuyCredits }) {
     <Stack spacing={1} sx={{ mb: 2 }}>
       <Chip
         icon={<BoltIcon />}
-        label={hasUnlimited ? 'Unlimited scans' : `Scans left: ${summary.creditsRemaining ?? 0}`}
+        label={hasUnlimited ? 'Unlimited scans' : `Scans left: ${summary.creditsRemaining === Infinity || summary.creditsRemaining === Number.POSITIVE_INFINITY ? '∞' : (summary.creditsRemaining ?? 0)}`}
         color={hasUnlimited ? 'primary' : (state === 'ok' ? 'success' : state === 'low' ? 'warning' : 'default')}
         variant="outlined"
         onClick={refresh}

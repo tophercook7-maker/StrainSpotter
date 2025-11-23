@@ -1,12 +1,17 @@
 import { Box, Chip, Tooltip, CircularProgress } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import { useCreditBalance } from '../hooks/useCreditBalance';
+import { FOUNDER_EMAIL } from '../config';
+import { useAuth } from '../hooks/useAuth';
 
 /**
  * Credit Balance Display Component
  * Shows user's remaining scan credits in the Garden header
  */
 export default function CreditBalance({ summary: externalSummary, loading: externalLoading }) {
+  const { user } = useAuth();
+  const email = user?.email ?? null;
+  const isFounder = email === FOUNDER_EMAIL;
   const shouldUseExternal = typeof externalSummary !== 'undefined' || typeof externalLoading !== 'undefined';
   const { summary: internalSummary, loading: internalLoading } = useCreditBalance();
 
@@ -20,7 +25,7 @@ export default function CreditBalance({ summary: externalSummary, loading: exter
   const rawTier = summary?.tier ?? 'free';
   const tier = tierAliases[rawTier] || rawTier;
   const credits = summary?.creditsRemaining ?? null;
-  const hasUnlimited = Boolean(summary?.unlimited || summary?.isUnlimited || summary?.membershipTier === 'founder_unlimited' || tier === 'admin');
+  const hasUnlimited = isFounder || Boolean(summary?.unlimited || summary?.isUnlimited || summary?.membershipTier === 'founder_unlimited' || tier === 'admin');
 
   if (loading) {
     return (
@@ -43,7 +48,8 @@ export default function CreditBalance({ summary: externalSummary, loading: exter
 
   const getLabel = () => {
     if (hasUnlimited) return '∞ Scans';
-    return `${credits} Scans`;
+    const displayCredits = credits === Infinity || credits === Number.POSITIVE_INFINITY ? '∞' : (credits ?? 0);
+    return `${displayCredits} Scans`;
   };
 
   const getTooltip = () => {

@@ -39,3 +39,6 @@ if (!isLocalhost && !isCapacitor && !fromEnv) {
 const functionsFromEnv = import.meta.env.VITE_FUNCTIONS_BASE;
 const functionsFallback = `${API_BASE}/api`;
 export const FUNCTIONS_BASE = (functionsFromEnv || functionsFallback).replace(/\/$/, '');
+
+// Founder email with unlimited scans
+export const FOUNDER_EMAIL = 'topher.cook7@gmail.com';

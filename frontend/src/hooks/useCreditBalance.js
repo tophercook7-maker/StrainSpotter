@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { API_BASE } from '../config';
+import { API_BASE, FOUNDER_EMAIL } from '../config';
 import { useAuth } from './useAuth';
-
-const FOUNDER_EMAIL = 'topher.cook7@gmail.com';
 
 /**
  * Apply founder override to credit state if user is founder

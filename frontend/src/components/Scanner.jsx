@@ -8,12 +8,14 @@ import {
   Stack,
 } from '@mui/material';
 import CannabisLeafIcon from './CannabisLeafIcon';
-import { API_BASE } from '../config';
+import { API_BASE, FOUNDER_EMAIL } from '../config';
 import { useMembership } from '../membership/MembershipContext';
+import { useAuth } from '../hooks/useAuth';
 import { useCreditBalance } from '../hooks/useCreditBalance';
 
 export default function Scanner(props) {
   const { onViewHistory, onBack, onNavigate } = props;
+  const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -42,17 +44,19 @@ export default function Scanner(props) {
   // Check for unlimited scans from credit balance API
   const { summary: creditSummary } = useCreditBalance();
   const hasUnlimited = Boolean(creditSummary?.unlimited || creditSummary?.isUnlimited || creditSummary?.membershipTier === 'founder_unlimited' || creditSummary?.tier === 'admin');
+  const email = user?.email ?? null;
+  const isFounder = email === FOUNDER_EMAIL;
   
   // Now everyone depends on totalAvailableScans, including members.
   // Founders/admins with unlimited scans can always scan
-  const canScan = hasUnlimited || totalAvailableScans > 0;
-  const lowCredits = !hasUnlimited && totalAvailableScans > 0 && totalAvailableScans <= 5;
+  const canScan = isFounder || hasUnlimited || totalAvailableScans > 0;
+  const lowCredits = !isFounder && !hasUnlimited && totalAvailableScans > 0 && totalAvailableScans <= 5;
 
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!canScan) {
+    if (!isFounder && !canScan) {
       const msg = `You're out of scans. Members get ${memberCap} scans included; you can also top up scan packs any time.`;
       setErrorMessage(msg);
       logDebug(`ERROR: ${msg}`);
@@ -139,7 +143,7 @@ export default function Scanner(props) {
   };
 
   const handleScanClick = () => {
-    if (!canScan) {
+    if (!isFounder && !canScan) {
       const msg = `You're out of scans. Members get ${memberCap} scans included; you can also top up scan packs any time.`;
       setErrorMessage(msg);
       logDebug(`ERROR: ${msg}`);
@@ -369,7 +373,7 @@ export default function Scanner(props) {
             variant="contained"
             size="large"
             onClick={handleScanClick}
-            disabled={isBusy || !canScan}
+            disabled={!isFounder && (isBusy || !canScan)}
             sx={{
               borderRadius: 999,
               px: 4,
@@ -388,7 +392,7 @@ export default function Scanner(props) {
             {processing && !uploading && 'Processing…'}
             {!uploading &&
               !processing &&
-              (canScan ? 'Take or choose photo' : 'Out of scans')}
+              (isFounder || canScan ? 'Take or choose photo' : 'Out of scans')}
           </Button>
 
           <Box sx={{ mt: 1.5 }}>
@@ -469,7 +473,7 @@ export default function Scanner(props) {
         )}
 
         {/* Hard stop prompt when user has no scans */}
-        {!canScan && (
+        {!isFounder && !canScan && (
           <Box
             sx={{
               mt: 2,

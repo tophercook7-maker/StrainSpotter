@@ -27,7 +27,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useMembership } from '../membership/MembershipContext';
 import { useProMode } from '../contexts/ProModeContext';
 import { useCreditBalance } from '../hooks/useCreditBalance';
-import { API_BASE } from '../config';
+import { API_BASE, FOUNDER_EMAIL } from '../config';
 import { normalizeScanResult, transformScanResult } from '../utils/scanResultUtils';
 import { resizeImageToBase64 } from '../utils/resizeImageToBase64';
 // Removed deriveDisplayStrain - using transformScanResult as single source of truth
@@ -66,6 +66,8 @@ export default function ScanPage({ onBack, onNavigate }) {
   const { proRole, proEnabled } = useProMode();
   const { summary: creditSummary } = useCreditBalance();
   const hasUnlimited = Boolean(creditSummary?.unlimited || creditSummary?.isUnlimited || creditSummary?.membershipTier === 'founder_unlimited' || creditSummary?.tier === 'admin');
+  const email = user?.email ?? null;
+  const isFounder = email === FOUNDER_EMAIL;
   const isGuest = !user;
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -86,7 +88,7 @@ export default function ScanPage({ onBack, onNavigate }) {
   
   // Now everyone depends on totalAvailableScans, including members.
   // Founders/admins with unlimited scans can always scan
-  const canScan = hasUnlimited || totalAvailableScans > 0;
+  const canScan = isFounder || hasUnlimited || totalAvailableScans > 0;
   const [scanPhase, setScanPhase] = useState('camera-loading'); // 'camera-loading' | 'ready' | 'capturing' | 'uploading' | 'processing' | 'done' | 'error'
   const [statusMessage, setStatusMessage] = useState('Opening scanner…');
   
@@ -343,7 +345,7 @@ export default function ScanPage({ onBack, onNavigate }) {
   };
 
   async function startScan(file) {
-    if (!canScan) {
+    if (!isFounder && !canScan) {
       setError(
         `You're out of scans. Members get ${memberCap} scans included; you can also top up scan packs any time.`
       );
@@ -1748,7 +1750,7 @@ export default function ScanPage({ onBack, onNavigate }) {
                 size="large"
                 startIcon={<CloudUploadIcon />}
                 onClick={handlePickImageClick}
-                disabled={isOpeningPicker || scanPhase === 'uploading' || scanPhase === 'processing' || scanPhase === 'capturing' || !canScan}
+                disabled={!isFounder && (isOpeningPicker || scanPhase === 'uploading' || scanPhase === 'processing' || scanPhase === 'capturing' || !canScan)}
                 sx={{
                   textTransform: 'none',
                   fontWeight: 700,
@@ -1849,7 +1851,7 @@ export default function ScanPage({ onBack, onNavigate }) {
                       fullWidth
                       size="medium"
                       onClick={handleStartMultiAngleScan}
-                      disabled={isUploading || isPolling || !canScan}
+                      disabled={!isFounder && (isUploading || isPolling || !canScan)}
                       sx={{
                         textTransform: 'none',
                         background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
