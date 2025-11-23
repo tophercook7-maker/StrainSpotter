@@ -25,6 +25,8 @@ import ScanAISummaryPanel from './ScanAISummaryPanel';
 import StrainResultCard from './StrainResultCard';
 import { useAuth } from '../hooks/useAuth';
 import { useMembership } from '../membership/MembershipContext';
+import { useProMode } from '../contexts/ProModeContext';
+import { useCreditBalance } from '../hooks/useCreditBalance';
 import { API_BASE } from '../config';
 import { normalizeScanResult, transformScanResult } from '../utils/scanResultUtils';
 import { resizeImageToBase64 } from '../utils/resizeImageToBase64';
@@ -61,6 +63,9 @@ export default function ScanPage({ onBack, onNavigate }) {
     starterCap,
     registerScanConsumed,
   } = useMembership();
+  const { proRole, proEnabled } = useProMode();
+  const { summary: creditSummary } = useCreditBalance();
+  const hasUnlimited = Boolean(creditSummary?.unlimited || creditSummary?.isUnlimited || creditSummary?.membershipTier === 'founder_unlimited' || creditSummary?.tier === 'admin');
   const isGuest = !user;
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -80,7 +85,8 @@ export default function ScanPage({ onBack, onNavigate }) {
   const MAX_FRAMES = 3;
   
   // Now everyone depends on totalAvailableScans, including members.
-  const canScan = totalAvailableScans > 0;
+  // Founders/admins with unlimited scans can always scan
+  const canScan = hasUnlimited || totalAvailableScans > 0;
   const [scanPhase, setScanPhase] = useState('camera-loading'); // 'camera-loading' | 'ready' | 'capturing' | 'uploading' | 'processing' | 'done' | 'error'
   const [statusMessage, setStatusMessage] = useState('Opening scanner…');
   

@@ -10,6 +10,7 @@ import {
 import CannabisLeafIcon from './CannabisLeafIcon';
 import { API_BASE } from '../config';
 import { useMembership } from '../membership/MembershipContext';
+import { useCreditBalance } from '../hooks/useCreditBalance';
 
 export default function Scanner(props) {
   const { onViewHistory, onBack, onNavigate } = props;
@@ -38,9 +39,14 @@ export default function Scanner(props) {
     requestTopupPurchase,
   } = useMembership();
 
+  // Check for unlimited scans from credit balance API
+  const { summary: creditSummary } = useCreditBalance();
+  const hasUnlimited = Boolean(creditSummary?.unlimited || creditSummary?.isUnlimited || creditSummary?.membershipTier === 'founder_unlimited' || creditSummary?.tier === 'admin');
+  
   // Now everyone depends on totalAvailableScans, including members.
-  const canScan = totalAvailableScans > 0;
-  const lowCredits = totalAvailableScans > 0 && totalAvailableScans <= 5;
+  // Founders/admins with unlimited scans can always scan
+  const canScan = hasUnlimited || totalAvailableScans > 0;
+  const lowCredits = !hasUnlimited && totalAvailableScans > 0 && totalAvailableScans <= 5;
 
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];

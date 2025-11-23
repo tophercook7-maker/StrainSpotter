@@ -10,6 +10,19 @@ import {
 
 const db = supabaseAdmin ?? supabase;
 
+// Founder emails with unlimited scans
+const FOUNDER_EMAILS = [
+  'topher.cook7@gmail.com',
+];
+
+/**
+ * Check if an email belongs to a founder
+ */
+function isFounderEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  return FOUNDER_EMAILS.includes(email.toLowerCase().trim());
+}
+
 const DEFAULT_STARTER_BUNDLE = Number(process.env.SCAN_STARTER_BUNDLE || 20);
 const DEFAULT_MEMBERSHIP_BUNDLE = Number(process.env.SCAN_MEMBERSHIP_BUNDLE || 30);
 const DEFAULT_MODERATOR_BUNDLE = Number(process.env.SCAN_MODERATOR_BUNDLE || 15);
@@ -231,6 +244,19 @@ export async function grantScanCredits(userId, amount, reason, metadata = null) 
 export async function consumeScanCredits(userId, amount, metadata = null) {
   if (!userId) throw new Error('[scanCredits] userId required for consume');
   if (amount <= 0) return { success: true };
+
+  // FOUNDER OVERRIDE: unlimited scans
+  const email = await fetchAuthUserEmail(userId);
+  if (isFounderEmail(email)) {
+    console.log('[scanCredits] Founder scan - skipping credit consumption');
+    return {
+      success: true,
+      unlimited: true,
+      remainingScans: Number.POSITIVE_INFINITY,
+      membershipTier: 'founder_unlimited',
+      membershipActive: true
+    };
+  }
 
   const { profile, membership } = await ensureMonthlyBundle(userId);
   const membershipActive = isMembershipActive(membership);

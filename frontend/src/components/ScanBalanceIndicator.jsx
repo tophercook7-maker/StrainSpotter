@@ -6,13 +6,16 @@ import { useCreditBalance } from '../hooks/useCreditBalance';
 export default function ScanBalanceIndicator({ onBuyCredits }) {
   const { summary, loading, refresh } = useCreditBalance();
 
+  const hasUnlimited = Boolean(summary?.unlimited || summary?.isUnlimited || summary?.membershipTier === 'founder_unlimited' || summary?.tier === 'admin');
+
   const state = useMemo(() => {
     if (!summary) return null;
+    if (hasUnlimited) return 'unlimited';
     const credits = summary.creditsRemaining ?? 0;
     if (credits <= 0) return 'empty';
     if (credits <= 5) return 'low';
     return 'ok';
-  }, [summary]);
+  }, [summary, hasUnlimited]);
 
   if (loading) {
     return (
@@ -29,12 +32,16 @@ export default function ScanBalanceIndicator({ onBuyCredits }) {
     <Stack spacing={1} sx={{ mb: 2 }}>
       <Chip
         icon={<BoltIcon />}
-        label={`Scans left: ${summary.creditsRemaining ?? 0}`}
-        color={state === 'ok' ? 'success' : state === 'low' ? 'warning' : 'default'}
+        label={hasUnlimited ? 'Unlimited scans' : `Scans left: ${summary.creditsRemaining ?? 0}`}
+        color={hasUnlimited ? 'primary' : (state === 'ok' ? 'success' : state === 'low' ? 'warning' : 'default')}
         variant="outlined"
         onClick={refresh}
+        sx={hasUnlimited ? {
+          background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 165, 0, 0.2) 100%)',
+          border: '1px solid rgba(255, 215, 0, 0.5)'
+        } : undefined}
       />
-      {state === 'low' && (
+      {state === 'low' && !hasUnlimited && (
         <Alert
           severity="warning"
           action={
@@ -46,7 +53,7 @@ export default function ScanBalanceIndicator({ onBuyCredits }) {
           Only a few scans remaining. Top up before your next session.
         </Alert>
       )}
-      {state === 'empty' && (
+      {state === 'empty' && !hasUnlimited && (
         <Alert
           severity="error"
           action={
@@ -55,7 +62,7 @@ export default function ScanBalanceIndicator({ onBuyCredits }) {
             </Button>
           }
         >
-          You’re out of scans. Add a top-up pack or upgrade membership.
+          You're out of scans. Add a top-up pack or upgrade membership.
         </Alert>
       )}
     </Stack>

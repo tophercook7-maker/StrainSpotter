@@ -20,6 +20,7 @@ export default function CreditBalance({ summary: externalSummary, loading: exter
   const rawTier = summary?.tier ?? 'free';
   const tier = tierAliases[rawTier] || rawTier;
   const credits = summary?.creditsRemaining ?? null;
+  const hasUnlimited = Boolean(summary?.unlimited || summary?.isUnlimited || summary?.membershipTier === 'founder_unlimited' || tier === 'admin');
 
   if (loading) {
     return (
@@ -29,24 +30,29 @@ export default function CreditBalance({ summary: externalSummary, loading: exter
     );
   }
 
-  if (credits === null) {
+  if (credits === null && !hasUnlimited) {
     return null;
   }
 
   const getColor = () => {
-    if (tier === 'admin') return 'primary';
+    if (hasUnlimited) return 'primary';
     if (credits === 0) return 'error';
     if (credits <= 10) return 'warning';
     return 'success';
   };
 
   const getLabel = () => {
-    if (tier === 'admin') return '∞ Scans';
+    if (hasUnlimited) return '∞ Scans';
     return `${credits} Scans`;
   };
 
   const getTooltip = () => {
-    if (tier === 'admin') return 'Unlimited scans (Admin)';
+    if (hasUnlimited) {
+      if (summary?.membershipTier === 'founder_unlimited') {
+        return 'Unlimited scans (Founder)';
+      }
+      return 'Unlimited scans (Admin)';
+    }
     if (tier === 'free') return `${credits} free scans remaining`;
     if (tier === 'app_purchase') return `${credits} scans from your app unlock`;
     if (tier === 'monthly_member') {
@@ -64,15 +70,15 @@ export default function CreditBalance({ summary: externalSummary, loading: exter
         size="small"
         sx={{
           fontWeight: 600,
-          background: tier === 'admin'
+          background: hasUnlimited
             ? 'linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 165, 0, 0.2) 100%)'
             : undefined,
           backdropFilter: 'blur(10px)',
-          border: tier === 'admin' ? '1px solid rgba(255, 215, 0, 0.5)' : undefined,
-          boxShadow: credits <= 10 && tier !== 'admin'
+          border: hasUnlimited ? '1px solid rgba(255, 215, 0, 0.5)' : undefined,
+          boxShadow: !hasUnlimited && credits <= 10
             ? '0 0 10px rgba(255, 152, 0, 0.4)'
             : undefined,
-          animation: credits === 0 ? 'pulse 2s ease-in-out infinite' : undefined,
+          animation: !hasUnlimited && credits === 0 ? 'pulse 2s ease-in-out infinite' : undefined,
           '@keyframes pulse': {
             '0%, 100%': { opacity: 1 },
             '50%': { opacity: 0.7 }

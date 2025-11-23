@@ -32,16 +32,19 @@ export function useCreditBalance() {
       }
 
       const data = await response.json();
+      const hasUnlimited = Boolean(data.unlimited || data.isUnlimited || data.tier === 'admin' || data.membershipTier === 'founder_unlimited');
       setSummary({
         tier: data.tier,
-        creditsRemaining: data.creditsRemaining,
+        creditsRemaining: hasUnlimited ? Number.POSITIVE_INFINITY : (data.creditsRemaining ?? 0),
         monthlyLimit: data.monthlyLimit,
         usedThisMonth: data.usedThisMonth,
         lifetimeScansUsed: data.lifetimeScansUsed,
         resetAt: data.resetAt,
         bonusCredits: data.bonusCredits ?? data.bonus_credits ?? 0,
-        isUnlimited: Boolean(data.isUnlimited || data.tier === 'admin'),
-        needsUpgrade: Boolean(data.needsUpgrade)
+        isUnlimited: hasUnlimited,
+        unlimited: hasUnlimited,
+        membershipTier: data.membershipTier,
+        needsUpgrade: hasUnlimited ? false : Boolean(data.needsUpgrade)
       });
     } catch (err) {
       console.error('useCreditBalance error:', err);
