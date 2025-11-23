@@ -1,9 +1,31 @@
-/**
- * Pro Mode Configuration
- * Handles dispensary/grower access codes and pro role resolution
- */
+// backend/config/proMode.js
+// Central toggle for "pro mode" / business features.
 
-// Access codes from environment variables
+const RAW_FLAG =
+  (process.env.PRO_MODE ||
+    process.env.PRO_FEATURES ||
+    process.env.STRIANSPOTTER_PRO_MODE ||
+    'false')
+    .toString()
+    .toLowerCase();
+
+export const PRO_MODE_ENABLED = RAW_FLAG === 'true';
+
+// Simple helper for callsites that expect a function:
+export function isProModeEnabled() {
+  return PRO_MODE_ENABLED;
+}
+
+// Default export for callsites that do:
+//   import proMode from './config/proMode.js';
+const proMode = {
+  enabled: PRO_MODE_ENABLED,
+  label: process.env.PRO_MODE_LABEL || 'Standard',
+};
+
+export default proMode;
+
+// Access codes from environment variables (for dispensary/grower roles)
 const DISPENSARY_ACCESS_CODE = process.env.DISPENSARY_ACCESS_CODE || '';
 const GROWER_ACCESS_CODE = process.env.GROWER_ACCESS_CODE || '';
 

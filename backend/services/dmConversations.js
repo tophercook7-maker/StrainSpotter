@@ -201,7 +201,7 @@ export async function sendDMMessage(conversationId, senderId, body, options = {}
       await supabaseAdmin.rpc('increment_dm_unread_count', {
         p_conversation_id: conversationId,
         p_user_id: recipientId,
-      }).catch(() => {
+      }).catch(async () => {
         // Fallback if RPC doesn't exist - update manually
         const { data: receipt } = await supabaseAdmin
           .from('dm_read_receipts')
