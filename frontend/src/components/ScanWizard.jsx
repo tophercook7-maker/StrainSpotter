@@ -36,7 +36,8 @@ export default function ScanWizard({ onBack, onScanComplete }) {
   const fileInputRef = useRef(null);
   const [membershipComplete, setMembershipComplete] = useState(true); // Skip membership for now
   const [loading, setLoading] = useState(false);
-  const [scanStatus, setScanStatus] = useState("");
+  const [scanStatus, setScanStatus] = useState("idle"); // "idle" | "uploading" | "processing" | "error" | "done"
+  const [errorMessage, setErrorMessage] = useState("");
   const [result, setResult] = useState(null);
   const [match, setMatch] = useState(null);
   const [plantHealth, setPlantHealth] = useState(null);
@@ -388,32 +389,23 @@ export default function ScanWizard({ onBack, onScanComplete }) {
     }
   };
 
+  // Simplified scan flow: pick file -> upload -> process -> call onScanComplete immediately
+  // No internal polling - parent (Garden/App) handles result display
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      setScanStatus("idle");
+      return;
+    }
 
-    // Allow scans without authentication - removed membership gate
-    // if (!currentUser) {
-    //   setAlertMsg('Sign in to use AI-powered scans.');
-    //   setAlertOpen(true);
-    //   setShowMembershipDialog(true);
-    //   return;
-    // }
-
-    // Allow scans even if credits are low - removed credit gate
-    // if (disableScanning) {
-    //   const message = starterExpired
-    //     ? 'Your starter access window has ended. Join the Garden membership or purchase a top-up pack within 3 days to keep scanning.'
-    //     : 'You are out of scan credits. Join the Garden or purchase a top-up pack to continue scanning.';
-    //   setAlertMsg(message);
-    //   setAlertOpen(true);
-    //   setTopUpMessage(message);
-    //   setShowTopUpDialog(true);
-    //   return;
-    // }
+    // Reset file input so same file can be selected again
+    if (e.target) {
+      e.target.value = '';
+    }
 
     setLoading(true);
     setScanStatus("Uploading image...");
+    setErrorMessage("");
 
     try {
       const reader = new FileReader();
@@ -448,16 +440,6 @@ export default function ScanWizard({ onBack, onScanComplete }) {
               })
             });
 
-            // Allow scans without authentication - removed 401 gate
-            // if (uploadResp.status === 401) {
-            //   const message = await parseErrorResponse(uploadResp);
-            //   setAlertMsg(message);
-            //   setAlertOpen(true);
-            //   setShowMembershipDialog(true);
-            //   setScanStatus("Sign in required");
-            //   return;
-            // }
-
             if (!uploadResp.ok) {
               const message = await parseErrorResponse(uploadResp);
               throw new Error(message || "Upload failed");
@@ -479,7 +461,6 @@ export default function ScanWizard({ onBack, onScanComplete }) {
             // If user is founder, they should never hit 402 - log warning and continue
             if (isFounderFromHook) {
               console.warn('[ScanWizard] Founder account hit 402 - backend may not be recognizing founder status. Continuing anyway.');
-              // Continue anyway - founders should bypass credit checks
             } else {
               let errorPayload = {};
               try {
@@ -488,10 +469,8 @@ export default function ScanWizard({ onBack, onScanComplete }) {
                 console.warn('[ScanWizard] Could not parse credit error payload:', err);
               }
 
-              // New credit system V2 error handling
               const tier = errorPayload.tier || 'free';
               const needsUpgrade = errorPayload.needsUpgrade || false;
-
               let message = errorPayload.message || 'No scan credits remaining.';
 
               if (needsUpgrade) {
@@ -508,6 +487,7 @@ export default function ScanWizard({ onBack, onScanComplete }) {
               setShowTopUpDialog(true);
               setScanStatus('Out of credits');
               await loadCredits();
+              setLoading(false);
               return;
             }
           }
@@ -518,26 +498,44 @@ export default function ScanWizard({ onBack, onScanComplete }) {
           }
 
           const processData = await processResp.json();
-          setResult(processData.result);
-          setPlantHealth(processData.plantHealth || null);
-          setScanStatus("Analyzing label and finding strain matches...");
+          
+          // Get the scan object from the process response or fetch it
+          let scan = processData.scan || processData;
+          if (!scan || !scan.id) {
+            // Fetch the scan if not in response
+            const scanResp = await fetch(`${API_BASE}/api/scans/${scanId}`);
+            if (scanResp.ok) {
+              const scanData = await scanResp.json();
+              scan = scanData.scan || scanData;
+            } else {
+              // If fetch fails, create minimal scan object with scanId
+              scan = { id: scanId, status: 'processing' };
+            }
+          }
 
-          // Poll for the complete scan result (like ScanPage does)
-          setIsPolling(true);
-          pollScanResult(scanId); // Don't await - let it poll in background
+          setScanStatus("Scan started successfully!");
+
+          // Call parent callback immediately with scan object
+          // Parent (Garden/App) will handle polling and result display
+          if (onScanComplete && typeof onScanComplete === 'function') {
+            onScanComplete(scan);
+          }
 
           await loadCredits();
+          setLoading(false);
+          setScanStatus("idle");
         } catch (err) {
           console.error('Scan error:', err);
-          setScanStatus(err.message || "Error: Upload or scan failed");
+          setScanStatus("error");
+          setErrorMessage(err.message || 'Scan failed. Please try again.');
           setAlertMsg(err.message || 'Scan failed. Please try again.');
           setAlertOpen(true);
-        } finally {
           setLoading(false);
         }
       };
       reader.onerror = () => {
-        setScanStatus("Error reading file");
+        setScanStatus("error");
+        setErrorMessage("Unable to read the selected file.");
         setAlertMsg("Unable to read the selected file.");
         setAlertOpen(true);
         setLoading(false);
@@ -545,7 +543,8 @@ export default function ScanWizard({ onBack, onScanComplete }) {
       reader.readAsDataURL(file);
     } catch (err) {
       console.error('Scan error:', err);
-      setScanStatus(err.message || "Error: Upload or scan failed");
+      setScanStatus("error");
+      setErrorMessage(err.message || 'Scan failed. Please try again.');
       setAlertMsg(err.message || 'Scan failed. Please try again.');
       setAlertOpen(true);
       setLoading(false);
@@ -658,6 +657,10 @@ export default function ScanWizard({ onBack, onScanComplete }) {
         : null);
   const lowCredits = typeof creditsRemaining === 'number' && creditsRemaining <= 5;
   const disableScanning = !membershipActive && Boolean(creditSummary) && (starterExpired || (typeof creditsRemaining === 'number' && creditsRemaining <= 0));
+  
+  // Clear booleans for button logic
+  const outOfScans = !canScanFromHook && !isFounderFromHook;
+  const canActuallyScan = !!canScanFromHook || !!isFounderFromHook;
 
   const trialMessage = (() => {
     if (membershipActive) return null;
@@ -1139,9 +1142,10 @@ export default function ScanWizard({ onBack, onScanComplete }) {
                 width: { xs: '90%', sm: 'auto' },
                 maxWidth: { xs: '320px', sm: 'none' }
               }}
-              disabled={loading}
+              disabled={loading || !canActuallyScan}
               onClick={() => {
-                if (disableScanning) {
+                if (!canActuallyScan) {
+                  // Show upgrade dialog if out of scans
                   const message = starterExpired
                     ? 'Your starter access window has ended. Join the Garden membership or purchase a top-up pack within 3 days to keep scanning.'
                     : 'You are out of scan credits. Join the Garden or purchase a top-up pack to continue scanning.';
@@ -1155,22 +1159,63 @@ export default function ScanWizard({ onBack, onScanComplete }) {
               }}
             >
               <span role="img" aria-label="camera" style={{ marginRight: 8 }}>📷</span>
-              Add Photo & Scan
+              {loading ? 'Scanning…' : 'Scan now'}
             </Button>
-            {disableScanning && (
-              <Typography align="center" sx={{ mt: 1, color: '#ffcc80', fontWeight: 600, fontSize: { xs: '0.75rem', sm: '1rem' } }}>
-                Add credits or join the Garden to unlock new scans.
+            
+            {/* Upgrade message - only shown when out of scans */}
+            {outOfScans && (
+              <Box sx={{ mt: 2, textAlign: 'center' }}>
+                <Typography variant="body2" sx={{ color: '#ffcc80', mb: 1 }}>
+                  You're out of free scans.
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  sx={{
+                    mt: 1,
+                    color: '#ffcc80',
+                    borderColor: 'rgba(255, 204, 128, 0.5)',
+                    '&:hover': {
+                      borderColor: '#ffcc80',
+                      bgcolor: 'rgba(255, 204, 128, 0.1)'
+                    }
+                  }}
+                  onClick={() => {
+                    const message = starterExpired
+                      ? 'Your starter access window has ended. Join the Garden membership or purchase a top-up pack within 3 days to keep scanning.'
+                      : 'You are out of scan credits. Join the Garden or purchase a top-up pack to continue scanning.';
+                    setAlertMsg(message);
+                    setAlertOpen(true);
+                    setTopUpMessage(message);
+                    setShowTopUpDialog(true);
+                  }}
+                >
+                  Upgrade to keep scanning
+                </Button>
+              </Box>
+            )}
+            {loading && (
+              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mt: 2 }}>
+                <CircularProgress color="success" />
+                <Typography variant="body2" sx={{ mt: 1, color: '#388e3c' }}>
+                  {scanStatus === "Uploading image..." && "Uploading your photo securely..."}
+                  {scanStatus === "Uploading image to Supabase..." && "Uploading your photo securely..."}
+                  {scanStatus === "Uploading image to backend..." && "Uploading your photo securely..."}
+                  {scanStatus === "Processing scan..." && "Analyzing your product..."}
+                  {scanStatus === "Scan started successfully!" && "Scan started! Redirecting to results..."}
+                </Typography>
+              </Box>
+            )}
+            {errorMessage && !loading && (
+              <Typography
+                variant="body2"
+                color="error"
+                sx={{ mt: 2, textAlign: "center", px: 2 }}
+              >
+                {errorMessage}
               </Typography>
             )}
-            {(loading || isPolling) && (
-              <CircularProgress color="success" sx={{ mt: { xs: 1, sm: 2 } }} />
-            )}
-            {scanStatus && !loading && !isPolling && (
-              <Typography align="center" sx={{ mt: { xs: 1, sm: 2 }, color: '#388e3c', fontWeight: 700, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
-                {scanStatus}
-              </Typography>
-            )}
-            {isPolling && scanStatus && (
+            {scanStatus && scanStatus !== "idle" && !loading && !errorMessage && (
               <Typography align="center" sx={{ mt: { xs: 1, sm: 2 }, color: '#388e3c', fontWeight: 700, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
                 {scanStatus}
               </Typography>
