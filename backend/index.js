@@ -58,6 +58,7 @@ import { normalizeMatchConfidence } from './services/matchUtils.js';
 import { findSeedBankEntry } from './services/seedBank.js';
 import { buildGrowProfile } from './services/buildGrowProfile.js';
 import { generateBusinessCode } from './services/businessCode.js';
+import { joinZipGroupAndSendMessage } from './services/messaging.js';
 import {
   consumeScanCredits,
   ensureMonthlyBundle,
@@ -4248,6 +4249,96 @@ app.post('/api/pro/validate-code', express.json(), async (req, res) => {
   } catch (err) {
     console.error('[pro/validate-code] Error', err);
     return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// ========================================
+// ZIP-BASED GROUP CHAT ENDPOINTS
+// ========================================
+
+// POST /api/chat/zip/send - Send a message to a ZIP group
+app.post('/api/chat/zip/send', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { zipCode, body } = req.body || {};
+    if (!zipCode || !body) {
+      return res.status(400).json({ error: 'zipCode and body are required' });
+    }
+
+    const { conversationId, message } = await joinZipGroupAndSendMessage({
+      zipCode,
+      userId: user.id,
+      body,
+    });
+
+    return res.json({
+      conversationId,
+      message,
+    });
+  } catch (err) {
+    console.error('[api/chat/zip/send] error', err);
+    return res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// GET /api/chat/zip/:zipCode - Get messages for a ZIP group
+app.get('/api/chat/zip/:zipCode', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { zipCode } = req.params;
+    const { limit = 50, before } = req.query;
+
+    const { data: zipGroup, error: zipError } = await supabaseAdmin
+      .from('zip_groups')
+      .select('conversation_id')
+      .eq('zip_code', zipCode)
+      .eq('country', 'US')
+      .maybeSingle();
+
+    if (zipError) {
+      console.error('[api/chat/zip/:zipCode] zip lookup error', zipError);
+      return res.status(500).json({ error: 'Failed to load zip group' });
+    }
+
+    if (!zipGroup?.conversation_id) {
+      return res.json({ messages: [], hasMore: false });
+    }
+
+    const conversationId = zipGroup.conversation_id;
+
+    let query = supabaseAdmin
+      .from('messages')
+      .select('id, body, sender_id, created_at')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: false })
+      .limit(Number(limit));
+
+    if (before) {
+      query = query.lt('created_at', before);
+    }
+
+    const { data: messages, error: msgError } = await query;
+
+    if (msgError) {
+      console.error('[api/chat/zip/:zipCode] messages error', msgError);
+      return res.status(500).json({ error: 'Failed to load messages' });
+    }
+
+    return res.json({
+      messages: messages || [],
+      hasMore: (messages || []).length === Number(limit),
+    });
+  } catch (err) {
+    console.error('[api/chat/zip/:zipCode] error', err);
+    return res.status(500).json({ error: 'Failed to load messages' });
   }
 });
 
