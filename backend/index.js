@@ -4806,6 +4806,96 @@ app.post('/api/dm/start', express.json(), async (req, res) => {
   }
 });
 
+// POST /api/dm/:conversationId/messages - Send a message in a DM conversation
+app.post('/api/dm/:conversationId/messages', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversationId = req.params.conversationId;
+    const { body, imageUrl } = req.body || {};
+
+    if (!body && !imageUrl) {
+      return res.status(400).json({ error: 'body or imageUrl is required' });
+    }
+
+    // Ensure user is part of conversation
+    const { data: conv, error: convErr } = await supabaseAdmin
+      .from('conversations')
+      .select('*')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    if (convErr) {
+      console.error('[api/dm/:conversationId/messages] conversation lookup error', convErr);
+      return res.status(500).json({ error: 'Failed to verify conversation' });
+    }
+
+    if (!conv) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    // Check if user is participant
+    // For user-user: user_a_id or user_b_id
+    // For user-business: user_a_id (user) or business owner
+    let isParticipant = false;
+    if (conv.user_a_id === user.id || conv.user_b_id === user.id) {
+      isParticipant = true;
+    } else if (conv.business_b_id) {
+      // Check if user owns the business
+      const { data: business } = await supabaseAdmin
+        .from('business_profiles')
+        .select('user_id')
+        .eq('id', conv.business_b_id)
+        .single();
+      if (business && business.user_id === user.id) {
+        isParticipant = true;
+      }
+    }
+
+    if (!isParticipant) {
+      return res.status(403).json({ error: 'Not allowed in this conversation' });
+    }
+
+    // Insert message
+    const { data: message, error: msgErr } = await supabaseAdmin
+      .from('conversation_messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_user_id: user.id,
+        body: body || null,
+        image_url: imageUrl || null,
+      })
+      .select('*')
+      .single();
+
+    if (msgErr) {
+      console.error('[api/dm/:conversationId/messages] message insert error', msgErr);
+      return res.status(500).json({ error: 'Failed to send message' });
+    }
+
+    // Update conversation metadata
+    const previewText = body || (imageUrl ? '[image]' : '');
+    const preview = previewText.length > 100 ? previewText.substring(0, 100) + '...' : previewText;
+
+    await supabaseAdmin
+      .from('conversations')
+      .update({
+        last_message_text: preview,
+        last_message_at: message.created_at,
+        updated_at: message.created_at,
+      })
+      .eq('id', conversationId);
+
+    return res.json({ message });
+  } catch (e) {
+    console.error('[api/dm/:conversationId/messages] error', e);
+    return res.status(500).json({ error: e?.message || 'Internal error' });
+  }
+});
+
 // GET /api/dm/conversations - List all DM conversations for current user
 app.get('/api/dm/conversations', async (req, res) => {
   try {
