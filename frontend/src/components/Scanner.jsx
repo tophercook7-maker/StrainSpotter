@@ -42,12 +42,12 @@ export default function Scanner(props) {
   } = useMembership();
 
   // Check for unlimited scans from credit balance API
-  const { summary: creditSummary, isFounder: ctxIsFounder } = useCreditBalance?.() ?? {};
+  const { isUnlimited, remainingScans: remainingFromHook } = useCreditBalance?.() ?? {};
   
-  // Safe isFounder check with typeof guard
-  const isFounderSafe = typeof ctxIsFounder !== 'undefined' ? Boolean(ctxIsFounder) : false;
+  // isUnlimited means founder
+  const isFounderSafe = Boolean(isUnlimited);
   
-  const hasUnlimited = isFounderSafe || Boolean(creditSummary?.unlimited || creditSummary?.isUnlimited || creditSummary?.membershipTier === 'founder_unlimited' || creditSummary?.tier === 'admin');
+  const hasUnlimited = isUnlimited;
   
   // Now everyone depends on totalAvailableScans, including members.
   // Founders/admins with unlimited scans can always scan
@@ -58,7 +58,7 @@ export default function Scanner(props) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!isFounder && !canScan) {
+    if (!isFounderSafe && !canScan) {
       const msg = `You're out of scans. Members get ${memberCap} scans included; you can also top up scan packs any time.`;
       setErrorMessage(msg);
       logDebug(`ERROR: ${msg}`);
@@ -145,7 +145,7 @@ export default function Scanner(props) {
   };
 
   const handleScanClick = () => {
-    if (!isFounder && !canScan) {
+    if (!isFounderSafe && !canScan) {
       const msg = `You're out of scans. Members get ${memberCap} scans included; you can also top up scan packs any time.`;
       setErrorMessage(msg);
       logDebug(`ERROR: ${msg}`);
@@ -375,7 +375,7 @@ export default function Scanner(props) {
             variant="contained"
             size="large"
             onClick={handleScanClick}
-            disabled={!isFounder && (isBusy || !canScan)}
+            disabled={!isFounderSafe && (isBusy || !canScan)}
             sx={{
               borderRadius: 999,
               px: 4,
@@ -394,7 +394,7 @@ export default function Scanner(props) {
             {processing && !uploading && 'Processing…'}
             {!uploading &&
               !processing &&
-              (isFounder || canScan ? 'Take or choose photo' : 'Out of scans')}
+              (isFounderSafe || canScan ? 'Take or choose photo' : 'Out of scans')}
           </Button>
 
           <Box sx={{ mt: 1.5 }}>
@@ -475,7 +475,7 @@ export default function Scanner(props) {
         )}
 
         {/* Hard stop prompt when user has no scans */}
-        {!isFounder && !canScan && (
+        {!isFounderSafe && !canScan && (
           <Box
             sx={{
               mt: 2,

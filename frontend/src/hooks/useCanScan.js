@@ -1,29 +1,28 @@
 import { useCreditBalance } from './useCreditBalance';
+import { useProMode } from '../contexts/ProModeContext';
 
 /**
  * Shared hook for determining if user can scan
  * Used by both ScanPage (standalone) and ScanWizard (inside Garden)
  */
 export function useCanScan() {
-  const { summary, isFounder, canScan: canScanFromHook } = useCreditBalance();
+  const { remainingScans, isUnlimited, loading, error } = useCreditBalance();
+  const { isFounder, founderUnlimitedEnabled } = useProMode();
   
   // Safe remaining scans calculation
-  const remainingScans = isFounder 
-    ? Number.POSITIVE_INFINITY 
-    : (summary?.remainingScans ?? summary?.creditsRemaining ?? 0);
-  
   const safeRemaining = Number.isFinite(remainingScans) 
     ? remainingScans 
-    : Number.POSITIVE_INFINITY;
-
+    : (isUnlimited ? Number.POSITIVE_INFINITY : 0);
+  
   // Founders can always scan, otherwise check remaining scans
-  const canScan = isFounder || safeRemaining > 0 || canScanFromHook;
+  const canScan = (isFounder && founderUnlimitedEnabled) || isUnlimited || safeRemaining > 0;
 
   return {
     canScan,
     remainingScans: safeRemaining,
-    isFounder: Boolean(isFounder),
-    summary,
+    isFounder: Boolean(isFounder && founderUnlimitedEnabled), // Only true if both are true
+    summary: { remainingScans: safeRemaining, isUnlimited: isUnlimited || (isFounder && founderUnlimitedEnabled) },
+    loading,
+    error,
   };
 }
-

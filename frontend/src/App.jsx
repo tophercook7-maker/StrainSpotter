@@ -7,6 +7,7 @@ import AgeGate from './components/AgeGate';
 import Auth from './components/Auth';
 import ScanHistory from './components/ScanHistory';
 import ScanWizard from './components/ScanWizard';
+import ScanResultCard from './components/ScanResultCard';
 // Navigation components removed in favor of on-screen action buttons
 import FeedbackChat from './components/FeedbackChat';
 import { API_BASE } from './config';
@@ -55,6 +56,7 @@ const theme = createTheme(muiThemeOverrides);
 function App() {
   const [ageVerified, setAgeVerified] = useState(false);
   const [currentView, setCurrentView] = useState('home');
+  const [activeScan, setActiveScan] = useState(null);
   const [showIntro, setShowIntro] = useState(() => {
     if (typeof window === 'undefined') {
       return false;
@@ -194,16 +196,87 @@ function App() {
                 <ScanPage
                   onBack={() => setCurrentView('home')}
                   onNavigate={(view) => setCurrentView(view)}
+                  onScanComplete={(scan) => {
+                    setActiveScan(scan);
+                    setCurrentView('result');
+                  }}
                 />
               </Suspense>
             )}
             {currentView === 'wizard' && (
-              <ScanWizard onBack={() => setCurrentView('home')} />
+              <ScanWizard
+                onBack={() => setCurrentView('home')}
+                onScanComplete={(scan) => {
+                  setActiveScan(scan);
+                  setCurrentView('result');
+                }}
+              />
+            )}
+            {currentView === 'result' && activeScan && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: '100vh',
+                  overflow: 'hidden',
+                  bgcolor: '#000',
+                }}
+              >
+                {/* Fixed header with back button */}
+                <Box
+                  sx={{
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    p: 2,
+                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                    bgcolor: 'rgba(0,0,0,0.7)',
+                    backdropFilter: 'blur(10px)',
+                    zIndex: 1,
+                  }}
+                >
+                  <Button
+                    variant="text"
+                    onClick={() => setCurrentView('home')}
+                    sx={{ color: '#fff', minWidth: 'auto', px: 1 }}
+                  >
+                    ← Back
+                  </Button>
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff', flex: 1 }}>
+                    Scan Result
+                  </Typography>
+                </Box>
+
+                {/* Scrollable content */}
+                <Box
+                  sx={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflowY: 'auto',
+                    WebkitOverflowScrolling: 'touch',
+                    px: 2,
+                    py: 2,
+                  }}
+                >
+                  <ScanResultCard
+                    scan={activeScan}
+                    result={activeScan}
+                    isGuest={false}
+                  />
+                </Box>
+              </Box>
             )}
             {/* LOGBOOK-style view: gate for non-members */}
             {currentView === 'history' && (
               <FeatureGate featureKey="logbook">
-                <ScanHistory onBack={() => setCurrentView('home')} />
+                <ScanHistory
+                  onBack={() => setCurrentView('home')}
+                  onSelectScan={(scan) => {
+                    setActiveScan(scan);
+                    setCurrentView('result');
+                  }}
+                />
               </FeatureGate>
             )}
             {currentView === 'feedback' && (

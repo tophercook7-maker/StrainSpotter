@@ -916,8 +916,8 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         user_id: userId,
         // Include reply_to_id if backend supports it (will be ignored if not)
         reply_to_id: replyToId,
-        // Include attachments if provided
-        attachments: attachments || null,
+        // Include attachments if provided (from parameter or state)
+        attachments: attachmentsToUse && attachmentsToUse.length > 0 ? attachmentsToUse : null,
       };
 
       const res = await fetch(apiUrl, {
@@ -1179,66 +1179,64 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             overflow: 'hidden',
           }}
         >
-          <GroupHeader
+          {!guidelinesAccepted && (
+            <Alert
+              severity="warning"
+              icon={false}
+              sx={{
+                background: 'rgba(255,193,7,0.25)',
+                color: '#CDDC39',
+                border: '1px solid rgba(255,193,7,0.5)',
+                flexShrink: 0,
+                m: 1,
+                mb: 0,
+              }}
+            >
+              By participating, you agree to our{' '}
+              <MuiLink
+                component="button"
+                onClick={() => onNavigate && onNavigate('guidelines')}
+                sx={{ fontWeight: 700, color: '#fff', textDecoration: 'underline' }}
+              >
+                Community Guidelines
+              </MuiLink>.
+            </Alert>
+          )}
+
+          <GroupMessages
+            messages={groupMessagesHook.messages}
+            pinnedMessages={groupMessagesHook.pinnedMessages}
+            isLoadingInitial={groupMessagesHook.isLoadingInitial}
+            isLoadingMore={groupMessagesHook.isLoadingMore}
+            hasMore={groupMessagesHook.hasMore}
+            onLoadMore={groupMessagesHook.loadMore}
+            scrollContainerRef={groupMessagesHook.scrollContainerRef}
+            scrollToBottomRef={groupMessagesHook.scrollToBottomRef}
+            onScroll={groupMessagesHook.handleScroll}
+            currentUserId={userId}
             group={selectedGroup}
-            memberCount={members.length}
             onBack={() => {
               setGroupDialogOpen(false);
               setSelectedGroup(null);
             }}
-            isMobile={isMobile}
+            onSend={isMember && guidelinesAccepted ? async (text, attachments, replyToMsg) => {
+              // Wrapper to match ChatInput's expected signature
+              if (!text?.trim() && (!attachments || attachments.length === 0)) return;
+              if (!selectedGroup || !userId) return;
+              
+              // Set reply if provided
+              if (replyToMsg) {
+                setReplyTo(replyToMsg);
+              }
+              
+              // Call sendMessage with text and attachments directly
+              await sendMessage(text, attachments);
+            } : null}
+            typingUsers={groupTypingHook.typingUsers || []}
           />
 
-          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            {!guidelinesAccepted && (
-              <Alert
-                severity="warning"
-                icon={false}
-                sx={{
-                  background: 'rgba(255,193,7,0.25)',
-                  color: '#CDDC39',
-                  border: '1px solid rgba(255,193,7,0.5)',
-                  flexShrink: 0,
-                  m: 1,
-                  mb: 0,
-                }}
-              >
-                By participating, you agree to our{' '}
-                <MuiLink
-                  component="button"
-                  onClick={() => onNavigate && onNavigate('guidelines')}
-                  sx={{ fontWeight: 700, color: '#fff', textDecoration: 'underline' }}
-                >
-                  Community Guidelines
-                </MuiLink>.
-              </Alert>
-            )}
-
-            <GroupMessages
-              messages={groupMessagesHook.messages}
-              pinnedMessages={groupMessagesHook.pinnedMessages}
-              isLoadingInitial={groupMessagesHook.isLoadingInitial}
-              isLoadingMore={groupMessagesHook.isLoadingMore}
-              hasMore={groupMessagesHook.hasMore}
-              onLoadMore={groupMessagesHook.loadMore}
-              scrollContainerRef={groupMessagesHook.scrollContainerRef}
-              scrollToBottomRef={groupMessagesHook.scrollToBottomRef}
-              onScroll={groupMessagesHook.handleScroll}
-              currentUserId={userId}
-            />
-          </Box>
-
-          {isMember ? (
-            <ChatInput
-              value={input}
-              onChange={setInput}
-              onSend={sendMessage}
-              disabled={sending || !guidelinesAccepted}
-              sending={sending}
-              placeholder={guidelinesAccepted ? 'Type a message…' : 'Accept guidelines to send messages'}
-            />
-          ) : (
-            <Box sx={{ p: 2, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          {!isMember && (
+            <Box sx={{ p: 2, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
               <Button
                 variant="contained"
                 onClick={() => joinGroup()}

@@ -1,12 +1,43 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { API_BASE } from '../config.js';
+import { useAuth } from '../hooks/useAuth';
 
 const ProModeContext = createContext(null);
 
 export function ProModeProvider({ children }) {
+  const { user, session } = useAuth();
   const [proRole, setProRole] = useState(null);           // 'dispensary' | 'grower' | null
   const [proEnabled, setProEnabled] = useState(false);
   const [proLoading, setProLoading] = useState(false);
+
+  // Founder detection - compute from current session/user
+  const founderValue = useMemo(() => {
+    const email = user?.email || session?.user?.email || '';
+    const meta = user?.user_metadata || session?.user?.user_metadata || {};
+
+    // 1) Env flag (from Vite)
+    const envFlag = import.meta.env.VITE_FOUNDER_UNLIMITED_ENABLED !== 'false';
+
+    // 2) Backend metadata says founder
+    const metaIsFounder = Boolean(meta.isFounder);
+
+    // 3) Hardcode founder email
+    const emailIsFounder = email.toLowerCase() === 'topher.cook7@gmail.com';
+
+    const isFounder = metaIsFounder || emailIsFounder;
+    const founderUnlimitedEnabled = isFounder && envFlag;
+
+    if (import.meta.env.DEV) {
+      // Debug log
+      console.log('[FounderDebug]', {
+        email,
+        FOUNDER_UNLIMITED_ENABLED: founderUnlimitedEnabled,
+        isFounder,
+      });
+    }
+
+    return { isFounder, founderUnlimitedEnabled };
+  }, [user, session]);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -86,7 +117,10 @@ export function ProModeProvider({ children }) {
     proEnabled,
     proLoading,
     activateProWithCode,
-    clearProMode
+    clearProMode,
+    // Founder flags
+    isFounder: founderValue.isFounder,
+    founderUnlimitedEnabled: founderValue.founderUnlimitedEnabled,
   };
 
   return (

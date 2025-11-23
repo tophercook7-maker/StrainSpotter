@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import LocalFloristIcon from '@mui/icons-material/LocalFlorist';
 import CloseIcon from '@mui/icons-material/Close';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate } from 'react-router-dom';
 import CannabisLeafIcon from './CannabisLeafIcon';
 import { API_BASE } from '../config';
@@ -23,7 +24,7 @@ import { supabase } from '../supabaseClient';
 import EmptyStateCard from './EmptyStateCard';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 
-function ScanHistory({ onBack }) {
+function ScanHistory({ onBack, onSelectScan }) {
   const navigate = useNavigate();
   const [scans, setScans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -65,8 +66,15 @@ function ScanHistory({ onBack }) {
   }, [fetchScans]);
 
   const handleViewStrain = async (scan) => {
+    // If onSelectScan is provided, use it to navigate to result view
+    if (onSelectScan && typeof onSelectScan === 'function') {
+      onSelectScan(scan);
+      return;
+    }
+    
     if (!scan.matched_strain_slug) return;
 
+    // Otherwise, show in dialog (backward compatibility)
     setSelectedScan(scan);
     setLoadingDetails(true);
 
@@ -132,15 +140,20 @@ function ScanHistory({ onBack }) {
         <Container maxWidth="md">
           <Stack direction="row" justifyContent="space-between" alignItems="center">
             <Stack direction="row" spacing={1} alignItems="center">
+              <IconButton
+                edge="start"
+                onClick={handleBack}
+                sx={{ color: '#fff', mr: 1 }}
+                aria-label="Go back"
+              >
+                <ArrowBackIcon />
+              </IconButton>
               <CannabisLeafIcon style={{ height: 28, color: '#7cb342' }} />
               <Typography variant="h5" fontWeight={700} sx={{ color: '#fff' }}>
                 Scan History
               </Typography>
             </Stack>
             <Stack direction="row" spacing={1}>
-              <Button variant="outlined" onClick={handleBack} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.3)' }}>
-                Back
-              </Button>
               <Button
                 variant="contained"
                 color="success"

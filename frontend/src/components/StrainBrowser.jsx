@@ -1025,29 +1025,49 @@ export default function StrainBrowser({ onBack }) {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      minHeight: 120
+                      minHeight: 120,
+                      position: 'relative'
                     }}
                   >
-                    {strain.image_url ? (
-                      <img
-                        src={strain.image_url}
-                        alt={strain.name}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover'
-                        }}
-                        loading="lazy"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          // Show placeholder if image fails
-                          const placeholder = e.currentTarget.parentElement;
-                          if (placeholder) {
-                            placeholder.innerHTML = '<div style="padding: 20px; text-align: center; color: rgba(255,255,255,0.5); font-size: 12px;">No strain photo yet</div>';
+                    <Box
+                      component="img"
+                      src={strain.image_url || strain.image || strain.hero_image_url || strain.imageUrl || '/assets/no-image.png'}
+                      alt={strain.name || 'Strain photo'}
+                      loading="lazy"
+                      sx={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        display: 'block',
+                        background: '#111'
+                      }}
+                      onError={(e) => {
+                        // Hide broken image and show placeholder text
+                        e.currentTarget.style.display = 'none';
+                        const placeholder = e.currentTarget.parentElement;
+                        if (placeholder) {
+                          const placeholderText = placeholder.querySelector('.strain-placeholder');
+                          if (placeholderText) {
+                            placeholderText.style.display = 'flex';
                           }
-                        }}
-                      />
-                    ) : (
+                        }
+                      }}
+                    />
+                    {/* Placeholder - shown when no image or image fails */}
+                    <Box
+                      className="strain-placeholder"
+                      sx={{
+                        display: (strain.image_url || strain.image || strain.hero_image_url) ? 'none' : 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '100%',
+                        height: '100%',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        background: 'radial-gradient(circle at top, rgba(124, 179, 66, 0.1) 0, rgba(0, 0, 0, 0.3) 100%)',
+                      }}
+                    >
                       <Typography
                         variant="caption"
                         sx={{
@@ -1059,7 +1079,7 @@ export default function StrainBrowser({ onBack }) {
                       >
                         No strain photo yet
                       </Typography>
-                    )}
+                    </Box>
                   </Box>
                   <Stack direction="row" alignItems="center" spacing={1}>
                     {/* Strain Number */}

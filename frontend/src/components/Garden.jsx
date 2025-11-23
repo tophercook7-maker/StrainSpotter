@@ -3,6 +3,7 @@ import { Box, Button, Typography, Grid, Paper, Stack, Avatar, Alert, Dialog, Dia
 import { supabase } from '../supabaseClient';
 import { useMembershipGuard } from '../hooks/useMembershipGuard';
 import ScanWizard from './ScanWizard';
+import ScanResultCard from './ScanResultCard';
 import StrainBrowser from './StrainBrowser';
 import ReviewsHub from './ReviewsHub';
 import DispensaryFinder from './DispensaryFinder';
@@ -45,6 +46,8 @@ export default function Garden({ onBack, onNavigate }) {
   const [showFeedbackReader, setShowFeedbackReader] = useState(false);
   const [showBuyScans, setShowBuyScans] = useState(false);
   const [navValue, setNavValue] = useState('home');
+  const [activeScan, setActiveScan] = useState(null);
+  const [activeView, setActiveView] = useState('scanner'); // 'scanner' | 'result' | 'history'
 
   // Get display name for user
   const getUserDisplayName = () => {
@@ -299,7 +302,80 @@ export default function Garden({ onBack, onNavigate }) {
   }
 
   if (showScan) {
-    return renderWithNav(<ScanWizard onBack={() => resetScreens('home')} />, 'scan');
+    // Show result view if we have a completed scan
+    if (activeView === 'result' && activeScan) {
+      return renderWithNav(
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            overflow: 'hidden',
+            bgcolor: '#000',
+          }}
+        >
+          {/* Fixed header with back button */}
+          <Box
+            sx={{
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              p: 2,
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              bgcolor: 'rgba(0,0,0,0.7)',
+              backdropFilter: 'blur(10px)',
+              zIndex: 1,
+            }}
+          >
+            <Button
+              variant="text"
+              onClick={() => {
+                setActiveView('scanner');
+                setActiveScan(null);
+              }}
+              sx={{ color: '#fff', minWidth: 'auto', px: 1 }}
+            >
+              ← Back
+            </Button>
+            <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff', flex: 1 }}>
+              Scan Result
+            </Typography>
+          </Box>
+
+          {/* Scrollable content */}
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              px: 2,
+              py: 2,
+            }}
+          >
+            <ScanResultCard
+              scan={activeScan}
+              result={activeScan}
+              isGuest={!user}
+            />
+          </Box>
+        </Box>,
+        'scan'
+      );
+    }
+    
+    // Show scanner view
+    return renderWithNav(
+      <ScanWizard
+        onBack={() => resetScreens('home')}
+        onScanComplete={(scan) => {
+          setActiveScan(scan);
+          setActiveView('result');
+        }}
+      />,
+      'scan'
+    );
   }
   if (showStrainBrowser) {
     return renderWithNav(<StrainBrowser onBack={() => resetScreens('home')} />);

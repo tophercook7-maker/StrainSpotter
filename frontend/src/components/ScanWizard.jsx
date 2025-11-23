@@ -8,6 +8,7 @@ import ScanResultCard from "./ScanResultCard";
 import Snackbar from '@mui/material/Snackbar';
 import { Container, Box, Button, Typography, Paper, CircularProgress, Tabs, Tab, Dialog, DialogTitle, DialogContent, Chip, Stack, TextField, IconButton, Alert, DialogActions, DialogContentText, Divider, Fab, Tooltip } from "@mui/material";
 import CloseIcon from '@mui/icons-material/Close';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FeedbackIcon from '@mui/icons-material/Feedback';
 import { supabase, SUPABASE_ANON_KEY } from '../supabaseClient';
 import { API_BASE, FUNCTIONS_BASE } from '../config';
@@ -31,7 +32,7 @@ const ConfidenceCallout = ({ confidence }) => {
   );
 };
 
-export default function ScanWizard({ onBack }) {
+export default function ScanWizard({ onBack, onScanComplete }) {
   const fileInputRef = useRef(null);
   const [membershipComplete, setMembershipComplete] = useState(true); // Skip membership for now
   const [loading, setLoading] = useState(false);
@@ -46,6 +47,8 @@ export default function ScanWizard({ onBack }) {
   const [detailsTab, setDetailsTab] = useState(0);
   const [scanResult, setScanResult] = useState(null); // Normalized scan result for ScanResultCard
   const [isPolling, setIsPolling] = useState(false);
+  const [activeView, setActiveView] = useState('scanner'); // 'scanner' | 'result'
+  const [completedScanId, setCompletedScanId] = useState(null); // Track completed scan ID
 
   // Review state
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -333,6 +336,7 @@ export default function ScanWizard({ onBack }) {
         } else {
           setScanResult(normalized);
           setScanStatus("Scan complete!");
+          setCompletedScanId(scanId);
           
           // Also set match for backward compatibility with existing code that uses match.strain
           if (normalized.topMatch) {
@@ -345,6 +349,14 @@ export default function ScanWizard({ onBack }) {
               },
               confidence: normalized.topMatch.confidence,
             });
+          }
+          
+          // Call parent callback if provided (for Garden to handle routing)
+          if (onScanComplete && typeof onScanComplete === 'function') {
+            onScanComplete(scan);
+          } else {
+            // Otherwise, switch to result view internally
+            setActiveView('result');
           }
         }
         return;
@@ -678,6 +690,174 @@ export default function ScanWizard({ onBack }) {
     return <DispensaryFinder onBack={() => setShowDispensaryFinder(false)} />;
   }
 
+  // Result view - full-screen scrollable layout
+  if (activeView === 'result' && scanResult) {
+    return (
+      <ErrorBoundary>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100vh',
+            overflow: 'hidden',
+            bgcolor: '#000',
+          }}
+        >
+          {/* Fixed header with back button */}
+          <Box
+            sx={{
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              p: 2,
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              bgcolor: 'rgba(0,0,0,0.7)',
+              backdropFilter: 'blur(10px)',
+              zIndex: 1,
+            }}
+          >
+            <IconButton
+              edge="start"
+              onClick={() => {
+                setActiveView('scanner');
+                setScanResult(null);
+                setCompletedScanId(null);
+              }}
+              sx={{ color: '#fff' }}
+              aria-label="Go back to scanner"
+            >
+              <ArrowBackIcon />
+            </IconButton>
+            <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff', flex: 1 }}>
+              Scan Result
+            </Typography>
+          </Box>
+
+          {/* Scrollable content */}
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              px: 2,
+              py: 2,
+            }}
+          >
+            <Container maxWidth="md" sx={{ py: 2 }}>
+              {/* Product type label */}
+              {(() => {
+                const isPackage = Boolean(scanResult.isPackagedProduct);
+                const dbName = cleanCandidateName(
+                  (scanResult?.topMatch && scanResult.topMatch.name) ||
+                  scanResult?.matchedName ||
+                  scanResult?.name
+                );
+                const labelStrain = cleanCandidateName(scanResult.labelInsights?.strainName);
+                const aiTitle = cleanCandidateName(
+                  scanResult.aiSummary?.title || scanResult.labelInsights?.aiSummary?.title
+                );
+                const primaryName = isPackage
+                  ? (aiTitle || labelStrain || dbName || "Unknown product")
+                  : (dbName || labelStrain || "Unknown strain");
+                
+                return (
+                  <Typography sx={{
+                    fontSize: { xs: '1.25rem', sm: '1.5rem' },
+                    fontWeight: 900,
+                    color: '#00e676',
+                    letterSpacing: { xs: 0.5, sm: 1 },
+                    mb: { xs: 1, sm: 1.5 },
+                    textAlign: 'center',
+                    textShadow: '0 2px 8px #388e3c',
+                    fontFamily: 'Montserrat, Arial, sans-serif'
+                  }}>
+                    {getScanKindLabel({
+                      isPackagedProduct: scanResult.isPackagedProduct || false,
+                      category: scanResult.labelInsights?.category,
+                      productType: scanResult.labelInsights?.productType,
+                    })} identified: {primaryName}
+                  </Typography>
+                );
+              })()}
+              
+              {/* ScanResultCard */}
+              <ScanResultCard
+                result={scanResult}
+                isGuest={!currentUser}
+                onSaveMatch={() => console.log('Save match')}
+                onLogExperience={() => handleLeaveReviewClick()}
+                onReportMismatch={() => {
+                  setAlertMsg('Thank you for reporting. We\'ll review this match.');
+                  setAlertOpen(true);
+                }}
+                onViewStrain={() => setDetailsOpen(true)}
+              />
+
+              {/* Plant Health Analysis - if available */}
+              {plantHealth && (
+                <Box sx={{
+                  mb: { xs: 2, sm: 3 },
+                  p: { xs: 2, sm: 3 },
+                  bgcolor: 'rgba(0, 0, 0, 0.4)',
+                  borderRadius: { xs: 2, sm: 3 },
+                  border: `2px solid ${plantHealth.healthStatus.color}`,
+                  boxShadow: `0 0 20px ${plantHealth.healthStatus.color}40`,
+                  width: '100%',
+                  mt: 2
+                }}>
+                  <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: { xs: 1.5, sm: 2 } }}>
+                    Plant Analysis
+                  </Typography>
+                  {/* Plant health content - simplified for result view */}
+                  <Typography variant="body2" sx={{ color: '#fff' }}>
+                    Growth Stage: {plantHealth.growthStage?.stage || 'Unknown'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#fff', mt: 1 }}>
+                    Health Status: {plantHealth.healthStatus?.status || 'Unknown'}
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Action buttons */}
+              <Box sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+                mt: 3,
+                width: '100%',
+                maxWidth: '400px',
+                mx: 'auto',
+              }}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  onClick={() => {
+                    setActiveView('scanner');
+                    setScanResult(null);
+                    setCompletedScanId(null);
+                    fileInputRef.current?.click();
+                  }}
+                  sx={{
+                    py: 2,
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
+                    textTransform: 'none',
+                  }}
+                >
+                  📷 Scan Another
+                </Button>
+              </Box>
+            </Container>
+          </Box>
+        </Box>
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <ErrorBoundary>
       {!membershipComplete ? (
@@ -997,8 +1177,8 @@ export default function ScanWizard({ onBack }) {
             )}
           </Box>
 
-          {/* Scan Results Section */}
-          {scanResult && (
+          {/* Scan Results Section - Only show in scanner view */}
+          {scanResult && activeView === 'scanner' && (
           <Box sx={{
             mt: { xs: 2, sm: 4 },
             width: '100%',

@@ -52,7 +52,7 @@ function apiUrl(path) {
   return `${API_BASE}${path}`;
 }
 
-export default function ScanPage({ onBack, onNavigate }) {
+export default function ScanPage({ onBack, onNavigate, onScanComplete }) {
   const { user } = useAuth();
   const {
     isMember,
@@ -69,6 +69,7 @@ export default function ScanPage({ onBack, onNavigate }) {
   const { canScan: canScanFromHook, isFounder, remainingScans: remainingScansFromHook } = useCanScan();
   const { summary: creditSummary } = useCreditBalance?.() ?? {};
   
+  // isFounder comes from useCanScan which uses ProModeContext
   const hasUnlimited = isFounder || Boolean(creditSummary?.unlimited || creditSummary?.isUnlimited || creditSummary?.membershipTier === 'founder_unlimited' || creditSummary?.tier === 'admin');
   const email = user?.email ?? null;
   const isGuest = !user;
@@ -260,6 +261,12 @@ export default function ScanPage({ onBack, onNavigate }) {
     (scan) => {
       if (!scan || !scan.id) {
         console.warn('[SCAN] handleScanCompleted called with invalid scan', scan);
+        return;
+      }
+      
+      // Call parent callback if provided (for App.jsx to handle routing)
+      if (onScanComplete && typeof onScanComplete === 'function') {
+        onScanComplete(scan);
         return;
       }
 

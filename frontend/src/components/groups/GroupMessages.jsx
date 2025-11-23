@@ -5,6 +5,8 @@ import { useState, useRef } from 'react';
 import { Box, Typography, Avatar, Stack, Button } from '@mui/material';
 import { useAuth } from '../../hooks/useAuth';
 import { useMediaQuery, useTheme } from '@mui/material';
+import GroupHeader from './GroupHeader';
+import ChatInput from './ChatInput';
 
 function formatTime(iso) {
   if (!iso) return '';
@@ -39,92 +41,118 @@ export default function GroupMessages({
   onScroll,
   currentUserId,
   onReply = null,
+  group,
+  onBack,
+  onSend,
+  typingUsers = [],
 }) {
   const { user } = useAuth();
   const userId = currentUserId || user?.id;
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
+  // Reply state
+  const [replyTo, setReplyTo] = useState(null);
+  const clearReply = () => setReplyTo(null);
+  const handleReply = (message) => {
+    if (onReply) {
+      onReply(message);
+    } else {
+      setReplyTo(message);
+    }
+  };
+  
+  const handleSend = (text, attachments) => {
+    if (onSend) {
+      onSend(text, attachments, replyTo);
+      clearReply();
+    }
+  };
+  
+  // Scroll anchor ref
+  const scrollAnchorRef = useRef(null);
+  
   // Swipe-to-reply state
   const touchStartXRef = useRef(0);
   const touchStartYRef = useRef(0);
 
-  if (isLoadingInitial) {
-    return (
-      <Box
-        sx={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: 0,
-        }}
-      >
-        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-          Loading messages...
-        </Typography>
-      </Box>
-    );
-  }
-
-  // Empty state - no messages yet
-  if (!messages || messages.length === 0) {
-    return (
-      <Box
-        sx={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: 0,
-          padding: 4,
-        }}
-      >
-        <Typography variant="h6" sx={{ color: '#fff', mb: 1, fontWeight: 600 }}>
-          No messages yet
-        </Typography>
-        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', textAlign: 'center' }}>
-          Be the first to start the conversation.
-        </Typography>
-      </Box>
-    );
-  }
-
+  const loading = isLoadingInitial;
+  
   return (
     <Box
-      ref={scrollContainerRef}
-      onScroll={onScroll}
       sx={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: 'auto',
-        WebkitOverflowScrolling: 'touch',
-        paddingX: 2,
-        paddingY: 1,
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        overflow: "hidden",
+        backgroundColor: "#000",
       }}
     >
-      {/* Load older messages button */}
-      {hasMore && (
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
-          <Button
-            onClick={onLoadMore}
-            disabled={isLoadingMore}
-            variant="outlined"
-            size="small"
-            sx={{
-              color: '#9CCC65',
-              borderColor: 'rgba(124,179,66,0.4)',
-              '&:hover': {
-                borderColor: 'rgba(124,179,66,0.6)',
-                bgcolor: 'rgba(124,179,66,0.1)',
-              },
-            }}
-          >
-            {isLoadingMore ? 'Loading…' : 'Load earlier messages'}
-          </Button>
-        </Box>
+      {group && (
+        <GroupHeader
+          group={group}
+          onBack={onBack}
+          typingUsers={typingUsers}
+          isMobile={isMobile}
+        />
       )}
+
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          WebkitOverflowScrolling: "touch",
+          paddingBottom: "16px",
+        }}
+        ref={scrollContainerRef}
+        onScroll={onScroll}
+      >
+        {loading && (!messages || messages.length === 0) && (
+          <Box sx={{ 
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            p: 2,
+            color: "#ccc"
+          }}>
+            Loading messages…
+          </Box>
+        )}
+
+        {!loading && (!messages || messages.length === 0) && (
+          <Box sx={{ 
+            p: 2, 
+            color: "#ccc",
+            textAlign: 'center',
+            mt: 2
+          }}>
+            No messages yet. Be the first to say hi 👋
+          </Box>
+        )}
+
+        {/* Load older messages button */}
+        {hasMore && (
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center', pt: 2 }}>
+            <Button
+              onClick={onLoadMore}
+              disabled={isLoadingMore}
+              variant="outlined"
+              size="small"
+              sx={{
+                color: '#9CCC65',
+                borderColor: 'rgba(124,179,66,0.4)',
+                '&:hover': {
+                  borderColor: 'rgba(124,179,66,0.6)',
+                  bgcolor: 'rgba(124,179,66,0.1)',
+                },
+              }}
+            >
+              {isLoadingMore ? 'Loading…' : 'Load earlier messages'}
+            </Button>
+          </Box>
+        )}
 
       {/* Pinned Messages */}
       {pinnedMessages && pinnedMessages.length > 0 && (
@@ -167,8 +195,8 @@ export default function GroupMessages({
       )}
 
       {/* Messages */}
-      <Stack spacing={1}>
-        {messages
+      <Stack spacing={1} sx={{ px: 2 }}>
+        {(Array.isArray(messages) ? messages : [])
           .filter((m) => !m.isPinned && !m.pinned_at)
           .map((message, idx) => {
               const msg = message.raw || message;
@@ -359,10 +387,29 @@ export default function GroupMessages({
               );
             })}
         </Stack>
-      )}
 
-      {/* Scroll anchor for auto-scroll */}
-      <div ref={scrollToBottomRef} />
+        <div
+          ref={scrollAnchorRef}
+          data-scroll-anchor="group-messages-end"
+          style={{ height: 1 }}
+        />
+        {scrollToBottomRef && <div ref={scrollToBottomRef} />}
+      </Box>
+
+      {group && onSend && (
+        <ChatInput
+          value=""
+          onChange={() => {}}
+          onSend={handleSend}
+          disabled={false}
+          sending={false}
+          placeholder="Type a message…"
+          replyToMessage={replyTo}
+          onCancelReply={clearReply}
+          scope="group"
+          channelId={group.id}
+        />
+      )}
     </Box>
   );
 }

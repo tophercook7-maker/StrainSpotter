@@ -10,22 +10,21 @@ import { useAuth } from '../hooks/useAuth';
 export default function CreditBalance({ summary: externalSummary, loading: externalLoading }) {
   const { user } = useAuth();
   const shouldUseExternal = typeof externalSummary !== 'undefined' || typeof externalLoading !== 'undefined';
-  const { summary: internalSummary, loading: internalLoading, isFounder: ctxIsFounder } = useCreditBalance?.() ?? {};
+  const { remainingScans, isUnlimited, loading: internalLoading } = useCreditBalance?.() ?? {};
 
-  // Safe isFounder check with typeof guard
-  const isFounderSafe = typeof ctxIsFounder !== 'undefined' ? Boolean(ctxIsFounder) : false;
+  // isUnlimited means founder
+  const isFounderSafe = Boolean(isUnlimited);
+  const hasUnlimited = isUnlimited;
 
-  const summary = shouldUseExternal ? externalSummary : internalSummary;
-  const loading = shouldUseExternal ? !!externalLoading : internalLoading;
-  const tierAliases = {
-    premium: 'monthly_member',
-    member: 'monthly_member',
-    moderator: 'monthly_member'
+  // For backward compatibility, create a summary-like object
+  const summary = shouldUseExternal ? externalSummary : {
+    creditsRemaining: remainingScans,
+    remainingScans: remainingScans,
+    isUnlimited: isUnlimited,
+    unlimited: isUnlimited,
   };
-  const rawTier = summary?.tier ?? 'free';
-  const tier = tierAliases[rawTier] || rawTier;
-  const credits = summary?.creditsRemaining ?? null;
-  const hasUnlimited = isFounderSafe || Boolean(summary?.unlimited || summary?.isUnlimited || summary?.membershipTier === 'founder_unlimited' || tier === 'admin');
+  const loading = shouldUseExternal ? !!externalLoading : internalLoading;
+  const credits = summary?.creditsRemaining ?? remainingScans ?? null;
 
   if (loading) {
     return (

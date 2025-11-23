@@ -6,12 +6,19 @@ import { useAuth } from '../hooks/useAuth';
 
 export default function ScanBalanceIndicator({ onBuyCredits }) {
   const { user } = useAuth();
-  const { summary, loading, refresh, isFounder: ctxIsFounder } = useCreditBalance?.() ?? {};
+  const { remainingScans, isUnlimited, loading } = useCreditBalance?.() ?? {};
   
-  // Safe isFounder check with typeof guard
-  const isFounderSafe = typeof ctxIsFounder !== 'undefined' ? Boolean(ctxIsFounder) : false;
+  // isUnlimited means founder
+  const isFounderSafe = Boolean(isUnlimited);
+  const hasUnlimited = isUnlimited;
   
-  const hasUnlimited = isFounderSafe || Boolean(summary?.unlimited || summary?.isUnlimited || summary?.membershipTier === 'founder_unlimited' || summary?.tier === 'admin');
+  // Create summary-like object for backward compatibility
+  const summary = {
+    creditsRemaining: remainingScans,
+    remainingScans: remainingScans,
+    isUnlimited: isUnlimited,
+    unlimited: isUnlimited,
+  };
 
   const state = useMemo(() => {
     if (!summary) return null;
@@ -40,7 +47,7 @@ export default function ScanBalanceIndicator({ onBuyCredits }) {
         label={hasUnlimited ? 'Unlimited scans' : `Scans left: ${summary.creditsRemaining === Infinity || summary.creditsRemaining === Number.POSITIVE_INFINITY ? '∞' : (summary.creditsRemaining ?? 0)}`}
         color={hasUnlimited ? 'primary' : (state === 'ok' ? 'success' : state === 'low' ? 'warning' : 'default')}
         variant="outlined"
-        onClick={refresh}
+        onClick={() => window.location.reload()}
         sx={hasUnlimited ? {
           background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 165, 0, 0.2) 100%)',
           border: '1px solid rgba(255, 215, 0, 0.5)'

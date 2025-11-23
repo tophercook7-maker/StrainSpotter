@@ -115,79 +115,80 @@ export default function Seeds({ onBack }) {
       >
         <Container maxWidth="lg" sx={{ py: 3 }}>
           {loading && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress />
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+              <CircularProgress size={28} />
             </Box>
           )}
 
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-
-          {error && (
-            <Alert 
-              severity="warning" 
-              sx={{ mb: 2 }}
-              action={
-                <Button color="inherit" size="small" onClick={() => window.location.reload()}>
-                  Retry
-                </Button>
-              }
-            >
-              {error}
-            </Alert>
+          {!loading && error && (
+            <Box sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="body1" sx={{ color: '#fff', mb: 1 }}>
+                Seed vendor search is warming up. Live data isn't available yet, but we'll add it soon.
+              </Typography>
+              <Button 
+                variant="outlined" 
+                size="small" 
+                onClick={() => window.location.reload()}
+                sx={{ mt: 1, color: '#fff', borderColor: 'rgba(255,255,255,0.3)' }}
+              >
+                Retry
+              </Button>
+            </Box>
           )}
 
-          {!loading && !error && showPlaceholder && (
-            <Box sx={{ padding: '16px', textAlign: 'center', opacity: 0.7 }}>
+          {!loading && !error && (!seeds || seeds.length === 0) && (
+            <Box sx={{ padding: '16px', textAlign: 'center', opacity: 0.7, mt: 4 }}>
               <Typography variant="h6" sx={{ color: '#fff', mb: 1 }}>
-                Seed vendors coming soon
+                No vendors available
               </Typography>
               <Typography variant="body2" sx={{ color: '#fff' }}>
-                We're still wiring up live seed vendors. Check back in a bit!
+                Seed vendors will appear here once configured.
               </Typography>
             </Box>
           )}
 
-          {!loading && !error && !showPlaceholder && (
-            Array.isArray(seeds) && seeds.length > 0 ? (
-              <Grid container spacing={2}>
-                {seeds.map(seed => (
-                  <Grid item size={{ xs: 12, sm: 6, md: 4 }} key={seed.id}>
-                    <Card>
-                      <CardContent>
-                        <Typography variant="h6">{seed.name}</Typography>
-                        <Typography variant="body2">{seed.breeder}</Typography>
-                        <Typography variant="body2">Type: {seed.type}</Typography>
-                        <Typography variant="body2">THC: {seed.thc || 'N/A'}%</Typography>
-                        <Typography variant="body2">CBD: {seed.cbd || 'N/A'}%</Typography>
-                        {seed.description && (
-                          <Typography variant="body2" sx={{ mt: 1 }}>{seed.description}</Typography>
-                        )}
-                        {seed.url && (
-                          <Stack direction="row" sx={{ mt: 1 }}>
-                            <Button
-                              size="small"
-                              variant="contained"
-                              color="primary"
-                              href={seed.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              View Seller
-                            </Button>
-                          </Stack>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                ))}
-              </Grid>
-            ) : (
-              <Box sx={{ padding: '16px', textAlign: 'center', opacity: 0.7 }}>
-                <Typography variant="body1" sx={{ color: '#fff' }}>
-                  No seed vendors found yet for this area. Try adjusting your filters.
-                </Typography>
-              </Box>
-            )
+          {!loading && !error && seeds && seeds.length > 0 && (
+            <Grid container spacing={2}>
+              {seeds.map(seed => (
+                <Grid item xs={12} sm={6} md={4} key={seed.id || seed.name}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardContent>
+                      <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                        {seed.name || 'Unknown Vendor'}
+                      </Typography>
+                      {seed.breeder && (
+                        <Typography variant="body2" sx={{ opacity: 0.8, mb: 0.5 }}>
+                          {seed.breeder}
+                        </Typography>
+                      )}
+                      {seed.type && (
+                        <Typography variant="body2" sx={{ opacity: 0.7, mb: 0.5 }}>
+                          Type: {seed.type}
+                        </Typography>
+                      )}
+                      {seed.description && (
+                        <Typography variant="body2" sx={{ mt: 1, opacity: 0.9 }}>
+                          {seed.description}
+                        </Typography>
+                      )}
+                      {seed.url && (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="primary"
+                          href={seed.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          sx={{ mt: 2 }}
+                        >
+                          Visit Website
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
           )}
         </Container>
       </Box>
