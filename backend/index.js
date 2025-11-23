@@ -61,6 +61,12 @@ import { generateBusinessCode } from './services/businessCode.js';
 import { joinZipGroupAndSendMessage, getOrCreateDM } from './services/messaging.js';
 import { ensureZipGroup } from './services/groups.js';
 import {
+  getOrCreateUserUserDM,
+  getOrCreateUserBusinessDM,
+  sendDMMessage,
+  markDMConversationAsRead,
+} from './services/dmConversations.js';
+import {
   consumeScanCredits,
   ensureMonthlyBundle,
   getCreditSummary,
@@ -4756,6 +4762,256 @@ app.post('/api/groups/:zip/posts/:id/reaction', express.json(), async (req, res)
   } catch (err) {
     console.error('[api/groups/:zip/posts/:id/reaction] error', err);
     return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// ========================================
+// DIRECT MESSAGING (DM) ENDPOINTS
+// ========================================
+
+// GET /api/dm/conversations - List all DM conversations for current user
+app.get('/api/dm/conversations', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Get conversations where user is participant A or B
+    const { data: conversations, error: convError } = await supabaseAdmin
+      .from('dm_conversations')
+      .select(`
+        *,
+        user_a:user_a_id (
+          id,
+          email
+        ),
+        user_b:user_b_id (
+          id,
+          email
+        ),
+        business:business_b_id (
+          id,
+          business_type,
+          business_code,
+          name,
+          city,
+          state
+        )
+      `)
+      .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
+      .order('last_message_at', { ascending: false, nullsFirst: false })
+      .limit(100);
+
+    if (convError) {
+      console.error('[api/dm/conversations] fetch error', convError);
+      return res.status(500).json({ error: 'Failed to load conversations' });
+    }
+
+    // Get unread counts for each conversation
+    const conversationIds = (conversations || []).map((c) => c.id);
+    const { data: receipts } = await supabaseAdmin
+      .from('dm_read_receipts')
+      .select('conversation_id, unread_count')
+      .eq('user_id', user.id)
+      .in('conversation_id', conversationIds);
+
+    const unreadMap = new Map();
+    (receipts || []).forEach((r) => {
+      unreadMap.set(r.conversation_id, r.unread_count || 0);
+    });
+
+    // Attach unread counts and format response
+    const formatted = (conversations || []).map((conv) => ({
+      id: conv.id,
+      lastMessageText: conv.last_message_text,
+      lastMessageAt: conv.last_message_at,
+      createdAt: conv.created_at,
+      unreadCount: unreadMap.get(conv.id) || 0,
+      participant: conv.user_a_id === user.id
+        ? (conv.user_b || conv.business)
+        : (conv.user_a || null),
+      isBusiness: !!conv.business_b_id,
+    }));
+
+    return res.json({ conversations: formatted });
+  } catch (err) {
+    console.error('[api/dm/conversations] error', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// POST /api/dm/conversations/create - Create or get DM conversation
+app.post('/api/dm/conversations/create', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { peerUserId, businessId } = req.body || {};
+
+    if (!peerUserId && !businessId) {
+      return res.status(400).json({ error: 'peerUserId or businessId is required' });
+    }
+
+    let conversationId;
+    if (businessId) {
+      conversationId = await getOrCreateUserBusinessDM(user.id, businessId);
+    } else {
+      conversationId = await getOrCreateUserUserDM(user.id, peerUserId);
+    }
+
+    return res.json({ conversationId });
+  } catch (err) {
+    console.error('[api/dm/conversations/create] error', err);
+    return res.status(500).json({ error: err?.message || 'Failed to create conversation' });
+  }
+});
+
+// GET /api/dm/conversations/:id/messages - Get messages in a DM conversation
+app.get('/api/dm/conversations/:id/messages', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversationId = req.params.id;
+    const { limit = 50, before } = req.query;
+
+    // Verify user is a participant
+    const { data: conversation, error: convError } = await supabaseAdmin
+      .from('dm_conversations')
+      .select('user_a_id, user_b_id, business_b_id')
+      .eq('id', conversationId)
+      .single();
+
+    if (convError || !conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    const isParticipant =
+      conversation.user_a_id === user.id ||
+      conversation.user_b_id === user.id ||
+      (conversation.business_b_id && await (async () => {
+        const { data: business } = await supabaseAdmin
+          .from('business_profiles')
+          .select('user_id')
+          .eq('id', conversation.business_b_id)
+          .single();
+        return business?.user_id === user.id;
+      })());
+
+    if (!isParticipant) {
+      return res.status(403).json({ error: 'Not a participant in this conversation' });
+    }
+
+    // Fetch messages
+    let query = supabaseAdmin
+      .from('dm_messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: false })
+      .limit(Number(limit));
+
+    if (before) {
+      query = query.lt('created_at', before);
+    }
+
+    const { data: messages, error: msgError } = await query;
+
+    if (msgError) {
+      console.error('[api/dm/conversations/:id/messages] fetch error', msgError);
+      return res.status(500).json({ error: 'Failed to load messages' });
+    }
+
+    // Mark conversation as read
+    await markDMConversationAsRead(conversationId, user.id);
+
+    return res.json({
+      messages: messages || [],
+      hasMore: (messages || []).length === Number(limit),
+    });
+  } catch (err) {
+    console.error('[api/dm/conversations/:id/messages] error', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// POST /api/dm/conversations/:id/messages - Send a message in a DM conversation
+app.post('/api/dm/conversations/:id/messages', express.json(), async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversationId = req.params.id;
+    const { body, imageUrl, imageType } = req.body || {};
+
+    if (!body && !imageUrl) {
+      return res.status(400).json({ error: 'body or imageUrl is required' });
+    }
+
+    // Verify user is a participant
+    const { data: conversation, error: convError } = await supabaseAdmin
+      .from('dm_conversations')
+      .select('user_a_id, user_b_id, business_b_id')
+      .eq('id', conversationId)
+      .single();
+
+    if (convError || !conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    const isParticipant =
+      conversation.user_a_id === user.id ||
+      conversation.user_b_id === user.id ||
+      (conversation.business_b_id && await (async () => {
+        const { data: business } = await supabaseAdmin
+          .from('business_profiles')
+          .select('user_id')
+          .eq('id', conversation.business_b_id)
+          .single();
+        return business?.user_id === user.id;
+      })());
+
+    if (!isParticipant) {
+      return res.status(403).json({ error: 'Not a participant in this conversation' });
+    }
+
+    // Send message
+    const { message } = await sendDMMessage(
+      conversationId,
+      user.id,
+      body || '',
+      { imageUrl, imageType }
+    );
+
+    return res.json({ message });
+  } catch (err) {
+    console.error('[api/dm/conversations/:id/messages] error', err);
+    return res.status(500).json({ error: err?.message || 'Failed to send message' });
+  }
+});
+
+// POST /api/dm/conversations/:id/read - Mark conversation as read
+app.post('/api/dm/conversations/:id/read', async (req, res) => {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const conversationId = req.params.id;
+
+    await markDMConversationAsRead(conversationId, user.id);
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[api/dm/conversations/:id/read] error', err);
+    return res.status(500).json({ error: 'Failed to mark as read' });
   }
 });
 
