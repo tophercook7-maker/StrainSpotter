@@ -135,8 +135,12 @@ export async function joinZipGroupAndSendMessage({ zipCode, country = 'US', user
       conversation_id: conversationId,
       sender_id: userId,
       body,
+      attachment_url: null,
+      attachment_type: null,
+      strain_slug: null,
+      scan_id: null,
     })
-    .select('id, created_at, body, sender_id')
+    .select('id, created_at, body, sender_id, attachment_url, attachment_type, strain_slug, scan_id')
     .single();
 
   if (msgError) {
