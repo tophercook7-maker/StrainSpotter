@@ -807,6 +807,9 @@ function UnknownStrainCard({
     return null;
   }
 
+  // Extract aiSummary from props, result, or scan (same pattern as PackagedProductCard)
+  const aiSummary = aiSummaryProp || result?.ai_summary || result?.aiSummary || scan?.ai_summary || scan?.aiSummary || scan?.result?.ai_summary || scan?.result?.aiSummary || null;
+
   // Determine if this is a plant-only scan (has plant health but no strain)
   const hasPlantData = plantHealth || growProfile;
   const isPlantOnly = !isPackagedProduct && hasPlantData;

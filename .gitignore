@@ -5,6 +5,10 @@ env/.env.local
 
 # Dependencies
 node_modules/
+
+# Build outputs
+dist/
+
 # Local secret / config files
 GOOGLE_VISION_JSON_FOR_VERCEL.txt
 docs/VERCEL_PASTE_SHEET.local.md
