@@ -546,7 +546,7 @@ function PackagedProductCard({
         </Box>
       )}
 
-      {/* Plant Health Section - Show whenever plant health or grow profile exists */}
+      {/* Plant Health Section - Show whenever plant health or grow profile exists (independent of strain/aiSummary) */}
       {(plantHealthData || growProfileData) && (
         <Box
           sx={{
@@ -573,13 +573,13 @@ function PackagedProductCard({
             Plant Health & Diagnostics
           </Typography>
           
-          {plantHealthData.overall_health && (
+          {plantHealthData?.overall_health && (
             <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 0.5 }}>
               <strong>Overall Health:</strong> {plantHealthData.overall_health}
             </Typography>
           )}
           
-          {plantHealthData.issues && Array.isArray(plantHealthData.issues) && plantHealthData.issues.length > 0 && (
+          {plantHealthData?.issues && Array.isArray(plantHealthData.issues) && plantHealthData.issues.length > 0 && (
             <Box sx={{ mt: 1 }}>
               <Typography variant="body2" sx={{ color: 'rgba(255, 152, 152, 0.9)', mb: 0.5, fontWeight: 600 }}>
                 Issues Detected:
@@ -596,7 +596,7 @@ function PackagedProductCard({
             </Box>
           )}
           
-          {plantHealthData.recommendations && Array.isArray(plantHealthData.recommendations) && plantHealthData.recommendations.length > 0 && (
+          {plantHealthData?.recommendations && Array.isArray(plantHealthData.recommendations) && plantHealthData.recommendations.length > 0 && (
             <Box sx={{ mt: 2 }}>
               <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 0.5, fontWeight: 600 }}>
                 Recommendations:
@@ -615,8 +615,8 @@ function PackagedProductCard({
         </Box>
       )}
 
-      {/* Effects & Flavors Section */}
-      {aiSummary && (
+      {/* Effects & Flavors Section - Use safe arrays from props */}
+      {aiSummary && (effects.length > 0 || flavors.length > 0) && (
         <Box
           sx={{
             mt: 3,
@@ -640,22 +640,22 @@ function PackagedProductCard({
             Effects & flavors
           </Typography>
           
-          {Array.isArray(aiSummary.effects) && aiSummary.effects.length > 0 && (
+          {effects.length > 0 && (
             <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 0.5, mt: 0.5 }}>
-              <strong>Effects:</strong> {aiSummary.effects.join(", ")}
+              <strong>Effects:</strong> {effects.join(", ")}
             </Typography>
           )}
           
-          {Array.isArray(aiSummary.flavors) && aiSummary.flavors.length > 0 && (
+          {flavors.length > 0 && (
             <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 0.5, mt: 0.5 }}>
-              <strong>Flavors:</strong> {aiSummary.flavors.join(", ")}
+              <strong>Flavors:</strong> {flavors.join(", ")}
             </Typography>
           )}
         </Box>
       )}
 
-      {/* Notes Section */}
-      {aiSummary && (
+      {/* Notes Section - Use safe arrays from props */}
+      {aiSummary && (dispensaryNotes.length > 0 || growerNotes.length > 0) && (
         <Box
           sx={{
             mt: 2,
@@ -679,13 +679,13 @@ function PackagedProductCard({
             Notes
           </Typography>
           
-          {Array.isArray(aiSummary.dispensaryNotes) && aiSummary.dispensaryNotes.length > 0 && (
+          {dispensaryNotes.length > 0 && (
             <Box sx={{ mb: 2 }}>
               <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 0.5, fontWeight: 600 }}>
                 <strong>Dispensary:</strong>
               </Typography>
               <Box component="ul" sx={{ paddingLeft: 2.25, margin: '4px 0', mt: 0.5 }}>
-                {aiSummary.dispensaryNotes.map((n, idx) => (
+                {dispensaryNotes.map((n, idx) => (
                   <Box component="li" key={idx} sx={{ mb: 0.5 }}>
                     <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)' }}>
                       {n}
@@ -696,13 +696,13 @@ function PackagedProductCard({
             </Box>
           )}
           
-          {Array.isArray(aiSummary.growerNotes) && aiSummary.growerNotes.length > 0 && (
+          {growerNotes.length > 0 && (
             <Box>
               <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 0.5, fontWeight: 600 }}>
                 <strong>Grower:</strong>
               </Typography>
               <Box component="ul" sx={{ paddingLeft: 2.25, margin: '4px 0', mt: 0.5 }}>
-                {aiSummary.growerNotes.map((n, idx) => (
+                {growerNotes.map((n, idx) => (
                   <Box component="li" key={idx} sx={{ mb: 0.5 }}>
                     <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)' }}>
                       {n}
@@ -715,8 +715,8 @@ function PackagedProductCard({
         </Box>
       )}
 
-      {/* Potency & Warnings Section */}
-      {(aiSummary && (aiSummary.thc != null || aiSummary.cbd != null || (Array.isArray(aiSummary.warnings) && aiSummary.warnings.length > 0))) && (
+      {/* Potency & Warnings Section - Use safe arrays from props */}
+      {aiSummary && (aiSummary.thc != null || aiSummary.cbd != null || warnings.length > 0) && (
         <Box
           sx={{
             mt: 2,
@@ -755,13 +755,13 @@ function PackagedProductCard({
             </Box>
           )}
           
-          {Array.isArray(aiSummary.warnings) && aiSummary.warnings.length > 0 && (
+          {warnings.length > 0 && (
             <Box>
               <Typography variant="body2" sx={{ color: 'rgba(255, 152, 152, 0.9)', mb: 0.5, fontWeight: 600 }}>
                 Warnings:
               </Typography>
               <Box component="ul" sx={{ marginTop: 0.5, paddingLeft: 2.25, marginBottom: 0 }}>
-                {aiSummary.warnings.map((w, idx) => (
+                {warnings.map((w, idx) => (
                   <Box component="li" key={idx} sx={{ mb: 0.5 }}>
                     <Typography variant="body2" sx={{ color: 'rgba(255, 152, 152, 0.9)' }}>
                       {w}
@@ -930,13 +930,13 @@ function UnknownStrainCard({
             Plant Health & Diagnostics
           </Typography>
           
-          {plantHealth.overall_health && (
+          {plantHealth?.overall_health && (
             <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 0.5 }}>
               <strong>Overall Health:</strong> {plantHealth.overall_health}
             </Typography>
           )}
           
-          {plantHealth.issues && Array.isArray(plantHealth.issues) && plantHealth.issues.length > 0 && (
+          {plantHealth?.issues && Array.isArray(plantHealth.issues) && plantHealth.issues.length > 0 && (
             <Box sx={{ mt: 1 }}>
               <Typography variant="body2" sx={{ color: 'rgba(255, 152, 152, 0.9)', mb: 0.5, fontWeight: 600 }}>
                 Issues Detected:
@@ -953,7 +953,7 @@ function UnknownStrainCard({
             </Box>
           )}
           
-          {plantHealth.recommendations && Array.isArray(plantHealth.recommendations) && plantHealth.recommendations.length > 0 && (
+          {plantHealth?.recommendations && Array.isArray(plantHealth.recommendations) && plantHealth.recommendations.length > 0 && (
             <Box sx={{ mt: 2 }}>
               <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 0.5, fontWeight: 600 }}>
                 Recommendations:
@@ -1019,8 +1019,8 @@ function UnknownStrainCard({
         </Box>
       )}
 
-      {/* Effects & Flavors Section */}
-      {aiSummary && (
+      {/* Effects & Flavors Section - Use safe arrays from props */}
+      {aiSummary && (effects.length > 0 || flavors.length > 0) && (
         <Box
           sx={{
             mt: 3,
@@ -1044,22 +1044,22 @@ function UnknownStrainCard({
             Effects & flavors
           </Typography>
           
-          {Array.isArray(aiSummary.effects) && aiSummary.effects.length > 0 && (
+          {effects.length > 0 && (
             <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 0.5, mt: 0.5 }}>
-              <strong>Effects:</strong> {aiSummary.effects.join(", ")}
+              <strong>Effects:</strong> {effects.join(", ")}
             </Typography>
           )}
           
-          {Array.isArray(aiSummary.flavors) && aiSummary.flavors.length > 0 && (
+          {flavors.length > 0 && (
             <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 0.5, mt: 0.5 }}>
-              <strong>Flavors:</strong> {aiSummary.flavors.join(", ")}
+              <strong>Flavors:</strong> {flavors.join(", ")}
             </Typography>
           )}
         </Box>
       )}
 
-      {/* Notes Section */}
-      {aiSummary && (
+      {/* Notes Section - Use safe arrays from props */}
+      {aiSummary && (dispensaryNotes.length > 0 || growerNotes.length > 0) && (
         <Box
           sx={{
             mt: 2,
@@ -1083,13 +1083,13 @@ function UnknownStrainCard({
             Notes
           </Typography>
           
-          {Array.isArray(aiSummary.dispensaryNotes) && aiSummary.dispensaryNotes.length > 0 && (
+          {dispensaryNotes.length > 0 && (
             <Box sx={{ mb: 2 }}>
               <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 0.5, fontWeight: 600 }}>
                 <strong>Dispensary:</strong>
               </Typography>
               <Box component="ul" sx={{ paddingLeft: 2.25, margin: '4px 0', mt: 0.5 }}>
-                {aiSummary.dispensaryNotes.map((n, idx) => (
+                {dispensaryNotes.map((n, idx) => (
                   <Box component="li" key={idx} sx={{ mb: 0.5 }}>
                     <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)' }}>
                       {n}
@@ -1100,13 +1100,13 @@ function UnknownStrainCard({
             </Box>
           )}
           
-          {Array.isArray(aiSummary.growerNotes) && aiSummary.growerNotes.length > 0 && (
+          {growerNotes.length > 0 && (
             <Box>
               <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)', mb: 0.5, fontWeight: 600 }}>
                 <strong>Grower:</strong>
               </Typography>
               <Box component="ul" sx={{ paddingLeft: 2.25, margin: '4px 0', mt: 0.5 }}>
-                {aiSummary.growerNotes.map((n, idx) => (
+                {growerNotes.map((n, idx) => (
                   <Box component="li" key={idx} sx={{ mb: 0.5 }}>
                     <Typography variant="body2" sx={{ color: 'rgba(200, 230, 201, 0.85)' }}>
                       {n}
@@ -1119,8 +1119,8 @@ function UnknownStrainCard({
         </Box>
       )}
 
-      {/* Potency & Warnings Section */}
-      {(aiSummary && (aiSummary.thc != null || aiSummary.cbd != null || (Array.isArray(aiSummary.warnings) && aiSummary.warnings.length > 0))) && (
+      {/* Potency & Warnings Section - Use safe arrays from props */}
+      {aiSummary && (aiSummary.thc != null || aiSummary.cbd != null || warnings.length > 0) && (
         <Box
           sx={{
             mt: 2,
@@ -1159,13 +1159,13 @@ function UnknownStrainCard({
             </Box>
           )}
           
-          {Array.isArray(aiSummary.warnings) && aiSummary.warnings.length > 0 && (
+          {warnings.length > 0 && (
             <Box>
               <Typography variant="body2" sx={{ color: 'rgba(255, 152, 152, 0.9)', mb: 0.5, fontWeight: 600 }}>
                 Warnings:
               </Typography>
               <Box component="ul" sx={{ marginTop: 0.5, paddingLeft: 2.25, marginBottom: 0 }}>
-                {aiSummary.warnings.map((w, idx) => (
+                {warnings.map((w, idx) => (
                   <Box component="li" key={idx} sx={{ mb: 0.5 }}>
                     <Typography variant="body2" sx={{ color: 'rgba(255, 152, 152, 0.9)' }}>
                       {w}
@@ -1318,30 +1318,16 @@ function BudEstimateCard({
 }
 
 function ScanResultCard({ result, scan, isGuest }) {
-  // Defensive null checks at the top
-  if (!scan && !result) {
+  // Defensive guard if scan is somehow missing
+  const scanId = scan?.id || scan?.scanId || result?.id || result?.scanId;
+  if (!scan || !scanId) {
     return (
       <Box sx={{ p: 3, textAlign: 'center' }}>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="h6" color="text.secondary" sx={{ mb: 2, fontWeight: 600 }}>
           Scan ready, but details are missing
         </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-          We processed your scan, but couldn't load the full details. You can check it in your scan history.
-        </Typography>
-      </Box>
-    );
-  }
-
-  // Ensure we have at least an id
-  const scanId = scan?.id || scan?.scanId || result?.id || result?.scanId;
-  if (!scanId) {
-    return (
-      <Box sx={{ p: 3, textAlign: 'center' }}>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Preparing your result…
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-          Your scan is processing. This may take a moment.
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+          You can refresh this screen or check the scan in your history.
         </Typography>
       </Box>
     );
@@ -1350,57 +1336,76 @@ function ScanResultCard({ result, scan, isGuest }) {
   const { proRole, proEnabled } = useProMode();
 
   // ===============================
-  // NORMALIZE RESULT DATA
+  // COMPREHENSIVE NORMALIZATION
   // ===============================
-  // Safely access result/scan with fallbacks
-  const scanData = result || scan || {};
-  const normalizedResult = scanData?.result || scanData || {};
+  // Extract raw data - handle both scan.result and direct scan properties
+  const raw = scan?.result || scan || result || {};
   
   // Normalize all result fields to handle different naming conventions
   const canonical =
-    normalizedResult.canonical_strain ||
-    normalizedResult.canonicalStrain ||
-    normalizedResult.canonical ||
+    raw.canonical_strain ||
+    raw.canonicalStrain ||
+    raw.canonical ||
     null;
 
   const seedBank =
-    normalizedResult.seedBank ||
-    normalizedResult.seed_bank ||
+    raw.seedBank ||
+    raw.seed_bank ||
     null;
 
   const aiSummary =
-    normalizedResult.ai_summary ||
-    normalizedResult.aiSummary ||
+    raw.ai_summary ||
+    raw.aiSummary ||
     null;
 
   const packagingInsights =
-    normalizedResult.packaging_insights ||
-    normalizedResult.packagingInsights ||
+    raw.packaging_insights ||
+    raw.packagingInsights ||
     null;
 
   const labelInsights =
-    normalizedResult.label_insights ||
-    normalizedResult.labelInsights ||
+    raw.label_insights ||
+    raw.labelInsights ||
     null;
 
   const plantHealth =
-    normalizedResult.plant_health ||
-    normalizedResult.plantHealth ||
+    raw.plant_health ||
+    raw.plantHealth ||
     null;
 
   const growProfile =
-    normalizedResult.grow_profile ||
-    normalizedResult.growProfile ||
+    raw.grow_profile ||
+    raw.growProfile ||
     null;
 
+  // Determine what data we have
+  const hasStrain =
+    !!(canonical?.name || seedBank?.name || aiSummary?.canonicalName);
+
+  const hasPlantOnlyData = !!(plantHealth || growProfile);
+
+  // SAFE arrays - always ensure arrays, never undefined
+  const effects = Array.isArray(aiSummary?.effects) ? aiSummary.effects : [];
+  const flavors = Array.isArray(aiSummary?.flavors) ? aiSummary.flavors : [];
+  const dispensaryNotes = Array.isArray(aiSummary?.dispensaryNotes) ? aiSummary.dispensaryNotes : [];
+  const growerNotes = Array.isArray(aiSummary?.growerNotes) ? aiSummary.growerNotes : [];
+  const warnings = Array.isArray(aiSummary?.warnings) ? aiSummary.warnings : [];
+  
+  // Also normalize for backward compatibility with existing code
+  const normalizedResult = raw;
+  const scanData = result || scan || {};
+
   // Determine display values for strain name, type, and breeder
-  const displayName =
+  // Title for plant-only scans
+  const title =
     canonical?.name ||
     seedBank?.name ||
     aiSummary?.canonicalName ||
     packagingInsights?.strainName ||
     labelInsights?.strainName ||
-    (plantHealth ? "Unknown strain (plant detected)" : "Unknown strain");
+    (hasPlantOnlyData ? "Unknown strain (plant detected)" : "Unknown strain");
+  
+  const displayName = title;
 
   const displayType =
     seedBank?.type ||
@@ -1414,15 +1419,50 @@ function ScanResultCard({ result, scan, isGuest }) {
     null;
 
   // Helper booleans for determining scan type and what to display
-  const hasStrainName = Boolean(displayName && displayName !== "Unknown strain" && displayName !== "Unknown strain (plant detected)");
-  const hasPlantDiagnostics = Boolean(plantHealth || growProfile);
+  const hasStrainName = Boolean(hasStrain && displayName && displayName !== "Unknown strain" && displayName !== "Unknown strain (plant detected)");
+  const hasPlantDiagnostics = Boolean(hasPlantOnlyData);
   const isLikelyPlantOnly = !hasStrainName && hasPlantDiagnostics && !packagingInsights;
 
   // CRITICAL: Use transformScanResult to get canonical strain name and metadata
   // This ensures packaged products ALWAYS use label strain, NEVER visual/library guesses
-  const transformed = transformScanResult(scanData);
+  // Wrap in try-catch to handle any transform errors gracefully
+  let transformed = null;
+  try {
+    transformed = transformScanResult(scanData);
+  } catch (error) {
+    console.error('[ScanResultCard] transformScanResult error:', error);
+    // Continue with null transformed - we'll handle plant-only scans below
+  }
   
-  // Handle transform failure gracefully
+  // For plant-only scans (has plant health but no strain), show UnknownStrainCard directly
+  // This handles cases where transformScanResult might fail or return unexpected structure
+  if (!transformed && hasPlantDiagnostics && !hasStrainName) {
+    return (
+      <UnknownStrainCard
+        isPackagedProduct={false}
+        isPackagedKnown={false}
+        isBudUnknown={true}
+        summary={null}
+        effects={[]}
+        flavors={[]}
+        intensity={null}
+        dispensaryNotes={[]}
+        growerNotes={[]}
+        warnings={[]}
+        canonicalStrain={null}
+        result={result}
+        scan={scan}
+        plantHealth={plantHealth}
+        growProfile={growProfile}
+        displayName={displayName}
+        hasStrainName={hasStrainName}
+        isLikelyPlantOnly={isLikelyPlantOnly}
+        aiSummary={aiSummary}
+      />
+    );
+  }
+  
+  // Handle transform failure gracefully (for other cases)
   if (!transformed) {
     return (
       <Box sx={{ p: 3, textAlign: 'center' }}>
@@ -1480,19 +1520,23 @@ function ScanResultCard({ result, scan, isGuest }) {
   // Unknown strain: either bud unknown OR packaged product without detected strain
   // BUT: Don't show if canonical.confidence === 1 (we know the strain)
   // IMPORTANT: For plant-only scans, show plant health even if strain is unknown
-  if ((transformed?.isBudUnknown || (transformed?.isPackagedProduct && !transformed?.isPackagedKnown)) && !isCanonicalConfident) {
+  // Also handle plant-only scans that might not have isBudUnknown set correctly
+  const isUnknownStrain = (transformed?.isBudUnknown || (transformed?.isPackagedProduct && !transformed?.isPackagedKnown)) && !isCanonicalConfident;
+  const isPlantOnlyScan = !hasStrainName && hasPlantDiagnostics && !packagingInsights;
+  
+  if (isUnknownStrain || isPlantOnlyScan) {
     return (
       <UnknownStrainCard
         isPackagedProduct={transformed?.isPackagedProduct || false}
         isPackagedKnown={transformed?.isPackagedKnown || false}
         isBudUnknown={transformed?.isBudUnknown || false}
         summary={transformed?.summary || null}
-        effects={transformed?.effectsTags || []}
-        flavors={transformed?.flavorTags || []}
+        effects={transformed?.effectsTags || effects || []}
+        flavors={transformed?.flavorTags || flavors || []}
         intensity={transformed?.intensity || null}
-        dispensaryNotes={transformed?.dispensaryNotes || []}
-        growerNotes={transformed?.growerNotes || []}
-        warnings={transformed?.warnings || []}
+        dispensaryNotes={transformed?.dispensaryNotes || dispensaryNotes || []}
+        growerNotes={transformed?.growerNotes || growerNotes || []}
+        warnings={transformed?.warnings || warnings || []}
         canonicalStrain={canonicalStrain}
         result={result}
         scan={scan}
@@ -1521,15 +1565,15 @@ function ScanResultCard({ result, scan, isGuest }) {
 
   return (
     <BudEstimateCard
-      strainName={transformed?.strainName || 'Unknown Strain'}
+      strainName={transformed?.strainName || displayName || 'Unknown Strain'}
       matchConfidence={transformed?.matchConfidence || null}
       summary={transformed?.summary || null}
-      effects={transformed?.effectsTags || []}
-      flavors={transformed?.flavorTags || []}
+      effects={transformed?.effectsTags || effects || []}
+      flavors={transformed?.flavorTags || flavors || []}
       intensity={transformed?.intensity || null}
-      dispensaryNotes={transformed?.dispensaryNotes || []}
-      growerNotes={transformed?.growerNotes || []}
-      warnings={transformed?.warnings || []}
+      dispensaryNotes={transformed?.dispensaryNotes || dispensaryNotes || []}
+      growerNotes={transformed?.growerNotes || growerNotes || []}
+      warnings={transformed?.warnings || warnings || []}
       result={result}
       scan={scan}
       growProfile={growProfile || transformed?.growProfile || null}
@@ -1538,6 +1582,8 @@ function ScanResultCard({ result, scan, isGuest }) {
       plantHealth={plantHealth}
       packagingInsights={packagingInsights}
       labelInsights={labelInsights}
+      displayBreeder={displayBreeder}
+      displayType={displayType}
       aiSummary={aiSummary}
     />
   );
