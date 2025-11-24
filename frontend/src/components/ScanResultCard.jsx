@@ -1322,15 +1322,14 @@ function BudEstimateCard({
 
 function ScanResultCard({ result, scan, isGuest }) {
   // Defensive guard if scan is somehow missing
-  const scanId = scan?.id || scan?.scanId || result?.id || result?.scanId;
-  if (!scan || !scanId) {
+  if (!scan || (!scan.id && !scan.result)) {
     return (
       <Box sx={{ p: 3, textAlign: 'center' }}>
         <Typography variant="h6" color="text.secondary" sx={{ mb: 2, fontWeight: 600 }}>
           Scan ready, but details are missing
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-          You can refresh this screen or check the scan in your history.
+          We processed your scan, but couldn&apos;t load the full details. Try checking your scan history or scanning again.
         </Typography>
       </Box>
     );
@@ -1344,10 +1343,17 @@ function ScanResultCard({ result, scan, isGuest }) {
   // Extract raw data - handle both scan.result and direct scan properties
   const raw = scan?.result || scan || result || {};
   
-  // Normalize all result fields to handle different naming conventions
+  // Normalize canonical_strain (handle both object and legacy string fields)
   const canonical =
     raw.canonical_strain ||
     raw.canonicalStrain ||
+    (raw.canonical_strain_name
+      ? {
+          name: raw.canonical_strain_name,
+          source: raw.canonical_strain_source || null,
+          confidence: raw.canonical_match_confidence ?? null,
+        }
+      : null) ||
     raw.canonical ||
     null;
 

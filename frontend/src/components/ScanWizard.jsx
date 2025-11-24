@@ -274,17 +274,72 @@ export default function ScanWizard({ onBack, onScanComplete }) {
       return;
     }
 
+    // Create normalized scan object with all result fields properly structured
     const normalizedScan = {
-      id: scan.id || scan.scanId || scanId,
+      id: scan.id || scan.scanId || scan.scan_id || scanId || null,
       status: scan.status || 'completed',
       created_at: scan.created_at ?? scan.createdAt ?? null,
       processed_at: scan.processed_at ?? scan.processedAt ?? null,
       image_url:
         scan.image_url ||
         scan.imageUrl ||
-        (scan.result && scan.result.image_url) ||
+        scan.result?.image_url ||
         null,
-      result: scan.result ?? {},
+      // Move all result-like fields under result, but keep backward compatibility
+      result: {
+        ...(scan.result || {}),
+        // Normalize seedBank
+        seedBank:
+          scan.result?.seedBank ??
+          scan.result?.seed_bank ??
+          null,
+        // Normalize canonical_strain (handle both object and legacy string fields)
+        canonical_strain:
+          scan.result?.canonical_strain ??
+          scan.result?.canonicalStrain ??
+          (scan.canonical_strain_name
+            ? {
+                name: scan.canonical_strain_name,
+                source: scan.canonical_strain_source || null,
+                confidence: scan.canonical_match_confidence ?? null,
+              }
+            : null),
+        // Normalize ai_summary
+        ai_summary:
+          scan.result?.ai_summary ??
+          scan.result?.aiSummary ??
+          scan.ai_summary ??
+          scan.aiSummary ??
+          null,
+        // Normalize packaging_insights
+        packaging_insights:
+          scan.result?.packaging_insights ??
+          scan.result?.packagingInsights ??
+          scan.packaging_insights ??
+          scan.packagingInsights ??
+          null,
+        // Normalize label_insights
+        label_insights:
+          scan.result?.label_insights ??
+          scan.result?.labelInsights ??
+          scan.label_insights ??
+          scan.labelInsights ??
+          null,
+        // Normalize plant_health
+        plant_health:
+          scan.result?.plant_health ??
+          scan.result?.plantHealth ??
+          scan.plant_health ??
+          scan.plantHealth ??
+          null,
+        // Normalize grow_profile
+        grow_profile:
+          scan.result?.grow_profile ??
+          scan.result?.growProfile ??
+          scan.grow_profile ??
+          scan.growProfile ??
+          null,
+      },
       // Include the full scan object for backward compatibility
       ...scan,
     };
@@ -556,14 +611,61 @@ export default function ScanWizard({ onBack, onScanComplete }) {
 
           setScanStatus("Scan started successfully!");
 
-          // Build normalized scan object with all required fields
+          // Build normalized scan object with all required fields (same structure as handlePollSuccess)
           const normalizedScan = {
-            id: scan.id || scan.scanId || scanId,
+            id: scan.id || scan.scanId || scan.scan_id || scanId || null,
             status: scan.status || 'processing',
             created_at: scan.created_at ?? scan.createdAt ?? null,
             processed_at: scan.processed_at ?? scan.processedAt ?? null,
             image_url: scan.image_url ?? scan.imageUrl ?? scan.result?.image_url ?? null,
-            result: scan.result ?? {},
+            result: {
+              ...(scan.result || {}),
+              // Normalize all result fields for consistency
+              seedBank:
+                scan.result?.seedBank ??
+                scan.result?.seed_bank ??
+                null,
+              canonical_strain:
+                scan.result?.canonical_strain ??
+                scan.result?.canonicalStrain ??
+                (scan.canonical_strain_name
+                  ? {
+                      name: scan.canonical_strain_name,
+                      source: scan.canonical_strain_source || null,
+                      confidence: scan.canonical_match_confidence ?? null,
+                    }
+                  : null),
+              ai_summary:
+                scan.result?.ai_summary ??
+                scan.result?.aiSummary ??
+                scan.ai_summary ??
+                scan.aiSummary ??
+                null,
+              packaging_insights:
+                scan.result?.packaging_insights ??
+                scan.result?.packagingInsights ??
+                scan.packaging_insights ??
+                scan.packagingInsights ??
+                null,
+              label_insights:
+                scan.result?.label_insights ??
+                scan.result?.labelInsights ??
+                scan.label_insights ??
+                scan.labelInsights ??
+                null,
+              plant_health:
+                scan.result?.plant_health ??
+                scan.result?.plantHealth ??
+                scan.plant_health ??
+                scan.plantHealth ??
+                null,
+              grow_profile:
+                scan.result?.grow_profile ??
+                scan.result?.growProfile ??
+                scan.grow_profile ??
+                scan.growProfile ??
+                null,
+            },
             // Include the full scan object for backward compatibility
             ...scan,
           };

@@ -261,28 +261,6 @@ export default function Garden({ onBack, onNavigate }) {
             scan={activeScan}
             result={activeScan}
             isGuest={!user}
-            onViewSeeds={(options) => {
-              // options can be { strainName, strainSlug } or { scan, result }
-              const scanData = options?.scan || activeScan;
-              const resultData = options?.result || activeScan?.result || activeScan;
-              
-              // Check if scan has a direct seedBank URL
-              const seedBank = resultData?.seedBank || scanData?.result?.seedBank || {};
-              const seedBankUrl = seedBank.seedBankUrl || seedBank.url || null;
-              
-              // 1) If backend gave us a direct seedBank URL, open it
-              if (seedBankUrl && typeof seedBankUrl === 'string') {
-                try {
-                  window.open(seedBankUrl, '_blank', 'noopener,noreferrer');
-                  return;
-                } catch (e) {
-                  console.error('[Garden] Failed to open seedBankUrl', e);
-                }
-              }
-              
-              // 2) Fallback: route to Seed Vendors
-              setShowSeedFinder(true);
-            }}
           />
         </Box>
       </Box>,
@@ -295,35 +273,15 @@ export default function Garden({ onBack, onNavigate }) {
     const handleScanComplete = useCallback((scan) => {
       console.log('[GardenScanner] scan complete:', scan);
 
-      if (!scan || (!scan.id && !scan.scanId)) {
-        console.warn('[GardenScanner] Missing scan object, routing to result with fallback.');
-        // Still show result view with what we have
-        const fallbackScan = {
-          id: scan?.scanId || 'unknown',
-          status: 'completed',
-          result: scan?.result || {},
-          ...scan,
-        };
-        setActiveScan(fallbackScan);
-        setActiveView('result');
-        setShowScan(false);
+      if (!scan || (!scan.id && !scan.scanId && !scan.scan_id)) {
+        console.warn('[GardenScanner] scan complete but no scan/id', scan);
+        // Optionally show error, but do NOT crash - just return without navigating
         return;
       }
 
-      // Normalize scan object to ensure it has all required fields
-      const normalizedScan = {
-        id: scan.id || scan.scanId,
-        status: scan.status || 'completed',
-        created_at: scan.created_at ?? scan.createdAt ?? null,
-        processed_at: scan.processed_at ?? scan.processedAt ?? null,
-        image_url: scan.image_url ?? scan.imageUrl ?? scan.result?.image_url ?? null,
-        result: scan.result ?? {},
-        // Include all other fields for backward compatibility
-        ...scan,
-      };
-      
-      // Switch Garden to the result view
-      setActiveScan(normalizedScan);
+      // ScanWizard already normalizes the scan object, so we can use it directly
+      // Just store it and switch to result view (NOT history)
+      setActiveScan(scan);
       setActiveView('result');
       setShowScan(false);
     }, []);
@@ -505,28 +463,6 @@ export default function Garden({ onBack, onNavigate }) {
                 scan={activeScan}
                 result={activeScan}
                 isGuest={!user}
-                onViewSeeds={(options) => {
-                  // options can be { strainName, strainSlug } or { scan, result }
-                  const scanData = options?.scan || activeScan;
-                  const resultData = options?.result || activeScan?.result || activeScan;
-                  
-                  // Check if scan has a direct seedBank URL
-                  const seedBank = resultData?.seedBank || scanData?.result?.seedBank || {};
-                  const seedBankUrl = seedBank.seedBankUrl || seedBank.url || null;
-                  
-                  // 1) If backend gave us a direct seedBank URL, open it
-                  if (seedBankUrl && typeof seedBankUrl === 'string') {
-                    try {
-                      window.open(seedBankUrl, '_blank', 'noopener,noreferrer');
-                      return;
-                    } catch (e) {
-                      console.error('[Garden] Failed to open seedBankUrl', e);
-                    }
-                  }
-                  
-                  // 2) Fallback: route to Seed Vendors
-                  setShowSeedFinder(true);
-                }}
               />
             )}
           </Box>
