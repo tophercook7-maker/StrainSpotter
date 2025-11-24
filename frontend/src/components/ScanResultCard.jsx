@@ -5,6 +5,8 @@ import {
   Typography,
   Box,
   Chip,
+  Button,
+  Stack,
 } from '@mui/material';
 import { transformScanResult } from '../utils/scanResultUtils';
 import { useProMode } from '../contexts/ProModeContext';
@@ -118,7 +120,7 @@ function AIStrainDetailsPanel({
             Likely effects
           </Typography>
           <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-            {effects.map((effect, idx) => (
+            {Array.isArray(effects) && effects.map((effect, idx) => (
               <Chip
                 key={idx}
                 size="small"
@@ -148,7 +150,7 @@ function AIStrainDetailsPanel({
             Aroma & flavor
           </Typography>
           <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-            {flavors.map((flavor, idx) => (
+            {Array.isArray(flavors) && flavors.map((flavor, idx) => (
               <Chip
                 key={idx}
                 size="small"
@@ -203,7 +205,7 @@ function AIStrainDetailsPanel({
             For dispensaries
           </Typography>
           <Box component="ul" sx={{ marginTop: 0.5, paddingLeft: 2.25, marginBottom: 0 }}>
-            {dispensaryNotes.map((note, idx) => (
+            {Array.isArray(dispensaryNotes) && dispensaryNotes.map((note, idx) => (
               <Box component="li" key={idx} sx={{ mb: 0.5 }}>
                 <Typography variant="body2" sx={{ color: 'rgba(224, 242, 241, 0.85)' }}>
                   {note}
@@ -227,7 +229,7 @@ function AIStrainDetailsPanel({
             For growers
           </Typography>
           <Box component="ul" sx={{ marginTop: 0.5, paddingLeft: 2.25, marginBottom: 0 }}>
-            {growerNotes.map((note, idx) => (
+            {Array.isArray(growerNotes) && growerNotes.map((note, idx) => (
               <Box component="li" key={idx} sx={{ mb: 0.5 }}>
                 <Typography variant="body2" sx={{ color: 'rgba(224, 242, 241, 0.85)' }}>
                   {note}
@@ -251,7 +253,7 @@ function AIStrainDetailsPanel({
             Warnings
           </Typography>
           <Box component="ul" sx={{ marginTop: 0.5, paddingLeft: 2.25, marginBottom: 0 }}>
-            {warnings.map((w, idx) => (
+            {Array.isArray(warnings) && warnings.map((w, idx) => (
               <Box component="li" key={idx} sx={{ mb: 0.5 }}>
                 <Typography variant="body2" sx={{ color: 'rgba(255, 152, 152, 0.9)' }}>
                   {w}
@@ -285,10 +287,16 @@ function PackagedProductCard({
   growProfile,
   canonicalStrain,
   heroImageUrl,
+  onViewSeeds,
 }) {
   // Get packaging insights for display (lineage and brand info)
+  // Safe property access with fallbacks
   const packagingInsights = result?.packaging_insights || scan?.packaging_insights || null;
   const labelInsights = result?.label_insights || scan?.label_insights || null;
+  
+  // Ensure seedBank and canonicalStrain are safely accessed
+  const safeSeedBank = seedBank || null;
+  const safeCanonicalStrain = canonicalStrain || null;
   // Lineage can come from packaging insights or be null
   const lineage = packagingInsights?.lineage || labelInsights?.lineage || null;
   const basic = packagingInsights?.basic || {};
@@ -471,7 +479,7 @@ function PackagedProductCard({
           {/* Seed Bank Info */}
           {seedBank && (
             <Box sx={{ mb: 2 }}>
-              {seedBank.breeder ? (
+              {seedBank?.breeder ? (
                 <Typography
                   variant="body2"
                   sx={{
@@ -492,7 +500,7 @@ function PackagedProductCard({
                   <strong>Breeder:</strong> Unknown breeder
                 </Typography>
               )}
-              {seedBank.type && (
+              {seedBank?.type && (
                 <Typography
                   variant="body2"
                   sx={{
@@ -503,7 +511,7 @@ function PackagedProductCard({
                   <strong>Type:</strong> {seedBank.type}
                 </Typography>
               )}
-              {seedBank.seedBankUrl && (
+              {seedBank?.seedBankUrl && (
                 <Typography
                   variant="body2"
                   component="a"
@@ -563,6 +571,83 @@ function PackagedProductCard({
           )}
         </Box>
       )}
+
+      {/* Seed Vendor Buttons - Always show */}
+      {onViewSeeds && (
+        <Box
+          sx={{
+            mt: 3,
+            p: 2,
+            borderRadius: 2,
+            background: 'rgba(124, 179, 66, 0.1)',
+            border: '1px solid rgba(124, 179, 66, 0.3)',
+          }}
+        >
+          <Typography
+            variant="overline"
+            sx={{
+              color: 'rgba(200, 230, 201, 0.7)',
+              textTransform: 'uppercase',
+              letterSpacing: 1,
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              display: 'block',
+              mb: 1.5,
+            }}
+          >
+            Find Seeds
+          </Typography>
+          <Stack direction="column" spacing={1.5}>
+            {canonicalStrain?.name || strainName ? (
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => onViewSeeds({
+                  strainName: canonicalStrain?.name || strainName,
+                  strainSlug: canonicalStrain?.slug,
+                  scan: scan,
+                  result: result,
+                })}
+                sx={{
+                  py: 1.5,
+                  fontSize: '0.95rem',
+                  fontWeight: 600,
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
+                  boxShadow: '0 4px 12px rgba(124, 179, 66, 0.3)',
+                  textTransform: 'none',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #9CCC65 0%, #AED581 100%)',
+                    boxShadow: '0 6px 16px rgba(124, 179, 66, 0.4)',
+                  },
+                }}
+              >
+                🌾 View Seeds for {canonicalStrain?.name || strainName}
+              </Button>
+            ) : null}
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={() => onViewSeeds({})}
+              sx={{
+                py: 1.5,
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                borderRadius: '8px',
+                border: '2px solid rgba(124, 179, 66, 0.6)',
+                color: '#9CCC65',
+                textTransform: 'none',
+                '&:hover': {
+                  border: '2px solid rgba(124, 179, 66, 0.9)',
+                  background: 'rgba(124, 179, 66, 0.15)',
+                },
+              }}
+            >
+              🌱 Browse All Seeds
+            </Button>
+          </Stack>
+        </Box>
+      )}
     </>
   );
 }
@@ -581,6 +666,9 @@ function UnknownStrainCard({
   growerNotes, 
   warnings,
   canonicalStrain,
+  onViewSeeds,
+  result,
+  scan,
 }) {
   // If packaged product AND we already know the strain (from packaging),
   // OR if canonical.confidence === 1 (certain match), do NOT render this card at all.
@@ -659,6 +747,83 @@ function UnknownStrainCard({
         warnings={warnings}
         summary={summary}
       />
+
+      {/* Seed Vendor Buttons - Always show, even for unknown strains */}
+      {onViewSeeds && (
+        <Box
+          sx={{
+            mt: 3,
+            p: 2,
+            borderRadius: 2,
+            background: 'rgba(124, 179, 66, 0.1)',
+            border: '1px solid rgba(124, 179, 66, 0.3)',
+          }}
+        >
+          <Typography
+            variant="overline"
+            sx={{
+              color: 'rgba(200, 230, 201, 0.7)',
+              textTransform: 'uppercase',
+              letterSpacing: 1,
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              display: 'block',
+              mb: 1.5,
+            }}
+          >
+            Find Seeds
+          </Typography>
+          <Stack direction="column" spacing={1.5}>
+            {canonicalStrain?.name ? (
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => onViewSeeds({
+                  strainName: canonicalStrain?.name,
+                  strainSlug: canonicalStrain?.slug,
+                  scan: scan,
+                  result: result,
+                })}
+                sx={{
+                  py: 1.5,
+                  fontSize: '0.95rem',
+                  fontWeight: 600,
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
+                  boxShadow: '0 4px 12px rgba(124, 179, 66, 0.3)',
+                  textTransform: 'none',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #9CCC65 0%, #AED581 100%)',
+                    boxShadow: '0 6px 16px rgba(124, 179, 66, 0.4)',
+                  },
+                }}
+              >
+                🌾 View Seeds for {canonicalStrain?.name}
+              </Button>
+            ) : null}
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={() => onViewSeeds({})}
+              sx={{
+                py: 1.5,
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                borderRadius: '8px',
+                border: '2px solid rgba(124, 179, 66, 0.6)',
+                color: '#9CCC65',
+                textTransform: 'none',
+                '&:hover': {
+                  border: '2px solid rgba(124, 179, 66, 0.9)',
+                  background: 'rgba(124, 179, 66, 0.15)',
+                },
+              }}
+            >
+              🌱 Browse All Seeds
+            </Button>
+          </Stack>
+        </Box>
+      )}
     </>
   );
 }
@@ -680,6 +845,7 @@ function BudEstimateCard({
   growProfile,
   canonicalStrain,
   heroImageUrl,
+  onViewSeeds,
 }) {
   // Get lineage from packaging insights or label insights
   const packagingInsights = result?.packaging_insights || scan?.packaging_insights || null;
@@ -816,7 +982,7 @@ function BudEstimateCard({
           {/* Seed Bank Info */}
           {seedBank && (
             <Box sx={{ mb: 2 }}>
-              {seedBank.breeder ? (
+              {seedBank?.breeder ? (
                 <Typography
                   variant="body2"
                   sx={{
@@ -837,7 +1003,7 @@ function BudEstimateCard({
                   <strong>Breeder:</strong> Unknown breeder
                 </Typography>
               )}
-              {seedBank.type && (
+              {seedBank?.type && (
                 <Typography
                   variant="body2"
                   sx={{
@@ -848,7 +1014,7 @@ function BudEstimateCard({
                   <strong>Type:</strong> {seedBank.type}
                 </Typography>
               )}
-              {seedBank.seedBankUrl && (
+              {seedBank?.seedBankUrl && (
                 <Typography
                   variant="body2"
                   component="a"
@@ -908,19 +1074,199 @@ function BudEstimateCard({
           )}
         </Box>
       )}
+
+      {/* Seed Vendor Buttons - Always show */}
+      {onViewSeeds && (
+        <Box
+          sx={{
+            mt: 3,
+            p: 2,
+            borderRadius: 2,
+            background: 'rgba(124, 179, 66, 0.1)',
+            border: '1px solid rgba(124, 179, 66, 0.3)',
+          }}
+        >
+          <Typography
+            variant="overline"
+            sx={{
+              color: 'rgba(200, 230, 201, 0.7)',
+              textTransform: 'uppercase',
+              letterSpacing: 1,
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              display: 'block',
+              mb: 1.5,
+            }}
+          >
+            Find Seeds
+          </Typography>
+          <Stack direction="column" spacing={1.5}>
+            {canonicalStrain?.name || strainName ? (
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => onViewSeeds({
+                  strainName: canonicalStrain?.name || strainName,
+                  strainSlug: canonicalStrain?.slug,
+                  scan: scan,
+                  result: result,
+                })}
+                sx={{
+                  py: 1.5,
+                  fontSize: '0.95rem',
+                  fontWeight: 600,
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
+                  boxShadow: '0 4px 12px rgba(124, 179, 66, 0.3)',
+                  textTransform: 'none',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #9CCC65 0%, #AED581 100%)',
+                    boxShadow: '0 6px 16px rgba(124, 179, 66, 0.4)',
+                  },
+                }}
+              >
+                🌾 View Seeds for {canonicalStrain?.name || strainName}
+              </Button>
+            ) : null}
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={() => onViewSeeds({})}
+              sx={{
+                py: 1.5,
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                borderRadius: '8px',
+                border: '2px solid rgba(124, 179, 66, 0.6)',
+                color: '#9CCC65',
+                textTransform: 'none',
+                '&:hover': {
+                  border: '2px solid rgba(124, 179, 66, 0.9)',
+                  background: 'rgba(124, 179, 66, 0.15)',
+                },
+              }}
+            >
+              🌱 Browse All Seeds
+            </Button>
+          </Stack>
+        </Box>
+      )}
     </>
   );
 }
 
-function ScanResultCard({ result, scan, isGuest }) {
-  if (!result && !scan) return null;
+// Helper: safely resolve best strain name for linking to seeds
+const getCanonicalStrainName = (scan, result) => {
+  const scanResult = result || scan?.result || {};
+  
+  const candidates = [
+    scanResult.canonical?.name,
+    scanResult.seedBank?.name,
+    scanResult.packaging?.strainName,
+    scanResult.label?.strainName,
+    scanResult.packaging_insights?.strainName,
+    scanResult.label_insights?.strainName,
+    scan?.strainName,
+    scan?.matched_strain_name,
+  ];
+  
+  const found = candidates.find(
+    (name) => typeof name === 'string' && name.trim().length > 0
+  );
+  
+  return found || 'this strain';
+};
+
+function ScanResultCard({ result, scan, isGuest, onViewSeeds }) {
+  // Defensive null checks at the top
+  if (!scan && !result) {
+    return (
+      <Box sx={{ p: 3, textAlign: 'center' }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Scan ready, but details are missing
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+          We processed your scan, but couldn't load the full details. You can check it in your scan history.
+        </Typography>
+        {onViewSeeds && (
+          <Button
+            variant="outlined"
+            onClick={() => onViewSeeds({})}
+            sx={{
+              border: '2px solid rgba(124, 179, 66, 0.6)',
+              color: '#9CCC65',
+            }}
+          >
+            🌱 Browse All Seeds
+          </Button>
+        )}
+      </Box>
+    );
+  }
+
+  // Ensure we have at least an id
+  const scanId = scan?.id || scan?.scanId || result?.id || result?.scanId;
+  if (!scanId) {
+    return (
+      <Box sx={{ p: 3, textAlign: 'center' }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Preparing your result…
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+          Your scan is processing. This may take a moment.
+        </Typography>
+        {onViewSeeds && (
+          <Button
+            variant="outlined"
+            onClick={() => onViewSeeds({})}
+            sx={{
+              border: '2px solid rgba(124, 179, 66, 0.6)',
+              color: '#9CCC65',
+            }}
+          >
+            🌱 Browse All Seeds
+          </Button>
+        )}
+      </Box>
+    );
+  }
 
   const { proRole, proEnabled } = useProMode();
 
   // CRITICAL: Use transformScanResult to get canonical strain name and metadata
   // This ensures packaged products ALWAYS use label strain, NEVER visual/library guesses
-  const transformed = transformScanResult(result || scan);
-  if (!transformed) return null;
+  // Safely access result/scan with fallbacks
+  const scanData = result || scan || {};
+  const transformed = transformScanResult(scanData);
+  
+  // Get canonical strain name for seed linking
+  const canonicalStrainName = getCanonicalStrainName(scan, result);
+  
+  // Handle transform failure gracefully
+  if (!transformed) {
+    return (
+      <Box sx={{ p: 3, textAlign: 'center' }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Preparing your result…
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+          Your scan is processing. This may take a moment.
+        </Typography>
+        {onViewSeeds && (
+          <Button
+            variant="outlined"
+            onClick={() => onViewSeeds({})}
+            sx={{
+              border: '2px solid rgba(124, 179, 66, 0.6)',
+              color: '#9CCC65',
+            }}
+          >
+            🌱 Browse All Seeds
+          </Button>
+        )}
+      </Box>
+    );
+  }
 
   // ===============================
   // NEW RENDER LOGIC
@@ -928,78 +1274,91 @@ function ScanResultCard({ result, scan, isGuest }) {
 
   // For packaged products with canonical.confidence === 1, show PackagedProductCard
   // Don't show "strain unknown" or "strain estimate" copy
-  const isCanonicalConfident = transformed.canonicalStrain && transformed.canonicalStrain.confidence === 1;
-  const shouldShowPackagedCard = transformed.isPackagedKnown || (transformed.isPackagedProduct && isCanonicalConfident);
+  // Safe property access
+  const canonicalStrain = transformed?.canonicalStrain || null;
+  const isCanonicalConfident = canonicalStrain && canonicalStrain.confidence === 1;
+  const shouldShowPackagedCard = transformed?.isPackagedKnown || (transformed?.isPackagedProduct && isCanonicalConfident);
 
   if (shouldShowPackagedCard) {
     return (
       <PackagedProductCard
-        strainName={transformed.strainName}
-        thc={transformed.thc}
-        cbd={transformed.cbd}
-        summary={transformed.summary}
-        effects={transformed.effectsTags}
-        flavors={transformed.flavorTags}
-        intensity={transformed.intensity}
-        dispensaryNotes={transformed.dispensaryNotes}
-        growerNotes={transformed.growerNotes}
-        warnings={transformed.warnings}
+        strainName={transformed?.strainName || null}
+        thc={transformed?.thc || null}
+        cbd={transformed?.cbd || null}
+        summary={transformed?.summary || null}
+        effects={transformed?.effectsTags || []}
+        flavors={transformed?.flavorTags || []}
+        intensity={transformed?.intensity || null}
+        dispensaryNotes={transformed?.dispensaryNotes || []}
+        growerNotes={transformed?.growerNotes || []}
+        warnings={transformed?.warnings || []}
         result={result}
         scan={scan}
         proRole={proRole}
         proEnabled={proEnabled}
-        seedBank={transformed.seedBank}
-        growProfile={transformed.growProfile}
-        canonicalStrain={transformed.canonicalStrain}
-        heroImageUrl={transformed.heroImageUrl}
+        seedBank={transformed?.seedBank || null}
+        growProfile={transformed?.growProfile || null}
+        canonicalStrain={canonicalStrain}
+        heroImageUrl={transformed?.heroImageUrl || null}
+        onViewSeeds={onViewSeeds}
       />
     );
   }
 
   // Unknown strain: either bud unknown OR packaged product without detected strain
   // BUT: Don't show if canonical.confidence === 1 (we know the strain)
-  if ((transformed.isBudUnknown || (transformed.isPackagedProduct && !transformed.isPackagedKnown)) && !isCanonicalConfident) {
+  if ((transformed?.isBudUnknown || (transformed?.isPackagedProduct && !transformed?.isPackagedKnown)) && !isCanonicalConfident) {
     return (
       <UnknownStrainCard
-        isPackagedProduct={transformed.isPackagedProduct}
-        isPackagedKnown={transformed.isPackagedKnown}
-        isBudUnknown={transformed.isBudUnknown}
-        summary={transformed.summary}
-        effects={transformed.effectsTags}
-        flavors={transformed.flavorTags}
-        intensity={transformed.intensity}
-        dispensaryNotes={transformed.dispensaryNotes}
-        growerNotes={transformed.growerNotes}
-        warnings={transformed.warnings}
-        canonicalStrain={transformed.canonicalStrain}
+        isPackagedProduct={transformed?.isPackagedProduct || false}
+        isPackagedKnown={transformed?.isPackagedKnown || false}
+        isBudUnknown={transformed?.isBudUnknown || false}
+        summary={transformed?.summary || null}
+        effects={transformed?.effectsTags || []}
+        flavors={transformed?.flavorTags || []}
+        intensity={transformed?.intensity || null}
+        dispensaryNotes={transformed?.dispensaryNotes || []}
+        growerNotes={transformed?.growerNotes || []}
+        warnings={transformed?.warnings || []}
+        canonicalStrain={canonicalStrain}
+        onViewSeeds={onViewSeeds}
+        result={result}
+        scan={scan}
       />
     );
   }
 
   // Bud estimate card - only show "strain estimate" if NOT canonical.confidence === 1
   // For packaged products with canonical.confidence === 1, we already showed PackagedProductCard above
-  if (transformed.isPackagedProduct && isCanonicalConfident) {
+  if (transformed?.isPackagedProduct && isCanonicalConfident) {
     // This shouldn't happen, but handle gracefully
-    return null;
+    return (
+      <Box sx={{ p: 3, textAlign: 'center' }}>
+        <Typography variant="body2" color="text.secondary">
+          Processing result…
+        </Typography>
+      </Box>
+    );
   }
 
   return (
     <BudEstimateCard
-      strainName={transformed.strainName}
-      matchConfidence={transformed.matchConfidence}
-      summary={transformed.summary}
-      effects={transformed.effectsTags}
-      flavors={transformed.flavorTags}
-      intensity={transformed.intensity}
-      dispensaryNotes={transformed.dispensaryNotes}
-      growerNotes={transformed.growerNotes}
-      warnings={transformed.warnings}
+      strainName={transformed?.strainName || 'Unknown Strain'}
+      matchConfidence={transformed?.matchConfidence || null}
+      summary={transformed?.summary || null}
+      effects={transformed?.effectsTags || []}
+      flavors={transformed?.flavorTags || []}
+      intensity={transformed?.intensity || null}
+      dispensaryNotes={transformed?.dispensaryNotes || []}
+      growerNotes={transformed?.growerNotes || []}
+      warnings={transformed?.warnings || []}
       result={result}
       scan={scan}
-      seedBank={transformed.seedBank}
-      growProfile={transformed.growProfile}
-      canonicalStrain={transformed.canonicalStrain}
-      heroImageUrl={transformed.heroImageUrl}
+      seedBank={transformed?.seedBank || null}
+      growProfile={transformed?.growProfile || null}
+      canonicalStrain={canonicalStrain}
+      heroImageUrl={transformed?.heroImageUrl || null}
+      onViewSeeds={onViewSeeds}
     />
   );
 }

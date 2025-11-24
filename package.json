@@ -1,6 +1,11 @@
 {
   "scripts": {
-    "build": "cd frontend && npm ci && npm run build && rm -rf ../dist && cp -R dist ../dist"
+    "build": "cd frontend && npm ci && npm run build && rm -rf ../dist && cp -R dist ../dist",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:all": "echo 'Run dev:backend and dev:frontend in two separate terminals'",
+    "cbc": "cd frontend && npm ci && npm run build && cd .. && rm -rf dist && cp -R frontend/dist ./dist && npx cap sync ios && npx cap open ios",
+    "cbc2": "cd frontend && npm run build && cd .. && rm -rf dist && cp -R frontend/dist ./dist && npx cap sync ios"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.75.1",
@@ -17,6 +22,8 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/ios": "^7.4.4",
     "@types/react": "~19.1.10",
     "typescript": "~5.9.2"
   }

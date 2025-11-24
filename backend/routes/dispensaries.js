@@ -830,8 +830,15 @@ router.get('/', (req, res) => {
   if (hasGeo) {
     const userLat = parseFloat(String(lat));
     const userLng = parseFloat(String(lng));
-    if (Number.isNaN(userLat) || Number.isNaN(userLng)) {
-      return res.status(400).json({ error: 'Invalid lat/lng' });
+    
+    // Validate location coordinates
+    if (!Number.isFinite(userLat) || !Number.isFinite(userLng)) {
+      return res.status(400).json({ error: 'Invalid lat/lng. Location required.' });
+    }
+    
+    // Validate reasonable coordinate ranges
+    if (userLat < -90 || userLat > 90 || userLng < -180 || userLng > 180) {
+      return res.status(400).json({ error: 'Invalid lat/lng coordinates. Location required.' });
     }
 
     const radiusMiles = Math.max(1, Math.min(500, parseFloat(String(radius ?? '50')) || 50));
@@ -856,9 +863,25 @@ router.get('/', (req, res) => {
   }
 
   // Fallback: filter by state/city when no geolocation was provided
-  let data = DISPENSARIES;
-  if (state) data = data.filter(d => d.state?.toLowerCase() === String(state).toLowerCase());
-  if (city) data = data.filter(d => d.city?.toLowerCase() === String(city).toLowerCase());
+  // DO NOT default to California - only return filtered results if explicitly requested
+  let data = [];
+  if (state) {
+    data = DISPENSARIES.filter(d => d.state?.toLowerCase() === String(state).toLowerCase());
+    if (city) {
+      data = data.filter(d => d.city?.toLowerCase() === String(city).toLowerCase());
+    }
+  } else if (city) {
+    data = DISPENSARIES.filter(d => d.city?.toLowerCase() === String(city).toLowerCase());
+  }
+  
+  // If no filters and no location, return empty array with message
+  if (data.length === 0 && !state && !city) {
+    return res.status(400).json({ 
+      error: 'Location required. Please provide lat/lng coordinates or filter by state/city.',
+      dispensaries: []
+    });
+  }
+  
   res.json(data);
 });
 

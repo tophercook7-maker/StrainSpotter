@@ -37,6 +37,7 @@ import ChatIcon from '@mui/icons-material/Chat';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import ProfileSetupDialog from './ProfileSetupDialog.jsx';
+import { BackHeader } from './BackHeader';
 import { API_BASE } from '../config';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../hooks/useAuth.js';
@@ -1321,27 +1322,31 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             onClose={handleProfileDialogClose}
           />
 
-          <Button
-            onClick={onBack || (() => window.history.back())}
-            size="small"
-            variant="contained"
-            sx={{
-              bgcolor: 'rgba(124, 179, 66, 0.9)',
-              color: '#fff',
-              textTransform: 'none',
-              fontWeight: 700,
-              borderRadius: 999,
-              mb: 2,
-              boxShadow: '0 4px 12px rgba(124, 179, 66, 0.4)',
-              '&:hover': {
-                bgcolor: 'rgba(156, 204, 101, 1)',
-                boxShadow: '0 6px 16px rgba(124, 179, 66, 0.6)',
-                transform: 'translateY(-2px)'
-              }
-            }}
-          >
-            ← Back to Garden
-          </Button>
+          {onBack ? (
+            <BackHeader title="Groups" onBack={onBack} />
+          ) : (
+            <Button
+              onClick={() => window.history.back()}
+              size="small"
+              variant="contained"
+              sx={{
+                bgcolor: 'rgba(124, 179, 66, 0.9)',
+                color: '#fff',
+                textTransform: 'none',
+                fontWeight: 700,
+                borderRadius: 999,
+                mb: 2,
+                boxShadow: '0 4px 12px rgba(124, 179, 66, 0.4)',
+                '&:hover': {
+                  bgcolor: 'rgba(156, 204, 101, 1)',
+                  boxShadow: '0 6px 16px rgba(124, 179, 66, 0.6)',
+                  transform: 'translateY(-2px)'
+                }
+              }}
+            >
+              ← Back to Garden
+            </Button>
+          )}
 
           {/* Hero Image Icon */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
@@ -1798,18 +1803,28 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
               </Alert>
             )}
 
-            <GroupMessages
-              messages={groupMessagesHook.messages}
-              pinnedMessages={groupMessagesHook.pinnedMessages}
-              isLoadingInitial={groupMessagesHook.isLoadingInitial}
-              isLoadingMore={groupMessagesHook.isLoadingMore}
-              hasMore={groupMessagesHook.hasMore}
-              onLoadMore={groupMessagesHook.loadMore}
-              scrollContainerRef={groupMessagesHook.scrollContainerRef}
-              scrollToBottomRef={groupMessagesHook.scrollToBottomRef}
-              onScroll={groupMessagesHook.handleScroll}
-              currentUserId={userId}
-            />
+            {groupMessagesHook.error ? (
+              <Box sx={{ p: 2, textAlign: 'center' }}>
+                <Alert severity="info" sx={{ bgcolor: 'rgba(124, 179, 66, 0.15)', color: '#fff', border: '1px solid rgba(124, 179, 66, 0.3)' }}>
+                  <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
+                    Chat is having trouble loading messages right now. You can still see groups and try again later.
+                  </Typography>
+                </Alert>
+              </Box>
+            ) : (
+              <GroupMessages
+                messages={groupMessagesHook.messages}
+                pinnedMessages={groupMessagesHook.pinnedMessages}
+                isLoadingInitial={groupMessagesHook.isLoadingInitial}
+                isLoadingMore={groupMessagesHook.isLoadingMore}
+                hasMore={groupMessagesHook.hasMore}
+                onLoadMore={groupMessagesHook.loadMore}
+                scrollContainerRef={groupMessagesHook.scrollContainerRef}
+                scrollToBottomRef={groupMessagesHook.scrollToBottomRef}
+                onScroll={groupMessagesHook.handleScroll}
+                currentUserId={userId}
+              />
+            )}
           </Box>
 
           {/* Input Composer */}

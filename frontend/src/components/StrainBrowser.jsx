@@ -29,6 +29,22 @@ import EmptyStateCard from './EmptyStateCard';
 const STRAINS_PER_PAGE = 100; // Display 100 strains at a time
 const FETCH_BATCH_SIZE = 1000; // Fetch 1000 strains per database query
 
+// Helper: safely resolve best strain image URL (prioritize thumbnail for performance)
+const getStrainImageUrl = (strain) => {
+  if (!strain) return null;
+  const candidates = [
+    strain.thumbnail_url, // Prioritize thumbnail for faster loading
+    strain.image_url,
+    strain.photo_url,
+    strain.main_image,
+    strain.leafly_image,
+    strain.hero_image_url,
+    strain.image,
+    strain.imageUrl,
+  ];
+  return candidates.find((u) => typeof u === 'string' && u.startsWith('http')) || null;
+};
+
 export default function StrainBrowser({ onBack }) {
   const [strains, setStrains] = useState([]);
   const [filteredStrains, setFilteredStrains] = useState([]);
@@ -55,7 +71,6 @@ export default function StrainBrowser({ onBack }) {
   const [showFilters, setShowFilters] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [showSeedFinder, setShowSeedFinder] = useState(false);
-  const [seedFinderStrain, setSeedFinderStrain] = useState(null);
   const [showingFavorites, setShowingFavorites] = useState(false);
   const [journalDialogOpen, setJournalDialogOpen] = useState(false);
   const [journalDefaults, setJournalDefaults] = useState(null);
@@ -562,7 +577,7 @@ export default function StrainBrowser({ onBack }) {
               size="small"
               startIcon={<SearchIcon />}
               onClick={() => {
-                setSeedFinderStrain({ name: selectedStrain.name, slug: selectedStrain.slug });
+                // Navigate to seed vendors (no strain pre-fill needed)
                 setShowSeedFinder(true);
                 setDetailsOpen(false);
               }}
@@ -695,16 +710,13 @@ export default function StrainBrowser({ onBack }) {
   };
 
   // Show SeedVendorFinder if requested
-  if (showSeedFinder && seedFinderStrain) {
+  if (showSeedFinder) {
     return (
       <SeedVendorFinder
         onBack={() => {
           setShowSeedFinder(false);
-          setSeedFinderStrain(null);
           setDetailsOpen(true);
         }}
-        strainName={seedFinderStrain.name}
-        strainSlug={seedFinderStrain.slug}
       />
     );
   }
@@ -1029,35 +1041,38 @@ export default function StrainBrowser({ onBack }) {
                       position: 'relative'
                     }}
                   >
-                    <Box
-                      component="img"
-                      src={strain.image_url || strain.image || strain.hero_image_url || strain.imageUrl || '/assets/no-image.png'}
-                      alt={strain.name || 'Strain photo'}
-                      loading="lazy"
-                      sx={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        display: 'block',
-                        background: '#111'
-                      }}
-                      onError={(e) => {
-                        // Hide broken image and show placeholder text
-                        e.currentTarget.style.display = 'none';
-                        const placeholder = e.currentTarget.parentElement;
-                        if (placeholder) {
-                          const placeholderText = placeholder.querySelector('.strain-placeholder');
-                          if (placeholderText) {
-                            placeholderText.style.display = 'flex';
-                          }
-                        }
-                      }}
-                    />
+                    {/* Image or placeholder */}
+                    {(() => {
+                      const imageUrl = getStrainImageUrl(strain);
+                      return imageUrl ? (
+                        <Box
+                          component="img"
+                          src={imageUrl}
+                          alt={strain.name || 'Strain photo'}
+                          loading="lazy"
+                          sx={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                            background: '#111'
+                          }}
+                          onError={(e) => {
+                            // Hide broken image and show placeholder
+                            e.currentTarget.style.display = 'none';
+                            const placeholder = e.currentTarget.parentElement?.querySelector('.strain-placeholder');
+                            if (placeholder) {
+                              placeholder.style.display = 'flex';
+                            }
+                          }}
+                        />
+                      ) : null;
+                    })()}
                     {/* Placeholder - shown when no image or image fails */}
                     <Box
                       className="strain-placeholder"
                       sx={{
-                        display: (strain.image_url || strain.image || strain.hero_image_url) ? 'none' : 'flex',
+                        display: getStrainImageUrl(strain) ? 'none' : 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         width: '100%',
@@ -1065,16 +1080,18 @@ export default function StrainBrowser({ onBack }) {
                         position: 'absolute',
                         top: 0,
                         left: 0,
-                        background: 'radial-gradient(circle at top, rgba(124, 179, 66, 0.1) 0, rgba(0, 0, 0, 0.3) 100%)',
+                        background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.15) 0%, rgba(0, 0, 0, 0.4) 100%)',
+                        border: '1px solid rgba(124, 179, 66, 0.2)',
                       }}
                     >
                       <Typography
                         variant="caption"
                         sx={{
-                          color: 'rgba(255,255,255,0.5)',
-                          fontSize: 12,
+                          color: 'rgba(200, 230, 201, 0.6)',
+                          fontSize: 11,
                           textAlign: 'center',
-                          px: 2
+                          px: 2,
+                          fontWeight: 500,
                         }}
                       >
                         No strain photo yet

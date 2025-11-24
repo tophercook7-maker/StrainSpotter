@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { AuthContext } from './AuthContextValue.js';
 import { API_BASE, FOUNDER_EMAIL, FOUNDER_UNLIMITED_ENABLED } from '../config.js';
+import { isFounderUser } from '../utils/founder';
 
 /**
  * Check if an email belongs to a founder
@@ -46,14 +47,11 @@ export function AuthProvider({ children }) {
 
   // Founder detection - compute from current session/user
   // CRITICAL: Always compute isFounder to ensure it's never undefined
-  const FOUNDER_EMAILS = [
-    'topher.cook7@gmail.com',
-    // add any other founder emails here
-  ];
+  // Use the shared helper function for consistency
+  const isFounder = isFounderUser(user || session?.user);
   
   // Safely get email from session or user, with fallback to empty string
   const email = (session?.user?.email || user?.email || '').toLowerCase().trim();
-  const isFounder = email ? FOUNDER_EMAILS.includes(email) : false;
   
   // Optional debug log
   useEffect(() => {

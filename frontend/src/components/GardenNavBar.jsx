@@ -11,8 +11,8 @@ export default function GardenNavBar({ value, onChange, items = [] }) {
         right: 0,
         zIndex: 1200,
         borderRadius: 0,
-        background: 'rgba(5, 10, 5, 0.9)',
-        backdropFilter: 'blur(20px)',
+        background: 'rgba(5, 10, 5, 0.4)',
+        backdropFilter: 'blur(8px)',
         borderTop: '1px solid rgba(124, 179, 66, 0.2)',
         pb: 'env(safe-area-inset-bottom)'
       }}

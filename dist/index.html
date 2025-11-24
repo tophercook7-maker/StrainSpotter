@@ -2,91 +2,99 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="./hero.png" />
-  <link rel="manifest" href="./manifest.json" />
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-    <meta name="theme-color" content="#0b120b" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
+    <link rel="icon" type="image/svg+xml" href="/strainspotter-icon.svg" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0C1910" />
     <title>StrainSpotter</title>
 
-    <!-- Load React from CDN to ensure it's available globally before Vite bundle -->
-    <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
-
     <style>
-      /* Global field background so translucent UI shows it */
-      html, body, #root { height: 100%; }
-      body {
+      html, body, #root {
         margin: 0;
-        /* Apply the background directly to body - no dark overlay */
-        background-image: url('strainspotter-bg.jpg');
-        background-size: cover;
-        background-position: center center;
-        background-attachment: fixed;
-        background-repeat: no-repeat;
-        color-scheme: dark;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #050705; /* deep green-black to match app */
+        color: #E8F5E9;
+        -webkit-font-smoothing: antialiased;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-L9_RqMRx.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CN8SJ2n4.css">
-  </head>
-  <body>
-    <div id="root"></div>
-    <script>
-      // Debug logging
-      console.log('=== StrainSpotter index.html loaded ===');
-      console.log('Protocol:', window.location.protocol);
-      console.log('Hostname:', window.location.hostname);
-      console.log('Pathname:', window.location.pathname);
-      console.log('User Agent:', navigator.userAgent);
-      console.log('React loaded from CDN:', typeof window.React);
-      console.log('ReactDOM loaded from CDN:', typeof window.ReactDOM);
 
-      // Add global error handler
-      window.addEventListener('error', (e) => {
-        console.error('Global error:', e.message, e.filename, e.lineno, e.colno);
-        console.error('Error object:', e.error);
-        alert('Error: ' + e.message + ' at ' + e.filename + ':' + e.lineno);
-      });
-
-      window.addEventListener('unhandledrejection', (e) => {
-        console.error('Unhandled promise rejection:', e.reason);
-        alert('Promise rejection: ' + e.reason);
-      });
-
-      // Only register service worker in web (not in Capacitor)
-      const isLocalDev = ['localhost', '127.0.0.1'].includes(location.hostname);
-      const isCapacitor = window.location.protocol === 'capacitor:';
-      console.log('isCapacitor:', isCapacitor);
-      if ('serviceWorker' in navigator && !isLocalDev && !isCapacitor) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./service-worker.js').then(reg => {
-            // Listen for updates
-            reg.onupdatefound = () => {
-              const installingWorker = reg.installing;
-              installingWorker.onstatechange = () => {
-                if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  // New content available
-                  window.dispatchEvent(new Event('pwa-update-available'));
-                }
-              };
-            };
-          });
-        });
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background-color: #0C1910; /* match LaunchScreen */
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
       }
 
-      // Check if root div exists
-      setTimeout(() => {
-        const root = document.getElementById('root');
-        console.log('Root element:', root);
-        console.log('Root innerHTML:', root ? root.innerHTML : 'ROOT NOT FOUND');
-        if (!root || !root.innerHTML) {
-          alert('App failed to mount! Check console.');
-        }
-      }, 3000);
-    </script>
+      #splash-root {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at top, #163325 0, #0C1910 45%, #050908 100%);
+        z-index: 1;
+      }
+
+      .splash-shell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        color: #f5fff2;
+      }
+
+      .splash-logo-circle {
+        width: 88px;
+        height: 88px;
+        border-radius: 999px;
+        border: 2px solid rgba(255,255,255,0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        background: rgba(0,0,0,0.18);
+        box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+      }
+
+      .splash-title {
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .splash-subtitle {
+        font-size: 14px;
+        opacity: 0.75;
+      }
+
+      #root { min-height: 100vh; }
+    </style>
+    <script type="module" crossorigin src="./assets/index-EBjh04nQ.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-B_k2oVQ8.css">
+  </head>
+
+  <body>
+    <div id="root" style="
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background-color: #0C1910; color: white;
+      font-family: system-ui; text-align: center; padding: 24px;
+    ">
+      <h1>StrainSpotter</h1>
+      <p style="opacity: 0.8;">
+        Loading scanner… decoding strains and labels for you.
+      </p>
+    </div>
   </body>
 </html>

@@ -15,11 +15,12 @@ export function useCreditBalance() {
   });
 
   useEffect(() => {
+    // Guest users get 20 free scans
     if (!user && !session) {
       setState({
         loading: false,
         error: null,
-        remainingScans: 0,
+        remainingScans: 20,
         isUnlimited: false,
       });
       return;

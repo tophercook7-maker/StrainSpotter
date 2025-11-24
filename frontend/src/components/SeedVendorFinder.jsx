@@ -14,6 +14,50 @@ import PaymentIcon from '@mui/icons-material/Payment';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import { API_BASE } from '../config';
 
+// Static seed vendor list as fallback
+const STATIC_SEED_VENDORS = [
+  {
+    id: 'ilgm',
+    name: 'ILGM - I Love Growing Marijuana',
+    url: 'https://ilgm.com',
+    tagline: 'Beginner-friendly, classic strains, strong grow guides.',
+    verified: true,
+    country: 'USA',
+  },
+  {
+    id: 'seedsman',
+    name: 'Seedsman',
+    url: 'https://www.seedsman.com/',
+    tagline: 'Huge catalog of breeders and genetics.',
+    verified: true,
+    country: 'UK',
+  },
+  {
+    id: 'attitude',
+    name: 'Attitude Seed Bank',
+    url: 'https://www.cannabis-seeds-bank.co.uk/',
+    tagline: 'Global shipping, many European breeders.',
+    verified: true,
+    country: 'UK',
+  },
+  {
+    id: 'north-atlantic',
+    name: 'North Atlantic Seed Company',
+    url: 'https://northatlanticseed.com/',
+    tagline: 'US-based, fast shipping, trusted breeders.',
+    verified: true,
+    country: 'USA',
+  },
+  {
+    id: 'herbies',
+    name: 'Herbies Seeds',
+    url: 'https://herbiesheadshop.com/',
+    tagline: 'European seed bank with worldwide shipping.',
+    verified: true,
+    country: 'Spain',
+  },
+];
+
 export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -21,6 +65,7 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
   const [searchStrain, setSearchStrain] = useState(strainName || '');
   const [country, setCountry] = useState('all');
   const [showPopular, setShowPopular] = useState(false);
+  const [useStaticList, setUseStaticList] = useState(false);
 
   const searchVendors = useCallback(async (strain) => {
     setLoading(true);
@@ -68,12 +113,16 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
   }, []);
 
   useEffect(() => {
+    // Always show static list by default for now
+    setVendors(STATIC_SEED_VENDORS);
+    setUseStaticList(true);
+    setLoading(false);
+    
+    // If strain is specified, also try to search (but keep static list visible)
     if (strainName || strainSlug) {
       searchVendors(strainSlug || strainName);
-    } else {
-      loadPopularVendors();
     }
-  }, [strainName, strainSlug, searchVendors, loadPopularVendors]);
+  }, [strainName, strainSlug, searchVendors]);
 
   const handleSearch = () => {
     if (searchStrain.trim()) {
@@ -86,79 +135,30 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
   return (
     <Box
       sx={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        overflowY: 'auto',
-        WebkitOverflowScrolling: 'touch',
-        pointerEvents: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        overflow: 'hidden',
         backgroundColor: '#050705',
         backgroundImage: 'url(/strainspotter-bg.jpg)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
-        zIndex: 1000,
+        position: 'relative',
       }}
     >
-      {/* Fixed Header with Close Button */}
-      <Box
-        sx={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
-          backgroundColor: 'rgba(5, 7, 5, 0.95)',
-          backdropFilter: 'blur(10px)',
-          borderBottom: '1px solid rgba(124, 179, 66, 0.3)',
-          pt: 'calc(env(safe-area-inset-top) + 8px)',
-          pb: 1,
-          px: 2,
-        }}
-      >
-        <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
-          {onBack && (
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={onBack}
-              startIcon={<ArrowBackIcon />}
-              sx={{
-                color: '#fff',
-                borderColor: 'rgba(124, 179, 66, 0.6)',
-                fontSize: '0.875rem',
-                '&:hover': {
-                  borderColor: 'rgba(124, 179, 66, 1)',
-                  bgcolor: 'rgba(124, 179, 66, 0.1)'
-                }
-              }}
-            >
-              Back
-            </Button>
-          )}
-          <IconButton
-            onClick={onBack}
-            sx={{
-              color: '#fff',
-              ml: 'auto',
-              '&:hover': {
-                bgcolor: 'rgba(255, 255, 255, 0.1)'
-              }
-            }}
-            aria-label="Close"
-          >
-            <CloseIcon />
-          </IconButton>
-        </Stack>
-        <Stack direction="row" alignItems="center" spacing={2}>
-          <StoreIcon sx={{ fontSize: 32, color: '#7cb342' }} />
-          <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>
-            Seed Vendor Finder
-          </Typography>
-        </Stack>
-      </Box>
+      {/* Fixed Header with Back Button */}
+      <BackHeader title="Seed Vendors" onBack={onBack} />
 
       {/* Scrollable Content */}
-      <Box sx={{ px: 2, pb: 2 }}>
+      <Box sx={{ 
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        px: 2, 
+        pb: 2,
+        pt: 1
+      }}>
         {/* Search Controls */}
       <Paper sx={{ 
         p: 2, 
@@ -244,8 +244,8 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
         </Box>
       )}
 
-      {/* Results */}
-      {!loading && vendors.length === 0 && (
+      {/* Results - Show static list if no API results */}
+      {!loading && vendors.length === 0 && !useStaticList && (
         <Paper sx={{ 
           p: 4, 
           textAlign: 'center', 
@@ -258,20 +258,98 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
             No seed vendors found
           </Typography>
           <Typography variant="body2" sx={{ color: '#e0e0e0', mb: 2 }}>
-            Try a different strain or view popular seed banks.
+            Try a different strain or browse trusted seed banks below.
           </Typography>
           <Button
             variant="outlined"
-            onClick={loadPopularVendors}
+            onClick={() => {
+              setVendors(STATIC_SEED_VENDORS);
+              setUseStaticList(true);
+            }}
             sx={{
               color: '#fff',
               borderColor: 'rgba(124, 179, 66, 0.6)',
               '&:hover': { borderColor: '#7cb342', bgcolor: 'rgba(124, 179, 66, 0.1)' }
             }}
           >
-            View Popular Seed Banks
+            View Trusted Seed Banks
           </Button>
         </Paper>
+      )}
+
+      {/* Always show static list by default */}
+      {!loading && (
+        <Box>
+          <Typography variant="body2" sx={{ color: '#e0e0e0', mb: 2 }}>
+            Trusted Seed Banks
+          </Typography>
+          <Grid container spacing={2}>
+            {STATIC_SEED_VENDORS.map((vendor) => (
+              <Grid item xs={12} md={6} key={vendor.id}>
+                <Card sx={{ 
+                  background: 'rgba(255,255,255,0.1)', 
+                  backdropFilter: 'blur(20px)', 
+                  border: '1px solid rgba(124, 179, 66, 0.3)', 
+                  borderRadius: 2,
+                  height: '100%'
+                }}>
+                  <CardContent>
+                    <Stack spacing={2}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                        <Box flex={1}>
+                          <Stack direction="row" alignItems="center" spacing={1} mb={1}>
+                            <Typography variant="h6" sx={{ color: '#fff', fontWeight: 600 }}>
+                              {vendor.name}
+                            </Typography>
+                            {vendor.verified && (
+                              <VerifiedIcon sx={{ fontSize: 20, color: '#7cb342' }} />
+                            )}
+                          </Stack>
+                          <Stack direction="row" spacing={1} flexWrap="wrap">
+                            <Chip 
+                              label="Trusted" 
+                              size="small" 
+                              sx={{ bgcolor: 'rgba(124, 179, 66, 0.3)', color: '#fff', fontSize: '0.65rem', height: 18 }} 
+                            />
+                            {vendor.country && (
+                              <Chip 
+                                label={vendor.country} 
+                                size="small" 
+                                sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', fontSize: '0.65rem', height: 18 }} 
+                              />
+                            )}
+                          </Stack>
+                        </Box>
+                      </Stack>
+
+                      {vendor.tagline && (
+                        <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
+                          {vendor.tagline}
+                        </Typography>
+                      )}
+
+                      {vendor.url && (
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          component="a"
+                          href={vendor.url}
+                          target="_blank"
+                          sx={{
+                            bgcolor: '#7cb342',
+                            '&:hover': { bgcolor: '#689f38' }
+                          }}
+                        >
+                          Visit Store →
+                        </Button>
+                      )}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
       )}
 
       {!loading && vendors.length > 0 && (

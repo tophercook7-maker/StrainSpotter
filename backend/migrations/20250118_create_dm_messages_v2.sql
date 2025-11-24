@@ -18,3 +18,4 @@ ON public.dm_messages (conversation_id, is_read);
 COMMENT ON TABLE public.dm_messages IS 'Messages in 1:1 DM conversations';
 COMMENT ON COLUMN public.dm_messages.attachments IS 'JSONB array: [{type: "image", url: "...", width?: number, height?: number}]';
 
+ ne fine day

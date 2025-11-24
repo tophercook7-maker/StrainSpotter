@@ -1457,23 +1457,21 @@ export default function ScanPage({ onBack, onNavigate, onScanComplete }) {
     );
   }
 
-  // SCANNER MODE - ensure no black overlays block touches
+  // SCANNER MODE - proper flex layout
   return (
     <Box
       sx={{
-        minHeight: '100vh',
-        width: '100%',
+        height: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        bgcolor: 'background.default',
         backgroundColor: '#050705',
         backgroundImage: 'url(/strainspotter-bg.jpg)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
         position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
-        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)',
-        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
-        boxSizing: 'border-box',
       }}
     >
       {/* Subtle overlay - ensure it doesn't block touches */}
@@ -1487,102 +1485,96 @@ export default function ScanPage({ onBack, onNavigate, onScanComplete }) {
         }}
       />
 
-      {/* Top bar with back button */}
+      {/* Fixed header with back button */}
       <Box
         sx={{
-          position: 'relative',
-          zIndex: 1,
-          px: 2,
-          pb: 1.5,
+          flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          pointerEvents: 'auto',
+          paddingX: 2,
+          paddingTop: 1.5,
+          paddingBottom: 1.5,
+          gap: 1.5,
+          position: 'relative',
+          zIndex: 1,
         }}
       >
         <IconButton
+          edge="start"
           onClick={handleBack}
-          sx={{
-            color: '#C5E1A5',
-            padding: 1,
-          }}
-          aria-label="Back"
+          sx={{ mr: 1, color: '#C5E1A5' }}
         >
           <ArrowBackIcon />
         </IconButton>
-        <Typography
-          variant="subtitle2"
-          sx={{ color: '#A5D6A7', fontWeight: 500, fontSize: 14 }}
-        >
-          Scanner
-        </Typography>
-        <Box sx={{ width: 40 }} /> {/* Spacer for centering */}
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="subtitle2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+            StrainSpotter
+          </Typography>
+          <Typography variant="h6" fontWeight="600" sx={{ color: '#fff' }}>
+            Scan a package or bud
+          </Typography>
+        </Box>
       </Box>
 
-      {/* Status Strip */}
-      {scanStatus.phase !== 'idle' && (
-        <Box
-          sx={{
-            position: 'relative',
-            zIndex: 1,
-            px: 2,
-            pb: 1,
-          }}
-        >
-          <Box
-            sx={{
-              padding: '8px 12px',
-              borderRadius: '999px',
-              fontSize: 12,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              backgroundColor:
-                scanStatus.phase === 'error'
-                  ? 'rgba(220, 53, 69, 0.12)'
-                  : scanStatus.phase === 'completed'
-                  ? 'rgba(25, 135, 84, 0.14)'
-                  : 'rgba(15, 118, 110, 0.16)',
-              color: '#e5fbea',
-              border: scanStatus.phase === 'error' ? '1px solid rgba(220, 53, 69, 0.3)' : 'none',
-            }}
-          >
-            <span style={{ fontSize: 14 }}>
-              {scanStatus.phase === 'error'
-                ? '⚠️'
-                : scanStatus.phase === 'completed'
-                ? '✅'
-                : '🔍'}
-            </span>
-            <Box sx={{ flex: 1 }}>
-              <Box sx={{ fontWeight: 500, fontSize: 13 }}>
-                {scanStatus.message || 'Ready to scan.'}
-              </Box>
-              {scanStatus.details && (
-                <Box sx={{ fontSize: 11, opacity: 0.8, mt: 0.25 }}>
-                  {scanStatus.details}
-                </Box>
-              )}
-            </Box>
-          </Box>
-        </Box>
-      )}
-
-      {/* Scrollable content area */}
+      {/* Scrollable content */}
       <Box
         sx={{
           flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
-          overflowX: 'hidden',
-          position: 'relative',
-          zIndex: 1,
+          WebkitOverflowScrolling: 'touch',
           px: 2,
           pb: 2,
-          display: 'flex',
-          flexDirection: 'column',
-          pointerEvents: 'auto',
+          position: 'relative',
+          zIndex: 1,
         }}
       >
+        {/* Status Strip */}
+        {scanStatus.phase !== 'idle' && (
+          <Box
+            sx={{
+              pt: 1,
+              pb: 1,
+            }}
+          >
+            <Box
+              sx={{
+                padding: '8px 12px',
+                borderRadius: '999px',
+                fontSize: 12,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                backgroundColor:
+                  scanStatus.phase === 'error'
+                    ? 'rgba(220, 53, 69, 0.12)'
+                    : scanStatus.phase === 'completed'
+                    ? 'rgba(25, 135, 84, 0.14)'
+                    : 'rgba(15, 118, 110, 0.16)',
+                color: '#e5fbea',
+                border: scanStatus.phase === 'error' ? '1px solid rgba(220, 53, 69, 0.3)' : 'none',
+              }}
+            >
+              <span style={{ fontSize: 14 }}>
+                {scanStatus.phase === 'error'
+                  ? '⚠️'
+                  : scanStatus.phase === 'completed'
+                  ? '✅'
+                  : '🔍'}
+              </span>
+              <Box sx={{ flex: 1 }}>
+                <Box sx={{ fontWeight: 500, fontSize: 13 }}>
+                  {scanStatus.message || 'Ready to scan.'}
+                </Box>
+                {scanStatus.details && (
+                  <Box sx={{ fontSize: 11, opacity: 0.8, mt: 0.25 }}>
+                    {scanStatus.details}
+                  </Box>
+                )}
+              </Box>
+            </Box>
+          </Box>
+        )}
         <Container
           maxWidth="sm"
           sx={{
@@ -1791,7 +1783,7 @@ export default function ScanPage({ onBack, onNavigate, onScanComplete }) {
                 size="large"
                 startIcon={<CloudUploadIcon />}
                 onClick={handlePickImageClick}
-                disabled={!isFounder && (isOpeningPicker || scanPhase === 'uploading' || scanPhase === 'processing' || scanPhase === 'capturing' || !canScan)}
+                disabled={!isFounder && !canScanFromHook && (isOpeningPicker || scanPhase === 'uploading' || scanPhase === 'processing' || scanPhase === 'capturing')}
                 sx={{
                   textTransform: 'none',
                   fontWeight: 700,
@@ -1815,11 +1807,9 @@ export default function ScanPage({ onBack, onNavigate, onScanComplete }) {
                   ? 'Processing…' 
                   : isOpeningPicker 
                   ? 'Opening camera…' 
-                  : !canScan
-                  ? 'Upgrade to keep scanning'
-                  : multiAngleMode && capturedFrames.length > 0
-                  ? `Capture photo ${capturedFrames.length + 1}/${MAX_FRAMES}`
-                  : 'Take or choose photo'}
+                  : (isFounder || canScanFromHook)
+                  ? 'Scan a package or bud'
+                  : 'Upgrade to keep scanning'}
               </Button>
 
               <Button
@@ -2134,6 +2124,9 @@ export default function ScanPage({ onBack, onNavigate, onScanComplete }) {
           {/* Removed duplicate error display to prevent duplicate error cards */}
         </Container>
       </Box>
+
+      {/* Optional bottom safe area spacer */}
+      <Box sx={{ height: 8, flexShrink: 0 }} />
 
       {/* Plans popup for guests who hit the limit */}
       <Dialog

@@ -28,44 +28,75 @@ export default function Dispensaries({ onBack }) {
   const [userLocation, setUserLocation] = useState(null);
   const [locationError, setLocationError] = useState(null);
 
-  // Request user's location
+  // Request user's location using Capacitor Geolocation if available, otherwise browser API
   useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          console.log('[Dispensaries] Location obtained successfully');
+    const getLocation = async () => {
+      try {
+        // Try Capacitor Geolocation first (for mobile apps)
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation) {
+          const { Geolocation } = window.Capacitor.Plugins;
+          const position = await Geolocation.getCurrentPosition({
+            timeout: 15000,
+            enableHighAccuracy: false,
+            maximumAge: 300000, // 5 min cache
+          });
+          console.log('[Dispensaries] Location obtained via Capacitor:', position);
           setUserLocation({
             lat: position.coords.latitude,
             lng: position.coords.longitude
           });
-        },
-        (err) => {
-          console.warn('[Dispensaries] Location access denied:', err.message);
-          setLocationError('Location access denied. Showing all dispensaries.');
-          // Set fallback location
-          setUserLocation({ lat: 37.7749, lng: -122.4194 });
-        },
-        {
-          timeout: 5000,
-          maximumAge: 300000, // 5 min cache
-          enableHighAccuracy: false
+          return;
         }
-      );
-    } else {
-      console.log('[Dispensaries] Geolocation not supported');
-      setLocationError('Geolocation not supported. Showing all dispensaries.');
-      // Set fallback location
-      setUserLocation({ lat: 37.7749, lng: -122.4194 });
-    }
+        
+        // Fallback to browser geolocation API
+        if ('geolocation' in navigator) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              console.log('[Dispensaries] Location obtained successfully');
+              setUserLocation({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+              });
+            },
+            (err) => {
+              console.warn('[Dispensaries] Location access denied:', err.message);
+              // Only show error, don't set fallback location
+              if (err.code === 1) {
+                setLocationError('Location access denied. Please enable location services or search manually.');
+              } else {
+                setLocationError('Unable to detect location. Please search manually or enable location services.');
+              }
+            },
+            {
+              timeout: 15000, // 15 second timeout
+              maximumAge: 300000, // 5 min cache
+              enableHighAccuracy: false
+            }
+          );
+        } else {
+          console.log('[Dispensaries] Geolocation not supported');
+          setLocationError('Geolocation not supported. Please search manually.');
+        }
+      } catch (error) {
+        console.error('[Dispensaries] Location error:', error);
+        setLocationError('Unable to detect location. Please search manually.');
+      }
+    };
+    
+    getLocation();
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (userLocation) {
-      params.set('lat', userLocation.lat);
-      params.set('lng', userLocation.lng);
-      params.set('radius', '50'); // 50 miles
+    // Only fetch if we have a location - don't auto-fetch with California fallback
+    if (!userLocation) {
+      setLoading(false);
+      return;
     }
+
+    const params = new URLSearchParams();
+    params.set('lat', userLocation.lat);
+    params.set('lng', userLocation.lng);
+    params.set('radius', '50'); // 50 miles
 
     const url = `${API_BASE}/api/dispensaries?${params}`;
     console.log('[Dispensaries] Fetching from:', url);
@@ -73,7 +104,14 @@ export default function Dispensaries({ onBack }) {
     fetch(url)
       .then(res => {
         console.log('[Dispensaries] Response status:', res.status, res.statusText);
-        if (!res.ok) throw new Error('Failed to load dispensaries');
+        if (!res.ok) {
+          if (res.status === 400) {
+            return res.json().then(err => {
+              throw new Error(err.error || 'Location required');
+            });
+          }
+          throw new Error('Failed to load dispensaries');
+        }
         return res.json();
       })
       .then(data => {
@@ -82,32 +120,13 @@ export default function Dispensaries({ onBack }) {
         if (userLocation && Array.isArray(data)) {
           data.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
         }
-        setDispensaries(data);
+        setDispensaries(data || []);
+        setError(null);
       })
       .catch(e => {
         console.error('[Dispensaries] Error:', e);
-        // Dev fallback: populate with sample entries instead of hard error
-        setDispensaries([
-          {
-            id: 'sample-green-leaf',
-            name: 'Green Leaf Dispensary',
-            address: '123 Main St',
-            city: 'San Francisco',
-            state: 'CA',
-            phone: '(415) 555-0123',
-            description: 'Friendly staff • Curbside pickup • Daily deals'
-          },
-          {
-            id: 'sample-sunset-wellness',
-            name: 'Sunset Wellness',
-            address: '456 Sunset Blvd',
-            city: 'Los Angeles',
-            state: 'CA',
-            phone: '(323) 555-0456',
-            description: 'Verified lab-tested products • Rewards program'
-          }
-        ]);
-        setError(null);
+        setError(e.message || 'Failed to load dispensaries. Please try again.');
+        setDispensaries([]);
       })
       .finally(() => setLoading(false));
   }, [userLocation]);

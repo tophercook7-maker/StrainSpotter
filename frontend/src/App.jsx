@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import { ThemeProvider, createTheme, CssBaseline, Box, Button, Typography } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProModeProvider } from './contexts/ProModeContext';
 import MobileOnlyGuard from './components/MobileOnlyGuard';
@@ -231,8 +231,8 @@ function App() {
                     gap: 1.5,
                     p: 2,
                     borderBottom: '1px solid rgba(255,255,255,0.08)',
-                    bgcolor: 'rgba(0,0,0,0.7)',
-                    backdropFilter: 'blur(10px)',
+                    bgcolor: 'rgba(0,0,0,0.3)',
+                    backdropFilter: 'blur(8px)',
                     zIndex: 1,
                   }}
                 >
@@ -255,15 +255,34 @@ function App() {
                     minHeight: 0,
                     overflowY: 'auto',
                     WebkitOverflowScrolling: 'touch',
+                    paddingBottom: 'calc(env(safe-area-inset-bottom) + 80px)',
                     px: 2,
                     py: 2,
                   }}
                 >
-                  <ScanResultCard
-                    scan={activeScan}
-                    result={activeScan}
-                    isGuest={false}
-                  />
+                  {!activeScan ? (
+                    <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Preparing your result…
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <ScanResultCard
+                      scan={activeScan}
+                      result={activeScan}
+                      isGuest={false}
+                      onViewSeeds={({ strainName, strainSlug }) => {
+                        // For App.jsx, we can navigate to a seed view or open external link
+                        // For now, open Seedsman search in new tab
+                        if (strainName || strainSlug) {
+                          const searchTerm = encodeURIComponent(strainName || strainSlug);
+                          window.open(`https://www.seedsman.com/en/search?q=${searchTerm}`, '_blank');
+                        } else {
+                          window.open('https://www.seedsman.com', '_blank');
+                        }
+                      }}
+                    />
+                  )}
                 </Box>
               </Box>
             )}

@@ -78,6 +78,63 @@ export default function GroupMessages({
 
   const loading = isLoadingInitial;
   
+  // Show error state if messages failed to load
+  if (error && !loading && (!messages || messages.length === 0)) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          overflow: "hidden",
+          backgroundColor: "#000",
+        }}
+      >
+        {group && (
+          <GroupHeader
+            group={group}
+            onBack={onBack}
+            typingUsers={typingUsers}
+            isMobile={isMobile}
+          />
+        )}
+        <Box sx={{ 
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          p: 3,
+          textAlign: 'center'
+        }}>
+          <Box>
+            <Typography variant="body2" sx={{ color: "#ccc", mb: 1 }}>
+              Couldn't load messages right now. You can still send a new one.
+            </Typography>
+            {onSend && (
+              <Typography variant="caption" sx={{ color: "#999" }}>
+                Try sending a message to refresh the conversation.
+              </Typography>
+            )}
+          </Box>
+        </Box>
+        {group && onSend && (
+          <ChatInput
+            value=""
+            onChange={() => {}}
+            onSend={handleSend}
+            disabled={false}
+            sending={false}
+            placeholder="Type a message…"
+            replyToMessage={replyTo}
+            onCancelReply={clearReply}
+            scope="group"
+            channelId={group.id}
+          />
+        )}
+      </Box>
+    );
+  }
+  
   return (
     <Box
       sx={{
@@ -121,7 +178,7 @@ export default function GroupMessages({
           </Box>
         )}
 
-        {!loading && (!messages || messages.length === 0) && (
+        {!loading && !error && (!messages || messages.length === 0) && (
           <Box sx={{ 
             p: 2, 
             color: "#ccc",

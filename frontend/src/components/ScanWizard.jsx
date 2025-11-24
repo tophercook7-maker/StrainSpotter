@@ -14,6 +14,7 @@ import { supabase, SUPABASE_ANON_KEY } from '../supabaseClient';
 import { API_BASE, FUNCTIONS_BASE } from '../config';
 import { normalizeScanResult, getScanKindLabel, cleanCandidateName } from '../utils/scanResultUtils';
 import { useCanScan } from '../hooks/useCanScan';
+import { useScanCredits } from '../hooks/useScanCredits';
 
 const ConfidenceCallout = ({ confidence }) => {
   if (confidence == null) return null;
@@ -80,6 +81,9 @@ export default function ScanWizard({ onBack, onScanComplete }) {
 
   // Use shared canScan hook for founder checks
   const { canScan: canScanFromHook, isFounder: isFounderFromHook, remainingScans: remainingScansFromHook } = useCanScan();
+  
+  // Use normalized scan credits hook for button logic
+  const { canScan, remainingScans, isFounder, isGuest } = useScanCredits();
 
   const membershipTier = (currentUser?.user_metadata?.membership || currentUser?.user_metadata?.tier || '').toString().toLowerCase();
   const metadataMembershipActive = ['club', 'full-access', 'pro', 'owner', 'admin', 'garden', 'member'].some((token) => membershipTier.includes(token));
@@ -263,6 +267,47 @@ export default function ScanWizard({ onBack, onScanComplete }) {
     }
   };
 
+  // Handle successful poll with normalized scan object
+  const handlePollSuccess = useCallback((scan, scanId) => {
+    if (!scan) {
+      console.warn('[ScanWizard] handlePollSuccess called without scan object');
+      return;
+    }
+
+    const normalizedScan = {
+      id: scan.id || scan.scanId || scanId,
+      status: scan.status || 'completed',
+      created_at: scan.created_at ?? scan.createdAt ?? null,
+      processed_at: scan.processed_at ?? scan.processedAt ?? null,
+      image_url:
+        scan.image_url ||
+        scan.imageUrl ||
+        (scan.result && scan.result.image_url) ||
+        null,
+      result: scan.result ?? {},
+      // Include the full scan object for backward compatibility
+      ...scan,
+    };
+
+    if (!normalizedScan.id) {
+      console.warn('[ScanWizard] Poll success but missing scan id', { scan, normalizedScan });
+    }
+
+    // Try to normalize the result for ScanResultCard
+    const normalized = normalizeScanResult(normalizedScan);
+    if (normalized) {
+      normalizedScan.normalizedResult = normalized;
+    }
+
+    // Call parent callback with normalized scan
+    if (onScanComplete && typeof onScanComplete === 'function') {
+      onScanComplete(normalizedScan);
+    } else {
+      // Otherwise, switch to result view internally
+      setActiveView('result');
+    }
+  }, [onScanComplete]);
+
   // Poll for scan result (similar to ScanPage)
   const pollScanResult = async (scanId, attempt = 0) => {
     const maxAttempts = 25; // ~25s at 1s delay
@@ -330,11 +375,9 @@ export default function ScanWizard({ onBack, onScanComplete }) {
         // AI is done or not needed - show results
         setIsPolling(false);
         
+        // Normalize result for internal state
         const normalized = normalizeScanResult(scan);
-        if (!normalized) {
-          setScanStatus('No strain match found yet. Try a clearer photo or different angle.');
-          setScanResult(null);
-        } else {
+        if (normalized) {
           setScanResult(normalized);
           setScanStatus("Scan complete!");
           setCompletedScanId(scanId);
@@ -351,15 +394,13 @@ export default function ScanWizard({ onBack, onScanComplete }) {
               confidence: normalized.topMatch.confidence,
             });
           }
-          
-          // Call parent callback if provided (for Garden to handle routing)
-          if (onScanComplete && typeof onScanComplete === 'function') {
-            onScanComplete(scan);
-          } else {
-            // Otherwise, switch to result view internally
-            setActiveView('result');
-          }
+        } else {
+          setScanStatus('No strain match found yet. Try a clearer photo or different angle.');
+          setScanResult(null);
         }
+        
+        // Always call handlePollSuccess to ensure normalized scan is passed to parent
+        handlePollSuccess(scan, scanId);
         return;
       }
 
@@ -515,10 +556,22 @@ export default function ScanWizard({ onBack, onScanComplete }) {
 
           setScanStatus("Scan started successfully!");
 
-          // Call parent callback immediately with scan object
+          // Build normalized scan object with all required fields
+          const normalizedScan = {
+            id: scan.id || scan.scanId || scanId,
+            status: scan.status || 'processing',
+            created_at: scan.created_at ?? scan.createdAt ?? null,
+            processed_at: scan.processed_at ?? scan.processedAt ?? null,
+            image_url: scan.image_url ?? scan.imageUrl ?? scan.result?.image_url ?? null,
+            result: scan.result ?? {},
+            // Include the full scan object for backward compatibility
+            ...scan,
+          };
+
+          // Call parent callback immediately with normalized scan object
           // Parent (Garden/App) will handle polling and result display
           if (onScanComplete && typeof onScanComplete === 'function') {
-            onScanComplete(scan);
+            onScanComplete(normalizedScan);
           }
 
           await loadCredits();
@@ -658,9 +711,9 @@ export default function ScanWizard({ onBack, onScanComplete }) {
   const lowCredits = typeof creditsRemaining === 'number' && creditsRemaining <= 5;
   const disableScanning = !membershipActive && Boolean(creditSummary) && (starterExpired || (typeof creditsRemaining === 'number' && creditsRemaining <= 0));
   
-  // Clear booleans for button logic
-  const outOfScans = !canScanFromHook && !isFounderFromHook;
-  const canActuallyScan = !!canScanFromHook || !!isFounderFromHook;
+  // Button logic using normalized scan credits
+  const isOutOfScans = !isFounder && !isGuest && (remainingScans ?? 0) <= 0;
+  const primaryLabel = isOutOfScans ? 'Upgrade to keep scanning' : 'Scan';
 
   const trialMessage = (() => {
     if (membershipActive) return null;
@@ -866,64 +919,47 @@ export default function ScanWizard({ onBack, onScanComplete }) {
       {!membershipComplete ? (
         <MembershipLogin onSuccess={() => setMembershipComplete(true)} />
       ) : (
-        <Container
-          maxWidth="sm"
+        <Box
           sx={{
-            minHeight: { xs: 'auto', sm: '100vh' },
-            width: '100%',
-            maxWidth: { xs: '100%', sm: '600px' },
-            py: { xs: 1, sm: 2 },
-            pb: { xs: 2, sm: 10 },
-            px: { xs: 1.5, sm: 3 },
-            background: 'none',
-            backdropFilter: 'none',
-            boxShadow: 'none',
-            opacity: 1,
-            borderRadius: 0,
+            height: '100dvh',
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: { xs: 'flex-start', sm: 'center' },
-            mx: 'auto'
+            bgcolor: 'background.default',
+            color: 'text.primary',
+            overflow: 'hidden',
           }}
         >
-          {/* Back and Logout buttons - Mobile Optimized */}
-          <Box sx={{
-            position: 'absolute',
-            top: { xs: '120px', sm: 24 },
-            left: { xs: 12, sm: 24 },
-            right: { xs: 12, sm: 'auto' },
-            zIndex: 100,
-            display: 'flex',
-            gap: 1,
-            flexWrap: 'wrap'
-          }}>
-            <Button
-              variant="contained"
-              size="small"
+          {/* Header row */}
+          <Box
+            sx={{
+              flexShrink: 0,
+              pt: 'calc(env(safe-area-inset-top) + 8px)',
+              px: 2,
+              pb: 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+            }}
+          >
+            <IconButton
+              edge="start"
               onClick={() => onBack ? onBack() : window.history.back()}
-              sx={{
-                fontWeight: 700,
-                borderRadius: '8px',
-                px: { xs: 2, sm: 3 },
-                py: 1,
-                fontSize: { xs: '0.875rem', sm: '1rem' },
-                boxShadow: 'none',
-                bgcolor: '#7CB342',
-                color: '#fff',
-                textTransform: 'none',
-                '&:active': {
-                  bgcolor: '#689f38',
-                  transform: 'scale(0.98)'
-                }
-              }}
+              size="small"
+              sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', color: '#fff' }}
             >
-              ← Back
-            </Button>
-
+              <ArrowBackIcon fontSize="small" />
+            </IconButton>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="subtitle1" fontWeight={600} noWrap sx={{ color: '#fff' }}>
+                StrainSpotter Scanner
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }} noWrap>
+                Snap packaging or buds to decode everything
+              </Typography>
+            </Box>
             {currentUser && (
               <Button
-                variant="contained"
+                variant="text"
                 size="small"
                 onClick={async () => {
                   try {
@@ -931,7 +967,6 @@ export default function ScanWizard({ onBack, onScanComplete }) {
                     setCurrentUser(null);
                     setAlertMsg('Logged out successfully');
                     setAlertOpen(true);
-                    // Optionally redirect to home or login page
                     setTimeout(() => {
                       if (onBack) {
                         onBack();
@@ -946,19 +981,8 @@ export default function ScanWizard({ onBack, onScanComplete }) {
                   }
                 }}
                 sx={{
-                  fontWeight: 700,
-                  borderRadius: '8px',
-                  px: { xs: 2, sm: 3 },
-                  py: 1,
-                  fontSize: { xs: '0.875rem', sm: '1rem' },
-                  boxShadow: 'none',
-                  bgcolor: '#7CB342',
                   color: '#fff',
                   textTransform: 'none',
-                  '&:active': {
-                    bgcolor: '#689f38',
-                    transform: 'scale(0.98)'
-                  }
                 }}
               >
                 Logout
@@ -966,8 +990,30 @@ export default function ScanWizard({ onBack, onScanComplete }) {
             )}
           </Box>
 
-          {/* Hero Image Icon */}
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: { xs: 1, sm: 2 }, mt: { xs: '180px', sm: 0 } }}>
+          {/* Scrollable content */}
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              px: 2,
+              pb: 2,
+            }}
+          >
+            {/* Main content wrapper for centering */}
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 2,
+                minHeight: '100%',
+              }}
+            >
+            {/* Hero Image Icon */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: { xs: 1, sm: 2 } }}>
             <Box
               sx={{
                 width: { xs: 50, sm: 70 },
@@ -1040,10 +1086,16 @@ export default function ScanWizard({ onBack, onScanComplete }) {
                   Scan Credits
                 </Typography>
                 <Typography variant="h3" sx={{ fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'baseline', gap: 1, fontSize: { xs: '2rem', sm: '3rem' } }}>
-                  {creditsLoading ? <CircularProgress size={28} sx={{ color: '#c8ff9e' }} /> : (creditsRemaining ?? '--')}
-                  <Typography component="span" variant="h6" sx={{ color: '#c8ff9e', fontWeight: 500, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
-                    left
-                  </Typography>
+                  {creditsLoading ? <CircularProgress size={28} sx={{ color: '#c8ff9e' }} /> : (
+                    isFounder ? 'Unlimited' : 
+                    (typeof remainingScans === 'number' && remainingScans === Infinity ? 'Unlimited' :
+                    (typeof remainingScans === 'number' ? remainingScans : creditsRemaining ?? '--'))
+                  )}
+                  {!isFounder && !(typeof remainingScans === 'number' && remainingScans === Infinity) && (
+                    <Typography component="span" variant="h6" sx={{ color: '#c8ff9e', fontWeight: 500, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                      left
+                    </Typography>
+                  )}
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#d0ffd6', maxWidth: 420, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                   {membershipActive
@@ -1116,84 +1168,6 @@ export default function ScanWizard({ onBack, onScanComplete }) {
             </Paper>
           )}
 
-          <Box sx={{ mt: { xs: 2, sm: 4 }, textAlign: 'center', width: '100%' }}>
-            <input
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              ref={fileInputRef}
-              onChange={handleFileChange}
-            />
-            <Button
-              variant="contained"
-              color="success"
-              sx={{
-                fontWeight: 700,
-                borderRadius: 999,
-                px: { xs: 3, sm: 5 },
-                py: { xs: 1.25, sm: 1.5 },
-                fontSize: { xs: '1rem', sm: '1.25rem' },
-                boxShadow: 'none',
-                mb: { xs: 1.5, sm: 2 },
-                bgcolor: 'rgba(255,255,255,0.15)',
-                backdropFilter: 'blur(8px)',
-                color: '#388e3c',
-                textTransform: 'none',
-                width: { xs: '90%', sm: 'auto' },
-                maxWidth: { xs: '320px', sm: 'none' }
-              }}
-              disabled={loading || !canActuallyScan}
-              onClick={() => {
-                if (!canActuallyScan) {
-                  // Show upgrade dialog if out of scans
-                  const message = starterExpired
-                    ? 'Your starter access window has ended. Join the Garden membership or purchase a top-up pack within 3 days to keep scanning.'
-                    : 'You are out of scan credits. Join the Garden or purchase a top-up pack to continue scanning.';
-                  setAlertMsg(message);
-                  setAlertOpen(true);
-                  setTopUpMessage(message);
-                  setShowTopUpDialog(true);
-                  return;
-                }
-                fileInputRef.current?.click();
-              }}
-            >
-              <span role="img" aria-label="camera" style={{ marginRight: 8 }}>📷</span>
-              {loading ? 'Scanning…' : 'Scan now'}
-            </Button>
-            
-            {/* Upgrade message - only shown when out of scans */}
-            {outOfScans && (
-              <Box sx={{ mt: 2, textAlign: 'center' }}>
-                <Typography variant="body2" sx={{ color: '#ffcc80', mb: 1 }}>
-                  You're out of free scans.
-                </Typography>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  sx={{
-                    mt: 1,
-                    color: '#ffcc80',
-                    borderColor: 'rgba(255, 204, 128, 0.5)',
-                    '&:hover': {
-                      borderColor: '#ffcc80',
-                      bgcolor: 'rgba(255, 204, 128, 0.1)'
-                    }
-                  }}
-                  onClick={() => {
-                    const message = starterExpired
-                      ? 'Your starter access window has ended. Join the Garden membership or purchase a top-up pack within 3 days to keep scanning.'
-                      : 'You are out of scan credits. Join the Garden or purchase a top-up pack to continue scanning.';
-                    setAlertMsg(message);
-                    setAlertOpen(true);
-                    setTopUpMessage(message);
-                    setShowTopUpDialog(true);
-                  }}
-                >
-                  Upgrade to keep scanning
-                </Button>
-              </Box>
-            )}
             {loading && (
               <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mt: 2 }}>
                 <CircularProgress color="success" />
@@ -2050,7 +2024,66 @@ export default function ScanWizard({ onBack, onScanComplete }) {
             onClose={() => setShowFeedback(false)}
             user={currentUser}
           />
-        </Container>
+          </Box>
+
+          {/* Bottom actions */}
+          <Box
+            sx={{
+              position: 'sticky',
+              bottom: 0,
+              zIndex: 20,
+              background: 'linear-gradient(to top, rgba(3,10,3,0.95), rgba(3,10,3,0.4))',
+              pt: 1,
+              pb: 'calc(env(safe-area-inset-bottom) + 8px)',
+              px: 2,
+              flexShrink: 0,
+            }}
+          >
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              ref={fileInputRef}
+              onChange={handleFileChange}
+            />
+            <Button
+              fullWidth
+              variant="contained"
+              size="large"
+              onClick={() => {
+                if (isOutOfScans) {
+                  // Show upgrade dialog if out of scans
+                  const message = starterExpired
+                    ? 'Your starter access window has ended. Join the Garden membership or purchase a top-up pack within 3 days to keep scanning.'
+                    : 'You are out of scan credits. Join the Garden or purchase a top-up pack to continue scanning.';
+                  setAlertMsg(message);
+                  setAlertOpen(true);
+                  setTopUpMessage(message);
+                  setShowTopUpDialog(true);
+                  return;
+                }
+                fileInputRef.current?.click();
+              }}
+              disabled={isOutOfScans || loading}
+              sx={{
+                borderRadius: 999,
+                py: 1.4,
+                fontWeight: 600,
+                textTransform: 'none',
+                mb: 1,
+              }}
+            >
+              {loading ? 'Scanning…' : primaryLabel}
+            </Button>
+            
+            {/* Show remaining scans count when available and not unlimited */}
+            {!isOutOfScans && !isFounder && typeof remainingScans === 'number' && remainingScans > 0 && remainingScans !== Infinity && (
+              <Typography variant="body2" sx={{ mt: 1, textAlign: 'center', color: '#c8ff9e', opacity: 0.9 }}>
+                {remainingScans} scan{remainingScans === 1 ? '' : 's'} remaining
+              </Typography>
+            )}
+          </Box>
+        </Box>
       )}
     </ErrorBoundary>
   );

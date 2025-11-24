@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Box, Button, Typography, Grid, Paper, Stack, Avatar, Alert, Dialog, DialogTitle, DialogContent, Fab, Tooltip } from '@mui/material';
 import { supabase } from '../supabaseClient';
 import { useMembershipGuard } from '../hooks/useMembershipGuard';
@@ -48,6 +48,11 @@ export default function Garden({ onBack, onNavigate }) {
   const [navValue, setNavValue] = useState('home');
   const [activeScan, setActiveScan] = useState(null);
   const [activeView, setActiveView] = useState('scanner'); // 'scanner' | 'result' | 'history'
+
+  // Version log to confirm new bundle is running
+  useEffect(() => {
+    console.log('[Garden] mounted – bundle v2 (seedFinderStrain removed)');
+  }, []);
 
   // Get display name for user
   const getUserDisplayName = () => {
@@ -142,7 +147,7 @@ export default function Garden({ onBack, onNavigate }) {
 
   const tiles = [
     { title: 'AI Strain Scan', icon: <CameraAltIcon />, nav: 'scan', color: '#00e676', description: 'Identify any strain instantly', image: '📷', useEmoji: true },
-    { title: 'Strain Browser', icon: <SpaIcon />, nav: 'strains', color: '#7cb342', description: 'Explore 1000+ strains', image: '/hero.png?v=13', useEmoji: false },
+    { title: 'Strain Browser', icon: <SpaIcon />, nav: 'strains', color: '#7cb342', description: 'Explore 1000+ strains', image: '/hero.png?v=13', useEmoji: false, isHero: true },
     { title: 'Reviews Hub', icon: <RateReviewIcon />, nav: 'reviews', color: '#ffd600', description: 'Read & share experiences', image: '⭐', useEmoji: true },
     { title: 'Community Groups', icon: <GroupsIcon />, nav: 'groups', color: '#66bb6a', description: 'Connect with growers', image: '👥', useEmoji: true },
     { title: 'Grow Coach', icon: <LocalFloristIcon />, nav: 'grow-coach', color: '#9ccc65', description: 'Expert growing tips', image: '🌱', useEmoji: true },
@@ -192,9 +197,146 @@ export default function Garden({ onBack, onNavigate }) {
     );
   }
 
+  // Show result view if we have a completed scan
+  if (activeView === 'result' && activeScan) {
+    return renderWithNav(
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          overflow: 'hidden',
+          bgcolor: '#000',
+        }}
+      >
+        {/* Fixed header with back button */}
+        <Box
+          sx={{
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            p: 2,
+            pt: 'calc(env(safe-area-inset-top) + 8px)',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            bgcolor: 'rgba(0,0,0,0.3)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 1,
+          }}
+        >
+          <Button
+            variant="text"
+            onClick={() => {
+              setActiveView('scanner');
+              setActiveScan(null);
+            }}
+            sx={{ 
+              color: '#fff', 
+              minWidth: 'auto', 
+              px: 1,
+              fontSize: '1rem',
+              fontWeight: 600,
+            }}
+          >
+            ← Back
+          </Button>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff', flex: 1 }}>
+            Scan Result
+          </Typography>
+        </Box>
+
+        {/* Scrollable content */}
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            paddingBottom: 'calc(env(safe-area-inset-bottom) + 80px)',
+            px: 2,
+            py: 2,
+          }}
+        >
+          <ScanResultCard
+            scan={activeScan}
+            result={activeScan}
+            isGuest={!user}
+            onViewSeeds={(options) => {
+              // options can be { strainName, strainSlug } or { scan, result }
+              const scanData = options?.scan || activeScan;
+              const resultData = options?.result || activeScan?.result || activeScan;
+              
+              // Check if scan has a direct seedBank URL
+              const seedBank = resultData?.seedBank || scanData?.result?.seedBank || {};
+              const seedBankUrl = seedBank.seedBankUrl || seedBank.url || null;
+              
+              // 1) If backend gave us a direct seedBank URL, open it
+              if (seedBankUrl && typeof seedBankUrl === 'string') {
+                try {
+                  window.open(seedBankUrl, '_blank', 'noopener,noreferrer');
+                  return;
+                } catch (e) {
+                  console.error('[Garden] Failed to open seedBankUrl', e);
+                }
+              }
+              
+              // 2) Fallback: route to Seed Vendors
+              setShowSeedFinder(true);
+            }}
+          />
+        </Box>
+      </Box>,
+      'scan'
+    );
+  }
+
   // Show ScanWizard if user clicked AI Scan
   if (showScan) {
-    return <ScanWizard onBack={() => setShowScan(false)} />;
+    const handleScanComplete = useCallback((scan) => {
+      console.log('[GardenScanner] scan complete:', scan);
+
+      if (!scan || (!scan.id && !scan.scanId)) {
+        console.warn('[GardenScanner] Missing scan object, routing to result with fallback.');
+        // Still show result view with what we have
+        const fallbackScan = {
+          id: scan?.scanId || 'unknown',
+          status: 'completed',
+          result: scan?.result || {},
+          ...scan,
+        };
+        setActiveScan(fallbackScan);
+        setActiveView('result');
+        setShowScan(false);
+        return;
+      }
+
+      // Normalize scan object to ensure it has all required fields
+      const normalizedScan = {
+        id: scan.id || scan.scanId,
+        status: scan.status || 'completed',
+        created_at: scan.created_at ?? scan.createdAt ?? null,
+        processed_at: scan.processed_at ?? scan.processedAt ?? null,
+        image_url: scan.image_url ?? scan.imageUrl ?? scan.result?.image_url ?? null,
+        result: scan.result ?? {},
+        // Include all other fields for backward compatibility
+        ...scan,
+      };
+      
+      // Switch Garden to the result view
+      setActiveScan(normalizedScan);
+      setActiveView('result');
+      setShowScan(false);
+    }, []);
+
+    return (
+      <ScanWizard 
+        onBack={() => {
+          setShowScan(false);
+          setActiveView('scanner');
+        }}
+        onScanComplete={handleScanComplete}
+      />
+    );
   }
 
   // Show StrainBrowser if user clicked Strain Browser
@@ -212,10 +354,7 @@ export default function Garden({ onBack, onNavigate }) {
     return <DispensaryFinder onBack={() => setShowDispensaryFinder(false)} />;
   }
 
-  // Show SeedVendorFinder if user clicked Seed Vendors
-  if (showSeedFinder) {
-    return <SeedVendorFinder onBack={() => setShowSeedFinder(false)} />;
-  }
+  // Show SeedVendorFinder if user clicked Seed Vendors (handled below with state)
 
   // Show Groups if user clicked Community Groups
   if (showGroups) {
@@ -264,7 +403,7 @@ export default function Garden({ onBack, onNavigate }) {
   const isCapacitor = typeof window !== 'undefined' && 
     (window.Capacitor || window.location.protocol === 'capacitor:' || 
      /iPhone|iPad|iPod|Android/i.test(window.navigator.userAgent));
-  const GARDEN_TOP_PAD = isCapacitor ? 'calc(env(safe-area-inset-top) + 20px)' : '20px';
+  const GARDEN_TOP_PAD = isCapacitor ? 'calc(env(safe-area-inset-top) + 8px)' : '8px';
 
   const renderWithNav = (content, navActive = navValue) => (
     <Box sx={{ 
@@ -323,8 +462,8 @@ export default function Garden({ onBack, onNavigate }) {
               gap: 1.5,
               p: 2,
               borderBottom: '1px solid rgba(255,255,255,0.08)',
-              bgcolor: 'rgba(0,0,0,0.7)',
-              backdropFilter: 'blur(10px)',
+              bgcolor: 'rgba(0,0,0,0.3)',
+              backdropFilter: 'blur(8px)',
               zIndex: 1,
             }}
           >
@@ -350,15 +489,46 @@ export default function Garden({ onBack, onNavigate }) {
               minHeight: 0,
               overflowY: 'auto',
               WebkitOverflowScrolling: 'touch',
+              paddingBottom: 'calc(env(safe-area-inset-bottom) + 80px)',
               px: 2,
               py: 2,
             }}
           >
-            <ScanResultCard
-              scan={activeScan}
-              result={activeScan}
-              isGuest={!user}
-            />
+            {!activeScan ? (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  Preparing your result…
+                </Typography>
+              </Box>
+            ) : (
+              <ScanResultCard
+                scan={activeScan}
+                result={activeScan}
+                isGuest={!user}
+                onViewSeeds={(options) => {
+                  // options can be { strainName, strainSlug } or { scan, result }
+                  const scanData = options?.scan || activeScan;
+                  const resultData = options?.result || activeScan?.result || activeScan;
+                  
+                  // Check if scan has a direct seedBank URL
+                  const seedBank = resultData?.seedBank || scanData?.result?.seedBank || {};
+                  const seedBankUrl = seedBank.seedBankUrl || seedBank.url || null;
+                  
+                  // 1) If backend gave us a direct seedBank URL, open it
+                  if (seedBankUrl && typeof seedBankUrl === 'string') {
+                    try {
+                      window.open(seedBankUrl, '_blank', 'noopener,noreferrer');
+                      return;
+                    } catch (e) {
+                      console.error('[Garden] Failed to open seedBankUrl', e);
+                    }
+                  }
+                  
+                  // 2) Fallback: route to Seed Vendors
+                  setShowSeedFinder(true);
+                }}
+              />
+            )}
           </Box>
         </Box>,
         'scan'
@@ -387,7 +557,14 @@ export default function Garden({ onBack, onNavigate }) {
     return renderWithNav(<DispensaryFinder onBack={() => resetScreens('home')} />, 'dispensaries');
   }
   if (showSeedFinder) {
-    return renderWithNav(<SeedVendorFinder onBack={() => resetScreens('home')} />);
+    return renderWithNav(
+      <SeedVendorFinder 
+        onBack={() => {
+          setShowSeedFinder(false);
+          resetScreens('home');
+        }}
+      />
+    );
   }
   if (showGroups) {
     return renderWithNav(<Groups onBack={() => resetScreens('home')} />, 'groups');
@@ -412,10 +589,15 @@ export default function Garden({ onBack, onNavigate }) {
     }}>
       {/* Fixed header */}
       <Box sx={{
-        flexShrink: 0,
-        paddingTop: GARDEN_TOP_PAD,
+        position: 'sticky',
+        top: 0,
+        zIndex: 10,
+        paddingTop: 'calc(env(safe-area-inset-top) + 8px)',
+        paddingBottom: 8,
         px: 2,
-        pb: 1,
+        background: 'linear-gradient(to bottom, rgba(0,0,0,0.15), rgba(0,0,0,0.02))',
+        backdropFilter: 'blur(4px)',
+        flexShrink: 0,
       }}>
         {/* Expired Membership Warning */}
         {isExpired && (
@@ -444,28 +626,21 @@ export default function Garden({ onBack, onNavigate }) {
         {/* Compact buttons and welcome in one row */}
         <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
           <Stack direction="row" spacing={1.5} alignItems="center">
-            <Box
+            <Avatar
+              src="/hero.png?v=13"
+              alt="StrainSpotter"
               sx={{
                 width: 40,
                 height: 40,
                 borderRadius: '50%',
-                background: 'transparent',
+                overflow: 'hidden',
                 border: '2px solid rgba(124, 179, 66, 0.6)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden'
+                boxShadow: '0 0 12px rgba(124, 179, 66, 0.4)',
               }}
-            >
-              <img
-                src="/hero.png?v=13"
-                alt="StrainSpotter"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            </Box>
+            />
             <Box>
               <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, fontSize: '1.4rem', lineHeight: 1.2, mb: 0.25 }}>
-                The Garden
+                The Garden (v2)
               </Typography>
               <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.75rem' }}>
                 {isAdmin ? '✓ Member • Admin & Moderator' : '✓ Member'}
@@ -585,9 +760,58 @@ export default function Garden({ onBack, onNavigate }) {
         </Typography>
       </Paper>
 
+        {/* Hero Card - Strain Browser */}
+        {tiles.find(t => t.isHero) && (() => {
+          const heroTile = tiles.find(t => t.isHero);
+          return (
+            <Paper
+              onClick={() => handleFeatureClick(heroTile.title, heroTile.nav)}
+              sx={{
+                p: 0,
+                mb: 2,
+                textAlign: 'center',
+                cursor: 'pointer',
+                background: 'rgba(0,0,0,0.25)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 24,
+                overflow: 'hidden',
+                width: '100%',
+                maxWidth: '600px',
+                mx: 'auto',
+                transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 8px 24px rgba(124, 179, 66, 0.3)',
+                }
+              }}
+            >
+              <Box
+                component="img"
+                src={heroTile.image}
+                alt={heroTile.title}
+                sx={{
+                  width: '100%',
+                  display: 'block',
+                  objectFit: 'cover',
+                  maxHeight: 220,
+                }}
+              />
+              <Box sx={{ p: 2 }}>
+                <Typography variant="h6" sx={{ color: '#CDDC39', fontWeight: 700, mb: 0.5 }}>
+                  {heroTile.title}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#9CCC65', fontSize: '0.85rem' }}>
+                  {heroTile.description}
+                </Typography>
+              </Box>
+            </Paper>
+          );
+        })()}
+
         {/* Premium Feature Tiles - 2 per row, compact */}
         <Grid container spacing={1.5} sx={{ width: '100%', maxWidth: '600px', justifyContent: 'center', mx: 'auto' }}>
-          {tiles.map((tile) => (
+          {tiles.filter(t => !t.isHero).map((tile) => (
           <Grid item xs={6} key={tile.nav} sx={{ display: 'flex', justifyContent: 'center' }}>
             <Paper
               onClick={() => handleFeatureClick(tile.title, tile.nav)}

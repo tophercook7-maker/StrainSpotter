@@ -3,13 +3,13 @@ import {
   Box, Typography, Stack, Paper, Button, CircularProgress,
   Card, CardContent, Chip, IconButton, Slider, Alert, CardActionArea
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import StoreIcon from '@mui/icons-material/Store';
 import DirectionsIcon from '@mui/icons-material/Directions';
 import PhoneIcon from '@mui/icons-material/Phone';
 import LanguageIcon from '@mui/icons-material/Language';
 import StarIcon from '@mui/icons-material/Star';
+import { BackHeader } from './BackHeader';
 import { API_BASE } from '../config';
 
 export default function DispensaryFinder({ onBack, strainSlug }) {
@@ -44,49 +44,62 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
   }, [strainSlug]);
 
   useEffect(() => {
-    // Get user's location with timeout
-    if (navigator.geolocation) {
-      setLocationStatus('detecting');
+    let timeoutId;
 
-      // Set a timeout in case geolocation hangs (common in simulators)
-      const timeoutId = setTimeout(() => {
-        console.warn('Location request timed out, using fallback');
-        setLocationStatus('denied');
-        const fallback = { lat: 37.7749, lng: -122.4194 };
-        setUserLocation(fallback);
-        searchDispensaries(fallback.lat, fallback.lng, initialRadiusRef.current);
-      }, 10000); // 10 second timeout (increased from 5)
+    async function requestLocation() {
+      if (!navigator.geolocation) {
+        setLocationStatus('unsupported');
+        setError('Geolocation is not supported by your browser. Please search manually.');
+        return;
+      }
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          clearTimeout(timeoutId);
-          const location = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          setUserLocation(location);
-          setLocationStatus('success');
-          searchDispensaries(location.lat, location.lng, initialRadiusRef.current);
-        },
-        (error) => {
-          clearTimeout(timeoutId);
-          console.error('Location access error:', error);
+      try {
+        setLocationStatus('detecting');
+        setError(null);
+
+        // TIMEOUT FAILSAFE
+        timeoutId = setTimeout(() => {
+          setLocationStatus('timeout');
+          setError('Location request timed out. Please try again.');
+        }, 8000);
+
+        const pos = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 7000,
+            maximumAge: 0
+          });
+        });
+
+        clearTimeout(timeoutId);
+
+        const location = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude
+        };
+        console.log('[DispensaryFinder] Location obtained:', location);
+        setUserLocation(location);
+        setLocationStatus('success');
+        searchDispensaries(location.lat, location.lng, initialRadiusRef.current);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        console.error('[DispensaryFinder] Geolocation error', err);
+        
+        if (err.code === 1) {
           setLocationStatus('denied');
-          // Fallback to San Francisco
-          const fallback = { lat: 37.7749, lng: -122.4194 };
-          setUserLocation(fallback);
-          searchDispensaries(fallback.lat, fallback.lng, initialRadiusRef.current);
-        },
-        {
-          timeout: 10000, // 10 second timeout (increased from 5)
-          maximumAge: 0,
-          enableHighAccuracy: true // Changed to true for better accuracy
+          setError('Location access denied. Please enable location services in your device settings.');
+        } else {
+          setLocationStatus('timeout');
+          setError('Unable to get your location. Please try again or enable location services.');
         }
-      );
-    } else {
-      setLocationStatus('unsupported');
-      setError('Geolocation is not supported by your browser');
+      }
     }
+
+    requestLocation();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [searchDispensaries]);
 
   const handleRadiusChange = (_event, newValue) => {
@@ -154,50 +167,96 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
 
   return (
     <Box sx={{
-      minHeight: '100vh',
-      pt: 'calc(env(safe-area-inset-top) + 32px)',
-      px: 2,
-      pb: 2,
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      overflow: 'hidden',
       background: 'none'
     }}>
       {/* Header */}
-      {onBack && (
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={onBack}
-          startIcon={<ArrowBackIcon />}
-          sx={{
-            color: '#fff',
-            borderColor: 'rgba(124, 179, 66, 0.6)',
-            fontSize: '0.875rem',
-            mb: 2,
-            '&:hover': {
-              borderColor: 'rgba(124, 179, 66, 1)',
-              bgcolor: 'rgba(124, 179, 66, 0.1)'
-            }
-          }}
-        >
-          Back
-        </Button>
-      )}
-      <Stack direction="row" alignItems="center" spacing={2} mb={2}>
-        <StoreIcon sx={{ fontSize: 32, color: '#7cb342' }} />
-        <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>
-          Dispensary Finder
-        </Typography>
-      </Stack>
+      <BackHeader title="Dispensary Finder" onBack={onBack} />
+      
+      {/* Scrollable Content */}
+      <Box sx={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        px: 2,
+        pb: 2,
+        pt: 1
+      }}>
 
       {/* Location Status */}
-      {locationStatus === 'detecting' && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          Detecting your location...
-        </Alert>
+      {locationStatus === 'detecting' && !error && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <Stack spacing={2} alignItems="center">
+            <CircularProgress sx={{ color: '#7cb342' }} />
+            <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
+              Getting your location…
+            </Typography>
+          </Stack>
+        </Box>
       )}
-      {locationStatus === 'denied' && (
-        <Alert severity="info" icon={<StoreIcon />} sx={{ mb: 2, bgcolor: 'rgba(124, 179, 66, 0.15)', color: '#fff', border: '1px solid rgba(124, 179, 66, 0.4)' }}>
-          Using San Francisco, CA as default location. Enable location access in your device settings to see nearby dispensaries.
-        </Alert>
+      
+      {error && locationStatus !== 'success' && (
+        <Paper sx={{ 
+          p: 3, 
+          mb: 2,
+          background: 'rgba(255,255,255,0.1)', 
+          backdropFilter: 'blur(20px)', 
+          border: '1px solid rgba(124, 179, 66, 0.3)', 
+          borderRadius: 2 
+        }}>
+          <Alert severity="warning" sx={{ mb: 2, bgcolor: 'rgba(255, 193, 7, 0.15)', color: '#fff', border: '1px solid rgba(255, 193, 7, 0.4)' }}>
+            {error}
+          </Alert>
+          <Button
+            variant="contained"
+            fullWidth
+            onClick={() => {
+              setError(null);
+              setLocationStatus('detecting');
+              setUserLocation(null);
+              // Trigger location request again
+              const timeoutId = setTimeout(() => {
+                if (navigator.geolocation) {
+                  navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                      const location = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                      };
+                      setUserLocation(location);
+                      setLocationStatus('success');
+                      searchDispensaries(location.lat, location.lng, initialRadiusRef.current);
+                    },
+                    (err) => {
+                      if (err.code === 1) {
+                        setLocationStatus('denied');
+                        setError('Location access denied. Please enable location services in your device settings.');
+                      } else {
+                        setLocationStatus('timeout');
+                        setError('Unable to get your location. Please try again.');
+                      }
+                    },
+                    {
+                      enableHighAccuracy: true,
+                      timeout: 7000,
+                      maximumAge: 0
+                    }
+                  );
+                }
+              }, 100);
+            }}
+            sx={{
+              bgcolor: '#7cb342',
+              '&:hover': { bgcolor: '#689f38' }
+            }}
+          >
+            Try Again
+          </Button>
+        </Paper>
       )}
 
       {/* Search Controls */}
@@ -402,6 +461,7 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
           </Stack>
         </Box>
       )}
+      </Box>
     </Box>
   );
 }

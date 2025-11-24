@@ -16,12 +16,16 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error, errorInfo) {
     this.setState({ error, errorInfo });
     
-    // Log to console with clear formatting
+    // Log to console with clear formatting and full error details
     console.error('\n🔥 FRONTEND ERROR CAUGHT BY BOUNDARY 🔥');
     console.error('═══════════════════════════════════════════════════════');
     console.error('Time:', new Date().toISOString());
-    console.error('Error:', error.toString());
-    console.error('Component Stack:', errorInfo.componentStack);
+    console.error('Error Message:', error?.message || 'Unknown error');
+    console.error('Error Stack:', error?.stack || 'No stack trace');
+    console.error('Error String:', error?.toString() || String(error));
+    console.error('Component Stack:', errorInfo?.componentStack || 'No component stack');
+    console.error('Full Error Object:', error);
+    console.error('Full Error Info:', errorInfo);
     console.error('═══════════════════════════════════════════════════════\n');
 
     this.sendClientError(error, errorInfo);
@@ -38,12 +42,19 @@ class ErrorBoundary extends React.Component {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          message: error?.toString(),
-          stack: errorInfo?.componentStack,
+          message: error?.message || error?.toString() || 'Unknown error',
+          stack: error?.stack || 'No stack trace',
+          componentStack: errorInfo?.componentStack || 'No component stack',
+          errorString: error?.toString() || String(error),
           location: window.location.href,
           currentView: window.location.pathname,
           platform: navigator?.platform || null,
-          userAgent: navigator?.userAgent || null
+          userAgent: navigator?.userAgent || null,
+          fullError: error ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+          } : null
         })
       });
     } catch (e) {

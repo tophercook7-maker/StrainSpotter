@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { API_BASE } from '../config.js';
 import { useAuth } from '../hooks/useAuth';
+import { isFounderUser } from '../utils/founder';
 
 const ProModeContext = createContext(null);
 
@@ -11,20 +12,16 @@ export function ProModeProvider({ children }) {
   const [proLoading, setProLoading] = useState(false);
 
   // Founder detection - compute from current session/user
+  // Use the shared helper function for consistency
   const founderValue = useMemo(() => {
     const email = user?.email || session?.user?.email || '';
-    const meta = user?.user_metadata || session?.user?.user_metadata || {};
-
+    
+    // Use the shared helper function
+    const isFounder = isFounderUser(user || session?.user);
+    
     // 1) Env flag (from Vite)
     const envFlag = import.meta.env.VITE_FOUNDER_UNLIMITED_ENABLED !== 'false';
 
-    // 2) Backend metadata says founder
-    const metaIsFounder = Boolean(meta.isFounder);
-
-    // 3) Hardcode founder email
-    const emailIsFounder = email.toLowerCase() === 'topher.cook7@gmail.com';
-
-    const isFounder = metaIsFounder || emailIsFounder;
     const founderUnlimitedEnabled = isFounder && envFlag;
 
     if (import.meta.env.DEV) {

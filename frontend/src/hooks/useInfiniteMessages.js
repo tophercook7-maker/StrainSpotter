@@ -110,8 +110,13 @@ export function useInfiniteMessages({ mode, id }) {
     })
       .then(async (res) => {
         if (!res.ok) {
-          console.error('[useInfiniteMessages] non-OK response', res.status);
-          // Don't throw - return empty data instead
+          console.error('[useInfiniteMessages] Failed to load messages', res.status, res.statusText);
+          // Don't throw - set error state and return empty data
+          if (!cancel) {
+            setError(new Error(`Failed to load messages (${res.status})`));
+            setIsLoadingInitial(false);
+            setHasMore(false);
+          }
           return { messages: [], pinned: [], hasMore: false, error: 'unavailable' };
         }
         return res.json();
