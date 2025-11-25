@@ -5597,26 +5597,13 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
     }
 
     // Fetch all messages for this group
-    // Try to select pinned_at/pinned_by, but handle gracefully if columns don't exist
+    // Select all available columns - if pinned_at/pinned_by don't exist, they'll just be null
     let query = supabaseAdmin
       .from('messages')
-      .select('id, group_id, user_id, content, created_at')
+      .select('*') // Select all columns - handles missing columns gracefully
       .eq('group_id', groupId)
       .order('created_at', { ascending: false })
       .limit(limit + 1); // Fetch one extra to check if there are more
-    
-    // Try to add pinned columns if they exist (will be ignored if they don't)
-    try {
-      query = supabaseAdmin
-        .from('messages')
-        .select('id, group_id, user_id, content, created_at, pinned_at, pinned_by')
-        .eq('group_id', groupId)
-        .order('created_at', { ascending: false })
-        .limit(limit + 1);
-    } catch (e) {
-      // If pinned columns don't exist, use basic query
-      console.log('[api/groups/:groupId/messages] pinned columns may not exist, using basic query');
-    }
 
     if (before) {
       query = query.lt('created_at', before);
