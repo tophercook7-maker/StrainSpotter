@@ -522,7 +522,13 @@ router.get('/:id/messages', async (req, res) => {
 
     res.json({ messages, pinnedMessages });
   } catch (e) {
-    res.status(500).json({ error: String(e) });
+    console.error('[groups/:id/messages] error', {
+      message: e.message,
+      stack: e.stack,
+      groupId: req.params.id
+    });
+    // Return empty array instead of 500 to keep frontend alive
+    res.status(200).json({ messages: [], pinnedMessages: [] });
   }
 });
 
