@@ -442,14 +442,24 @@ function canPinRole(role) {
 
 router.get('/:id/messages', async (req, res) => {
   try {
+    // Use select('*') to handle missing columns gracefully
     const { data, error } = await readClient
       .from('messages')
-      .select('id, group_id, user_id, content, created_at, pinned_at, pinned_by')
+      .select('*')
       .eq('group_id', req.params.id)
       .order('created_at', { ascending: false })
       .limit(1000);
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error('[groups/:id/messages] Supabase error', { 
+        groupId: req.params.id,
+        error: error.message || error,
+        code: error.code,
+        details: error.details
+      });
+      // Return empty array instead of 500 to keep frontend alive
+      return res.status(200).json({ messages: [], pinnedMessages: [] });
+    }
 
     const rawMessages = data || [];
     const userIds = [...new Set(rawMessages.map(m => m.user_id).filter(Boolean))];
