@@ -28,7 +28,7 @@ export default function GroupHeader({
         backdropFilter: 'blur(10px)',
       }}
     >
-      {isMobile && (
+      {onBack && (
         <IconButton
           onClick={onBack}
           sx={{

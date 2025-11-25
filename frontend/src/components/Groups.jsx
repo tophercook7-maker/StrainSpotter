@@ -1331,12 +1331,11 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       />
       {/* Header */}
       <Box sx={{ flexShrink: 0, position: 'relative', zIndex: 1 }}>
-        <Container
-          maxWidth="lg"
+        <Box
           sx={{
             pt: 'calc(env(safe-area-inset-top, 0px) + 16px)',
             pb: 2,
-            px: { xs: 1.5, md: 4 }
+            px: { xs: 1.5, md: 2 }
           }}
         >
           <ProfileSetupDialog
@@ -1428,9 +1427,9 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             >
               Edit Profile
             </Button>
-          </Stack>
-        </Container>
-      </Box>
+            </Stack>
+          </Box>
+        </Box>
 
       {/* Scrollable Body */}
       <Box
@@ -1443,12 +1442,12 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           zIndex: 1
         }}
       >
-        <Container
-          maxWidth="lg"
+        <Box
           sx={{
-            px: { xs: 1.5, md: 4 },
+            px: { xs: 1.5, md: 2 },
             py: 2,
-            pb: 'calc(env(safe-area-inset-bottom, 0px) + 80px)'
+            pb: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
+            width: '100%' // Ensure full width
           }}
         >
           {/* Tabs for Groups and Direct Messages */}
@@ -1799,7 +1798,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             )}
           </CardContent>
         </Card>
-        </Container>
+        </Box>
       </Box>
 
       {/* Group Chat - Modern Layout */}

@@ -8,7 +8,7 @@ export function BackHeader({ title, onBack }) {
       sx={{
         display: 'flex',
         alignItems: 'center',
-        paddingTop: 'calc(env(safe-area-inset-top) + 8px)',
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)',
         paddingBottom: 1,
         px: 1.5,
         gap: 1,
@@ -16,6 +16,7 @@ export function BackHeader({ title, onBack }) {
         borderBottom: '1px solid rgba(255,255,255,0.08)',
         backgroundColor: 'rgba(0,0,0,0.2)',
         backdropFilter: 'blur(8px)',
+        minHeight: 48, // Consistent header height
       }}
     >
       <IconButton

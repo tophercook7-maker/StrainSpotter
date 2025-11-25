@@ -143,6 +143,7 @@ export default function GroupMessages({
         height: "100%",
         overflow: "hidden",
         bgcolor: '#0a0f0a', // Match app background
+        width: '100%', // Ensure full width
       }}
     >
       {group && (
