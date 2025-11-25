@@ -31,7 +31,6 @@ export async function upsertTypingIndicator({ userId, groupId, expiresAt }) {
           user_id: userId,
           group_id: groupId,
           expires_at,
-          updated_at: new Date().toISOString(),
         },
         { onConflict: 'user_id,group_id' }
       );
@@ -79,7 +78,7 @@ export async function getTypingIndicatorsForGroup(groupId) {
 
     const { data, error } = await supabaseAdmin
       .from(TABLE)
-      .select('user_id, group_id, expires_at, updated_at')
+      .select('user_id, group_id, expires_at')
       .eq('group_id', groupId)
       .gt('expires_at', nowIso);
 
