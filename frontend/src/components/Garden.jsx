@@ -147,7 +147,7 @@ export default function Garden({ onBack, onNavigate }) {
 
   const tiles = [
     { title: 'AI Strain Scan', icon: <CameraAltIcon />, nav: 'scan', color: '#00e676', description: 'Identify any strain instantly', image: '📷', useEmoji: true },
-    { title: 'Strain Browser', icon: <SpaIcon />, nav: 'strains', color: '#7cb342', description: 'Explore 1000+ strains', image: '/hero.png?v=13', useEmoji: false, isHero: true },
+    { title: 'Strain Browser', icon: <SpaIcon />, nav: 'strains', color: '#7cb342', description: 'Explore 1000+ strains', image: '🌿', useEmoji: true },
     { title: 'Reviews Hub', icon: <RateReviewIcon />, nav: 'reviews', color: '#ffd600', description: 'Read & share experiences', image: '⭐', useEmoji: true },
     { title: 'Community Groups', icon: <GroupsIcon />, nav: 'groups', color: '#66bb6a', description: 'Connect with growers', image: '👥', useEmoji: true },
     { title: 'Grow Coach', icon: <LocalFloristIcon />, nav: 'grow-coach', color: '#9ccc65', description: 'Expert growing tips', image: '🌱', useEmoji: true },
@@ -531,7 +531,7 @@ export default function Garden({ onBack, onNavigate }) {
         paddingTop: 'calc(env(safe-area-inset-top) + 8px)',
         paddingBottom: 8,
         px: 2,
-        background: 'linear-gradient(to bottom, rgba(0,0,0,0.15), rgba(0,0,0,0.02))',
+        bgcolor: '#0a0f0a', // Clean, solid background
         backdropFilter: 'blur(4px)',
         flexShrink: 0,
       }}>
@@ -696,58 +696,9 @@ export default function Garden({ onBack, onNavigate }) {
         </Typography>
       </Paper>
 
-        {/* Hero Card - Strain Browser */}
-        {tiles.find(t => t.isHero) && (() => {
-          const heroTile = tiles.find(t => t.isHero);
-          return (
-            <Paper
-              onClick={() => handleFeatureClick(heroTile.title, heroTile.nav)}
-              sx={{
-                p: 0,
-                mb: 2,
-                textAlign: 'center',
-                cursor: 'pointer',
-                background: 'rgba(0,0,0,0.25)',
-                backdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 24,
-                overflow: 'hidden',
-                width: '100%',
-                maxWidth: '600px',
-                mx: 'auto',
-                transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 8px 24px rgba(124, 179, 66, 0.3)',
-                }
-              }}
-            >
-              <Box
-                component="img"
-                src={heroTile.image}
-                alt={heroTile.title}
-                sx={{
-                  width: '100%',
-                  display: 'block',
-                  objectFit: 'cover',
-                  maxHeight: 220,
-                }}
-              />
-              <Box sx={{ p: 2 }}>
-                <Typography variant="h6" sx={{ color: '#CDDC39', fontWeight: 700, mb: 0.5 }}>
-                  {heroTile.title}
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#9CCC65', fontSize: '0.85rem' }}>
-                  {heroTile.description}
-                </Typography>
-              </Box>
-            </Paper>
-          );
-        })()}
-
-        {/* Premium Feature Tiles - 2 per row, compact */}
+        {/* All Feature Tiles - 2 per row, compact (Strain Browser is now same size as others) */}
         <Grid container spacing={1.5} sx={{ width: '100%', maxWidth: '600px', justifyContent: 'center', mx: 'auto' }}>
-          {tiles.filter(t => !t.isHero).map((tile) => (
+          {tiles.map((tile) => (
           <Grid item xs={6} key={tile.nav} sx={{ display: 'flex', justifyContent: 'center' }}>
             <Paper
               onClick={() => handleFeatureClick(tile.title, tile.nav)}

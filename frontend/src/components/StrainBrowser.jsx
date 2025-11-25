@@ -25,11 +25,13 @@ import { API_BASE } from '../config';
 import SeedVendorFinder from './SeedVendorFinder';
 import JournalDialog from './JournalDialog';
 import EmptyStateCard from './EmptyStateCard';
+import { useStrainImage } from '../hooks/useStrainImage';
 
 const STRAINS_PER_PAGE = 100; // Display 100 strains at a time
 const FETCH_BATCH_SIZE = 1000; // Fetch 1000 strains per database query
 
 // Helper: safely resolve best strain image URL (prioritize thumbnail for performance)
+// NOTE: This checks local strain fields. For API-fetched images, use useStrainImage hook
 const getStrainImageUrl = (strain) => {
   if (!strain) return null;
   const candidates = [
@@ -44,6 +46,73 @@ const getStrainImageUrl = (strain) => {
   ];
   return candidates.find((u) => typeof u === 'string' && u.startsWith('http')) || null;
 };
+
+// Component to render strain image with API fallback
+function StrainImageCard({ strain }) {
+  const canonicalName = strain?.name || strain?.canonicalName || null;
+  const { imageUrl: apiImageUrl } = useStrainImage(canonicalName);
+  const localImageUrl = getStrainImageUrl(strain);
+  
+  // Prefer API image, fallback to local image
+  const imageUrl = apiImageUrl || localImageUrl;
+  
+  return (
+    <>
+      {imageUrl ? (
+        <Box
+          component="img"
+          src={imageUrl}
+          alt={strain?.name || 'Strain photo'}
+          loading="lazy"
+          sx={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+            background: '#111'
+          }}
+          onError={(e) => {
+            // Hide broken image and show placeholder
+            e.currentTarget.style.display = 'none';
+            const placeholder = e.currentTarget.parentElement?.querySelector('.strain-placeholder');
+            if (placeholder) {
+              placeholder.style.display = 'flex';
+            }
+          }}
+        />
+      ) : null}
+      {/* Placeholder - shown when no image or image fails */}
+      <Box
+        className="strain-placeholder"
+        sx={{
+          display: imageUrl ? 'none' : 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '100%',
+          height: '100%',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.15) 0%, rgba(0, 0, 0, 0.4) 100%)',
+          border: '1px solid rgba(124, 179, 66, 0.2)',
+        }}
+      >
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'rgba(200, 230, 201, 0.6)',
+            fontSize: 11,
+            textAlign: 'center',
+            px: 2,
+            fontWeight: 500,
+          }}
+        >
+          No strain photo yet
+        </Typography>
+      </Box>
+    </>
+  );
+}
 
 export default function StrainBrowser({ onBack }) {
   const [strains, setStrains] = useState([]);
@@ -1041,62 +1110,8 @@ export default function StrainBrowser({ onBack }) {
                       position: 'relative'
                     }}
                   >
-                    {/* Image or placeholder */}
-                    {(() => {
-                      const imageUrl = getStrainImageUrl(strain);
-                      return imageUrl ? (
-                        <Box
-                          component="img"
-                          src={imageUrl}
-                          alt={strain.name || 'Strain photo'}
-                          loading="lazy"
-                          sx={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block',
-                            background: '#111'
-                          }}
-                          onError={(e) => {
-                            // Hide broken image and show placeholder
-                            e.currentTarget.style.display = 'none';
-                            const placeholder = e.currentTarget.parentElement?.querySelector('.strain-placeholder');
-                            if (placeholder) {
-                              placeholder.style.display = 'flex';
-                            }
-                          }}
-                        />
-                      ) : null;
-                    })()}
-                    {/* Placeholder - shown when no image or image fails */}
-                    <Box
-                      className="strain-placeholder"
-                      sx={{
-                        display: getStrainImageUrl(strain) ? 'none' : 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '100%',
-                        height: '100%',
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.15) 0%, rgba(0, 0, 0, 0.4) 100%)',
-                        border: '1px solid rgba(124, 179, 66, 0.2)',
-                      }}
-                    >
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: 'rgba(200, 230, 201, 0.6)',
-                          fontSize: 11,
-                          textAlign: 'center',
-                          px: 2,
-                          fontWeight: 500,
-                        }}
-                      >
-                        No strain photo yet
-                      </Typography>
-                    </Box>
+                    {/* Strain Image - uses API endpoint if available, fallback to local fields */}
+                    <StrainImageCard strain={strain} />
                   </Box>
                   <Stack direction="row" alignItems="center" spacing={1}>
                     {/* Strain Number */}

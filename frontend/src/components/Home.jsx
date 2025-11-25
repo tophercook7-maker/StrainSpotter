@@ -68,8 +68,7 @@ export default function Home({ onNavigate }) {
       sx={{
         minHeight: '100vh',
         width: '100%',
-        backgroundColor: '#0a0a0a',
-        backgroundImage: 'url(/strainspotter-bg.jpg)',
+        backgroundColor: '#0a0f0a', // Clean, solid dark green background
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundAttachment: 'fixed',

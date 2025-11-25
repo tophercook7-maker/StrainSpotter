@@ -140,9 +140,7 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
         height: '100vh',
         overflow: 'hidden',
         backgroundColor: '#050705',
-        backgroundImage: 'url(/strainspotter-bg.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
+        bgcolor: '#0a0f0a', // Clean, solid dark green background
         position: 'relative',
       }}
     >

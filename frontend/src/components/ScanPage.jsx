@@ -23,6 +23,7 @@ import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import ScanResultCard from './ScanResultCard';
 import ScanAISummaryPanel from './ScanAISummaryPanel';
 import StrainResultCard from './StrainResultCard';
+import AnimatedScanProgress from './AnimatedScanProgress';
 import { useAuth } from '../hooks/useAuth';
 import { useMembership } from '../membership/MembershipContext';
 import { useProMode } from '../contexts/ProModeContext';
@@ -112,6 +113,7 @@ export default function ScanPage({ onBack, onNavigate, onScanComplete }) {
     message: '',
     details: '',
   });
+  const [scanProgress, setScanProgress] = useState(null); // 0-100 for progress bar
   
   // Structured error state
   const [scanError, setScanError] = useState(null); // { type, message, details, scanId }
@@ -394,31 +396,34 @@ export default function ScanPage({ onBack, onNavigate, onScanComplete }) {
       setScanError(null);
       setCurrentScanId(null);
       setScanPhase('capturing');
+      setScanProgress(5);
       setStatusMessage('Preparing image…');
       setScanStatus({
-        phase: 'preparing',
+        phase: 'uploading',
         message: 'Preparing your scan...',
         details: '',
       });
 
       // Resize and compress image using the new utility
       setScanPhase('uploading');
+      setScanProgress(15);
       setStatusMessage('Resizing image for faster upload…');
       setScanStatus({
-        phase: 'compressing',
-        message: 'Compressing photo for upload...',
-        details: 'Keeping image sharp while shrinking file size.',
+        phase: 'uploading',
+        message: 'Securely uploading your photo to our servers…',
+        details: 'We compress and encrypt your image for fast, secure processing.',
       });
       
       console.time('[Scanner] image-compression');
       const { base64, contentType } = await resizeImageToBase64(file, 1280, 0.7);
       console.timeEnd('[Scanner] image-compression');
 
+      setScanProgress(40);
       setStatusMessage('Uploading image…');
       setScanStatus({
         phase: 'uploading',
-        message: 'Uploading image securely...',
-        details: 'Sending your scan to StrainSpotter servers.',
+        message: 'Securely uploading your photo to our servers…',
+        details: 'We compress and encrypt your image for fast, secure processing.',
       });
       const payload = {
         filename: file.name || 'scan.jpg',
@@ -605,11 +610,12 @@ export default function ScanPage({ onBack, onNavigate, onScanComplete }) {
     setIsUploading(false);
     setIsPolling(true);
     setScanPhase('processing');
+    setScanProgress(60);
     setStatusMessage('Processing image with Vision API…');
     setScanStatus({
       phase: 'processing',
-      message: 'Analyzing label & bud details...',
-      details: 'Running vision, OCR, and strain matching.',
+      message: 'Extracting text and visual features…',
+      details: 'Running Google Vision AI to read labels and analyze your photo.',
     });
     setHasCompletedScan(false); // Reset completion flag for new scan
     hasCompletedScanRef.current = false; // Reset ref flag for new scan
@@ -726,41 +732,43 @@ export default function ScanPage({ onBack, onNavigate, onScanComplete }) {
 
     try {
       // Update status message based on attempt number to show progress
+      const progressPercent = Math.min(70 + (attempt * 2), 95);
+      setScanProgress(progressPercent);
+      
       if (attempt === 0) {
-        setStatusMessage('Processing image with Vision API…');
         setScanStatus({
           phase: 'processing',
-          message: 'Analyzing label & bud details...',
-          details: 'Running vision, OCR, and strain matching.',
+          message: 'Extracting text and visual features…',
+          details: 'Running Google Vision AI to read labels and analyze your photo.',
         });
+        setStatusMessage('Processing image with Vision API…');
       } else if (attempt < 5) {
-        setStatusMessage('Extracting text from label…');
         setScanStatus({
           phase: 'processing',
-          message: 'Extracting text from label...',
+          message: 'Extracting text from label…',
           details: 'Reading product information and batch numbers.',
         });
+        setStatusMessage('Extracting text from label…');
       } else if (attempt < 10) {
-        setStatusMessage('Matching against strain database…');
         setScanStatus({
-          phase: 'processing',
-          message: 'Matching against strain database...',
-          details: 'Comparing your image against 35,000+ strains.',
+          phase: 'matching',
+          message: 'Searching our database of 35,000+ strains…',
+          details: 'Comparing visual features and text against our comprehensive strain library.',
         });
       } else if (attempt < 20) {
+        setScanStatus({
+          phase: 'analyzing',
+          message: 'Decoding label details and generating AI insights…',
+          details: 'Our AI extracts THC, CBD, effects, flavors, and warnings from the label.',
+        });
         setStatusMessage('Analyzing product details…');
-        setScanStatus({
-          phase: 'finalizing',
-          message: 'Building summary & insights...',
-          details: 'Summarizing effects, warnings, and packaging info.',
-        });
       } else {
-        setStatusMessage('Finalizing results…');
         setScanStatus({
           phase: 'finalizing',
-          message: 'Finalizing results...',
-          details: 'Almost done!',
+          message: 'Compiling your complete strain breakdown…',
+          details: 'Combining all analyses into a comprehensive result card.',
         });
+        setStatusMessage('Finalizing results…');
       }
 
       if (attempt === 0) {
@@ -832,15 +840,28 @@ export default function ScanPage({ onBack, onNavigate, onScanComplete }) {
         setIsPolling(false);
         setHasCompletedScan(true);
         hasCompletedScanRef.current = true;
-        setScanPhase('done');
-        setStatusMessage('Scan complete!');
-        setError(null);
-        setScanError(null);
+        
+        // Finalize progress
+        setScanProgress(100);
         setScanStatus({
-          phase: 'completed',
-          message: 'Scan complete.',
-          details: '',
+          phase: 'finalizing',
+          message: 'Compiling your complete strain breakdown…',
+          details: 'Combining all analyses into a comprehensive result card.',
         });
+        
+        // Brief delay to show 100% before transitioning
+        setTimeout(() => {
+          setScanPhase('done');
+          setStatusMessage('Scan complete!');
+          setError(null);
+          setScanError(null);
+          setScanStatus({
+            phase: 'completed',
+            message: 'Scan complete.',
+            details: '',
+          });
+          setScanProgress(null);
+        }, 800);
         
         // Process and display results
         const normalized = normalizeScanResult(scan);
@@ -1459,31 +1480,16 @@ export default function ScanPage({ onBack, onNavigate, onScanComplete }) {
 
   // SCANNER MODE - proper flex layout
   return (
-    <Box
-      sx={{
-        height: '100dvh',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        bgcolor: 'background.default',
-        backgroundColor: '#050705',
-        backgroundImage: 'url(/strainspotter-bg.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        position: 'relative',
-      }}
-    >
-      {/* Subtle overlay - ensure it doesn't block touches */}
       <Box
         sx={{
-          position: 'absolute',
-          inset: 0,
-          background: 'radial-gradient(circle at top, rgba(124,179,66,0.25), transparent 55%)',
-          pointerEvents: 'none',
-          zIndex: 0,
+          height: '100dvh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          bgcolor: '#0a0f0a', // Clean, solid dark green background
+          position: 'relative',
         }}
-      />
+      >
 
       {/* Fixed header with back button */}
       <Box
@@ -1527,6 +1533,7 @@ export default function ScanPage({ onBack, onNavigate, onScanComplete }) {
           pb: 2,
           position: 'relative',
           zIndex: 1,
+          bgcolor: 'transparent', // Transparent to show parent background
         }}
       >
         {/* Status Strip */}

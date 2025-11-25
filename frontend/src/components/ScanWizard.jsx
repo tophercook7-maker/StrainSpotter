@@ -5,6 +5,7 @@ import SeedVendorFinder from "./SeedVendorFinder";
 import DispensaryFinder from "./DispensaryFinder";
 import FeedbackModal from "./FeedbackModal";
 import ScanResultCard from "./ScanResultCard";
+import AnimatedScanProgress from "./AnimatedScanProgress";
 import Snackbar from '@mui/material/Snackbar';
 import { Container, Box, Button, Typography, Paper, CircularProgress, Tabs, Tab, Dialog, DialogTitle, DialogContent, Chip, Stack, TextField, IconButton, Alert, DialogActions, DialogContentText, Divider, Fab, Tooltip } from "@mui/material";
 import CloseIcon from '@mui/icons-material/Close';
@@ -38,10 +39,13 @@ export default function ScanWizard({ onBack, onScanComplete }) {
   const [membershipComplete, setMembershipComplete] = useState(true); // Skip membership for now
   const [loading, setLoading] = useState(false);
   const [scanStatus, setScanStatus] = useState("idle"); // "idle" | "uploading" | "processing" | "error" | "done"
+  const [scanPhase, setScanPhase] = useState(null); // "uploading" | "processing" | "matching" | "analyzing" | "finalizing"
+  const [scanProgress, setScanProgress] = useState(null); // 0-100 for progress bar
+  const [scanMessage, setScanMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [result, setResult] = useState(null);
+  const [result] = useState(null);
   const [match, setMatch] = useState(null);
-  const [plantHealth, setPlantHealth] = useState(null);
+  const [plantHealth] = useState(null);
   const [scanHistory, setScanHistory] = useState([]);
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
@@ -50,7 +54,6 @@ export default function ScanWizard({ onBack, onScanComplete }) {
   const [scanResult, setScanResult] = useState(null); // Normalized scan result for ScanResultCard
   const [isPolling, setIsPolling] = useState(false);
   const [activeView, setActiveView] = useState('scanner'); // 'scanner' | 'result'
-  const [completedScanId, setCompletedScanId] = useState(null); // Track completed scan ID
 
   // Review state
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -80,10 +83,10 @@ export default function ScanWizard({ onBack, onScanComplete }) {
   ];
 
   // Use shared canScan hook for founder checks
-  const { canScan: canScanFromHook, isFounder: isFounderFromHook, remainingScans: remainingScansFromHook } = useCanScan();
+  const { isFounder: isFounderFromHook } = useCanScan();
   
   // Use normalized scan credits hook for button logic
-  const { canScan, remainingScans, isFounder, isGuest } = useScanCredits();
+  const { remainingScans, isFounder, isGuest } = useScanCredits();
 
   const membershipTier = (currentUser?.user_metadata?.membership || currentUser?.user_metadata?.tier || '').toString().toLowerCase();
   const metadataMembershipActive = ['club', 'full-access', 'pro', 'owner', 'admin', 'garden', 'member'].some((token) => membershipTier.includes(token));
@@ -91,6 +94,7 @@ export default function ScanWizard({ onBack, onScanComplete }) {
   const canUseEdgeUploads = typeof FUNCTIONS_BASE === 'string' && FUNCTIONS_BASE.length > 0 && FUNCTIONS_BASE !== `${API_BASE}/api`;
 
   const uploadViaEdgeFunction = useCallback(async ({ base64, filename, contentType, userId }) => {
+    // FUNCTIONS_BASE is from outer scope, not a dependency
     if (!canUseEdgeUploads || !base64) return null;
     try {
       const headers = { 'Content-Type': 'application/json' };
@@ -116,7 +120,7 @@ export default function ScanWizard({ onBack, onScanComplete }) {
       console.warn('[ScanWizard] Edge upload exception:', err);
     }
     return null;
-  }, [canUseEdgeUploads, FUNCTIONS_BASE]);
+  }, [canUseEdgeUploads]); // FUNCTIONS_BASE is from outer scope
 
   // Track authentication state
   useEffect(() => {
@@ -410,58 +414,72 @@ export default function ScanWizard({ onBack, onScanComplete }) {
         !!scan?.error || 
         !!scan?.errorMessage;
 
-      // Check if AI is still running (result present but aiSummary missing for packaged products)
-      const isPackaged = result?.labelInsights?.isPackagedProduct || false;
-      const hasAiSummary = !!(result?.labelInsights?.aiSummary || result?.visualMatches?.labelInsights?.aiSummary);
-      const aiPending = isPackaged && hasResult && !hasAiSummary;
+      // Update progress based on attempt - show we're actively working
+      const progressPercent = Math.min(70 + (attempt * 2), 95);
+      setScanProgress(progressPercent);
+      setScanPhase('matching');
+      setScanMessage(`Searching our database of 35,000+ strains… (attempt ${attempt + 1})`);
       
-      // If scan is complete OR has a result, stop polling and show results
-      if (isComplete || hasResult) {
-        // If AI is still pending, set status and continue polling
-        if (aiPending) {
-          setScanStatus("Generating AI decoded label…");
-          // Continue polling for AI summary
-          setTimeout(() => {
-            pollScanResult(scanId, attempt + 1);
-          }, delayMs);
-          return;
-        }
+      // Check if we have any results at all - don't wait for AI, show results immediately
+      const hasVisualMatch = !!(result?.visualMatches?.match || result?.visualMatches?.candidates?.length > 0);
+      const hasLabelData = !!(result?.labelInsights);
+      const hasAnyMatch = !!(result?.matches?.length > 0 || result?.match);
+      const hasStrainName = !!(result?.canonical_strain?.name || scan?.canonical_strain_name || result?.labelInsights?.strainName);
+      
+      // Show results as soon as we have ANY usable data - don't wait for AI
+      if (isComplete || hasResult || hasVisualMatch || hasLabelData || hasAnyMatch || hasStrainName) {
+        // Transition to finalizing
+        setScanPhase('finalizing');
+        setScanProgress(95);
+        setScanMessage('Compiling your complete strain breakdown…');
         
-        // AI is done or not needed - show results
+        // Stop polling and show results immediately
         setIsPolling(false);
+        setLoading(false); // Make sure loading is off
         
         // Normalize result for internal state
         const normalized = normalizeScanResult(scan);
         if (normalized) {
-          setScanResult(normalized);
-          setScanStatus("Scan complete!");
-          setCompletedScanId(scanId);
-          
-          // Also set match for backward compatibility with existing code that uses match.strain
-          if (normalized.topMatch) {
-            setMatch({
-              strain: {
-                ...normalized.topMatch.dbMeta,
-                name: normalized.topMatch.name,
-                type: normalized.topMatch.type,
-                slug: normalized.topMatch.id,
-              },
-              confidence: normalized.topMatch.confidence,
-            });
-          }
+          setScanProgress(100);
+          // Brief delay to show 100% before transitioning
+          setTimeout(() => {
+            setScanPhase(null);
+            setScanProgress(null);
+            setScanResult(normalized);
+            setScanStatus("Scan complete!");
+            
+            // Also set match for backward compatibility with existing code that uses match.strain
+            if (normalized.topMatch) {
+              setMatch({
+                strain: {
+                  ...normalized.topMatch.dbMeta,
+                  name: normalized.topMatch.name,
+                  type: normalized.topMatch.type,
+                  slug: normalized.topMatch.id,
+                },
+                confidence: normalized.topMatch.confidence,
+              });
+            }
+            
+            // Always call handlePollSuccess to ensure normalized scan is passed to parent
+            handlePollSuccess(scan, scanId);
+          }, 800);
         } else {
+          setScanPhase(null);
+          setScanProgress(null);
+          setLoading(false);
           setScanStatus('No strain match found yet. Try a clearer photo or different angle.');
           setScanResult(null);
         }
-        
-        // Always call handlePollSuccess to ensure normalized scan is passed to parent
-        handlePollSuccess(scan, scanId);
         return;
       }
-
+      
       // If scan has an error status or error field, stop polling and show error
       if (isError) {
         setIsPolling(false);
+        setLoading(false);
+        setScanPhase(null);
+        setScanProgress(null);
         const errorMessage = scan?.error || scan?.errorMessage || 'Scan failed on the server.';
         setScanStatus(errorMessage);
         return;
@@ -470,17 +488,23 @@ export default function ScanWizard({ onBack, onScanComplete }) {
       // If we've hit max attempts, stop polling
       if (attempt >= maxAttempts) {
         setIsPolling(false);
+        setLoading(false);
+        setScanPhase(null);
+        setScanProgress(null);
         setScanStatus('Scan is taking too long. Please try again with a clearer photo.');
         return;
       }
 
-      // Otherwise, schedule another poll attempt
+      // Update progress while polling - always show we're working
+      // Schedule another poll attempt
       setTimeout(() => {
         pollScanResult(scanId, attempt + 1);
       }, delayMs);
     } catch (e) {
       console.error('pollScanResult error', e);
       setIsPolling(false);
+      setScanPhase(null);
+      setScanProgress(null);
       setScanStatus(String(e.message || e));
     }
   };
@@ -500,7 +524,10 @@ export default function ScanWizard({ onBack, onScanComplete }) {
     }
 
     setLoading(true);
+    setScanPhase('uploading');
+    setScanProgress(10);
     setScanStatus("Uploading image...");
+    setScanMessage("Securely uploading your photo to our servers…");
     setErrorMessage("");
 
     try {
@@ -511,6 +538,9 @@ export default function ScanWizard({ onBack, onScanComplete }) {
 
           let uploadData = null;
           if (canUseEdgeUploads && currentUser) {
+            setScanPhase('uploading');
+            setScanProgress(30);
+            setScanMessage('Uploading image to Supabase…');
             setScanStatus('Uploading image to Supabase...');
             const edge = await uploadViaEdgeFunction({
               base64,
@@ -524,6 +554,9 @@ export default function ScanWizard({ onBack, onScanComplete }) {
           }
 
           if (!uploadData) {
+            setScanPhase('uploading');
+            setScanProgress(50);
+            setScanMessage('Uploading image to backend…');
             setScanStatus('Uploading image to backend...');
             const uploadResp = await fetch(`${API_BASE}/api/uploads`, {
               method: "POST",
@@ -546,6 +579,10 @@ export default function ScanWizard({ onBack, onScanComplete }) {
 
           const scanId = uploadData.id;
 
+          // Transition to processing phase
+          setScanPhase('processing');
+          setScanProgress(60);
+          setScanMessage('Extracting text and visual features…');
           setScanStatus("Processing scan...");
 
           const processResp = await fetch(`${API_BASE}/api/scans/${scanId}/process`, {
@@ -609,7 +646,16 @@ export default function ScanWizard({ onBack, onScanComplete }) {
             }
           }
 
+          // Transition to matching phase
+          setScanPhase('matching');
+          setScanProgress(70);
+          setScanMessage('Searching our database of 35,000+ strains…');
           setScanStatus("Scan started successfully!");
+
+          // Start polling with animated progress
+          setIsPolling(true);
+          setLoading(false); // Upload/process done, but keep polling active
+          pollScanResult(scanId, 0);
 
           // Build normalized scan object with all required fields (same structure as handlePollSuccess)
           const normalizedScan = {
@@ -677,10 +723,15 @@ export default function ScanWizard({ onBack, onScanComplete }) {
           }
 
           await loadCredits();
-          setLoading(false);
-          setScanStatus("idle");
+          // Don't clear loading/phase here - polling is still active
+          // setLoading(false); // Keep false from above
+          // setScanPhase(null); // Keep phase active for polling
+          // setScanProgress(null); // Keep progress active for polling
+          // setScanStatus("idle"); // Keep status active
         } catch (err) {
           console.error('Scan error:', err);
+          setScanPhase(null);
+          setScanProgress(null);
           setScanStatus("error");
           setErrorMessage(err.message || 'Scan failed. Please try again.');
           setAlertMsg(err.message || 'Scan failed. Please try again.');
@@ -811,7 +862,6 @@ export default function ScanWizard({ onBack, onScanComplete }) {
         ? Math.max(0, Math.ceil((accessExpiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
         : null);
   const lowCredits = typeof creditsRemaining === 'number' && creditsRemaining <= 5;
-  const disableScanning = !membershipActive && Boolean(creditSummary) && (starterExpired || (typeof creditsRemaining === 'number' && creditsRemaining <= 0));
   
   // Button logic using normalized scan credits
   const isOutOfScans = !isFounder && !isGuest && (remainingScans ?? 0) <= 0;
@@ -880,7 +930,6 @@ export default function ScanWizard({ onBack, onScanComplete }) {
               onClick={() => {
                 setActiveView('scanner');
                 setScanResult(null);
-                setCompletedScanId(null);
               }}
               sx={{ color: '#fff' }}
               aria-label="Go back to scanner"
@@ -994,7 +1043,6 @@ export default function ScanWizard({ onBack, onScanComplete }) {
                   onClick={() => {
                     setActiveView('scanner');
                     setScanResult(null);
-                    setCompletedScanId(null);
                     fileInputRef.current?.click();
                   }}
                   sx={{
@@ -1026,9 +1074,10 @@ export default function ScanWizard({ onBack, onScanComplete }) {
             height: '100dvh',
             display: 'flex',
             flexDirection: 'column',
-            bgcolor: 'background.default',
-            color: 'text.primary',
+            bgcolor: '#0a0f0a', // Clean, solid dark green background
+            color: '#fff',
             overflow: 'hidden',
+            position: 'relative',
           }}
         >
           {/* Header row */}
@@ -1270,16 +1319,15 @@ export default function ScanWizard({ onBack, onScanComplete }) {
             </Paper>
           )}
 
-            {loading && (
-              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mt: 2 }}>
-                <CircularProgress color="success" />
-                <Typography variant="body2" sx={{ mt: 1, color: '#388e3c' }}>
-                  {scanStatus === "Uploading image..." && "Uploading your photo securely..."}
-                  {scanStatus === "Uploading image to Supabase..." && "Uploading your photo securely..."}
-                  {scanStatus === "Uploading image to backend..." && "Uploading your photo securely..."}
-                  {scanStatus === "Processing scan..." && "Analyzing your product..."}
-                  {scanStatus === "Scan started successfully!" && "Scan started! Redirecting to results..."}
-                </Typography>
+            {/* Animated scan progress */}
+            {(loading || isPolling || scanPhase) && (
+              <Box sx={{ mt: 4, mb: 4 }}>
+                <AnimatedScanProgress
+                  phase={scanPhase}
+                  message={scanMessage || scanStatus}
+                  progress={scanProgress}
+                  error={errorMessage || null}
+                />
               </Box>
             )}
             {errorMessage && !loading && (

@@ -31,10 +31,18 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
       }
 
       const response = await fetch(url);
-      if (!response.ok) throw new Error('Search failed');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[DispensaryFinder] API error:', response.status, errorText);
+        throw new Error(`Search failed: ${response.status}`);
+      }
       
       const data = await response.json();
-      setDispensaries(data.results || []);
+      console.log('[DispensaryFinder] API response:', data);
+      // Handle both formats: { results: [...] } or direct array
+      const results = Array.isArray(data) ? data : (data.results || data.dispensaries || []);
+      console.log('[DispensaryFinder] Found dispensaries:', results.length);
+      setDispensaries(results);
     } catch (err) {
       console.error('Dispensary search failed:', err);
       setError('Failed to find dispensaries. Please try again.');

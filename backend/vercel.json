@@ -5,5 +5,11 @@
   ],
   "routes": [
     { "src": "/(.*)", "dest": "index.js" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/scrape-strain-images",
+      "schedule": "0 2 * * *"
+    }
   ]
 }

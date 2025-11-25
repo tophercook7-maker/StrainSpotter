@@ -78,8 +78,8 @@ export default function GroupMessages({
 
   const loading = isLoadingInitial;
   
-  // Show error state if messages failed to load
-  if (error && !loading && (!messages || messages.length === 0)) {
+  // Show error state if messages failed to load (gracefully handle missing messages)
+  if (!loading && (!messages || messages.length === 0)) {
     return (
       <Box
         sx={{
@@ -87,7 +87,7 @@ export default function GroupMessages({
           flexDirection: "column",
           height: "100%",
           overflow: "hidden",
-          backgroundColor: "#000",
+          bgcolor: '#0a0f0a', // Match app background
         }}
       >
         {group && (
@@ -107,11 +107,11 @@ export default function GroupMessages({
           textAlign: 'center'
         }}>
           <Box>
-            <Typography variant="body2" sx={{ color: "#ccc", mb: 1 }}>
+            <Typography variant="body2" sx={{ color: "#9CCC65", mb: 1 }}>
               Couldn't load messages right now. You can still send a new one.
             </Typography>
             {onSend && (
-              <Typography variant="caption" sx={{ color: "#999" }}>
+              <Typography variant="caption" sx={{ color: "#7CB342" }}>
                 Try sending a message to refresh the conversation.
               </Typography>
             )}
@@ -142,7 +142,7 @@ export default function GroupMessages({
         flexDirection: "column",
         height: "100%",
         overflow: "hidden",
-        backgroundColor: "#000",
+        bgcolor: '#0a0f0a', // Match app background
       }}
     >
       {group && (
@@ -172,16 +172,16 @@ export default function GroupMessages({
             justifyContent: 'center',
             height: '100%',
             p: 2,
-            color: "#ccc"
+            color: "#9CCC65"
           }}>
             Loading messages…
           </Box>
         )}
 
-        {!loading && !error && (!messages || messages.length === 0) && (
+        {!loading && (!messages || messages.length === 0) && (
           <Box sx={{ 
             p: 2, 
-            color: "#ccc",
+            color: "#9CCC65",
             textAlign: 'center',
             mt: 2
           }}>

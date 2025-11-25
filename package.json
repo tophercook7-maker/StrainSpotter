@@ -1,11 +1,17 @@
 {
+  "name": "strainspotter",
+  "version": "1.0.0",
+  "bin": {
+    "cbc": "./scripts/cbc.sh"
+  },
   "scripts": {
     "build": "cd frontend && npm ci && npm run build && rm -rf ../dist && cp -R dist ../dist",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && npm run dev",
     "dev:all": "echo 'Run dev:backend and dev:frontend in two separate terminals'",
-    "cbc": "cd frontend && npm ci && npm run build && cd .. && rm -rf dist && cp -R frontend/dist ./dist && npx cap sync ios && npx cap open ios",
-    "cbc2": "cd frontend && npm run build && cd .. && rm -rf dist && cp -R frontend/dist ./dist && npx cap sync ios"
+    "cbc": "bash scripts/cbc.sh",
+    "cbc2": "cd frontend && npm run build && cd .. && rm -rf dist && cp -R frontend/dist ./dist && npx cap sync ios",
+    "clean-rebuild": "bash scripts/clean-rebuild.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.75.1",

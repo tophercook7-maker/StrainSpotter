@@ -832,3 +832,23 @@ Scraping ilovegrowingmarijuana...
   stdout: null,
   stderr: null
 }
+[full_pipeline] Running: scrape_strain_sources.mjs 
+/bin/sh: node: command not found
+[full_pipeline] Pipeline error: Error: Command failed: node /Users/christophercook/Projects/strainspotter/tools/scrape_strain_sources.mjs 
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at runNodeScript (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:13:3)
+    at main (file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:20:3)
+    at file:///Users/christophercook/Projects/strainspotter/tools/full_pipeline.mjs:63:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  status: 127,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 42944,
+  stdout: null,
+  stderr: null
+}

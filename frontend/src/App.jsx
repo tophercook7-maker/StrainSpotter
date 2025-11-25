@@ -151,11 +151,12 @@ function App() {
         <ProModeProvider>
           <MembershipProvider>
             <MobileOnlyGuard>
-          {/* Global background layer - restored, no dark filter or overlay */}
+          {/* Global background layer - clean, solid background for Apple inspections */}
           <div style={{
-            position: 'fixed', inset: 0, zIndex: 0,
-            backgroundImage: 'url(/strainspotter-bg.jpg)',
-            backgroundSize: 'cover', backgroundPosition: 'center'
+            position: 'fixed', 
+            inset: 0, 
+            zIndex: 0,
+            backgroundColor: '#0a0f0a', // Clean, solid dark green background - no scrolling
           }} />
           <ErrorBoundary>
             <GuidelinesGate>
@@ -219,7 +220,7 @@ function App() {
                   flexDirection: 'column',
                   height: '100vh',
                   overflow: 'hidden',
-                  bgcolor: '#000',
+                  bgcolor: '#0a0f0a', // Clean, solid background
                 }}
               >
                 {/* Fixed header with back button */}
@@ -271,16 +272,6 @@ function App() {
                       scan={activeScan}
                       result={activeScan}
                       isGuest={false}
-                      onViewSeeds={({ strainName, strainSlug }) => {
-                        // For App.jsx, we can navigate to a seed view or open external link
-                        // For now, open Seedsman search in new tab
-                        if (strainName || strainSlug) {
-                          const searchTerm = encodeURIComponent(strainName || strainSlug);
-                          window.open(`https://www.seedsman.com/en/search?q=${searchTerm}`, '_blank');
-                        } else {
-                          window.open('https://www.seedsman.com', '_blank');
-                        }
-                      }}
                     />
                   )}
                 </Box>

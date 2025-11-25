@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import { transformScanResult } from '../utils/scanResultUtils';
 import { useProMode } from '../contexts/ProModeContext';
+import { useStrainImage } from '../hooks/useStrainImage';
 
 // AI Strain Details Panel Component
 function AIStrainDetailsPanel({ 
@@ -347,7 +348,7 @@ function PackagedProductCard({
           mb: 2,
           borderColor: 'rgba(165, 214, 167, 0.35)',
           background:
-            'radial-gradient(circle at top left, rgba(129, 199, 132, 0.12), transparent 55%), #0b100a',
+            '#0a0f0a', // Clean, solid dark green background
         }}
       >
         <CardContent>
@@ -850,7 +851,7 @@ function UnknownStrainCard({
           mb: 2,
           borderColor: 'rgba(165, 214, 167, 0.35)',
           background:
-            'radial-gradient(circle at top left, rgba(129, 199, 132, 0.12), transparent 55%), #0b100a',
+            '#0a0f0a', // Clean, solid dark green background
         }}
       >
         <CardContent>
@@ -1251,7 +1252,7 @@ function BudEstimateCard({
           mb: 2,
           borderColor: 'rgba(165, 214, 167, 0.35)',
           background:
-            'radial-gradient(circle at top left, rgba(129, 199, 132, 0.12), transparent 55%), #0b100a',
+            '#0a0f0a', // Clean, solid dark green background
         }}
       >
         <CardContent>
@@ -1432,6 +1433,21 @@ function ScanResultCard({ result, scan, isGuest }) {
   const hasPlantDiagnostics = Boolean(hasPlantOnlyData);
   const isLikelyPlantOnly = !hasStrainName && hasPlantDiagnostics && !packagingInsights;
 
+  // Get canonical strain name for image lookup
+  const canonicalNameForImage =
+    canonical?.name ||
+    seedBank?.name ||
+    aiSummary?.canonicalName ||
+    null;
+
+  // Fetch strain image from API (only if we have a canonical name)
+  const { imageUrl: strainImageUrl } = useStrainImage(canonicalNameForImage);
+
+  // Determine best image URL: prefer API strain image, fallback to scan image
+  const getBestImageUrl = (transformedImageUrl) => {
+    return strainImageUrl || transformedImageUrl || scan?.image_url || null;
+  };
+
   // CRITICAL: Use transformScanResult to get canonical strain name and metadata
   // This ensures packaged products ALWAYS use label strain, NEVER visual/library guesses
   // Wrap in try-catch to handle any transform errors gracefully
@@ -1515,7 +1531,7 @@ function ScanResultCard({ result, scan, isGuest }) {
         proEnabled={proEnabled}
         growProfile={growProfile || transformed?.growProfile || null}
         canonicalStrain={canonicalStrain}
-        heroImageUrl={transformed?.heroImageUrl || null}
+        heroImageUrl={getBestImageUrl(transformed?.heroImageUrl)}
         plantHealth={plantHealth}
         packagingInsights={packagingInsights}
         labelInsights={labelInsights}
@@ -1587,7 +1603,7 @@ function ScanResultCard({ result, scan, isGuest }) {
       scan={scan}
       growProfile={growProfile || transformed?.growProfile || null}
       canonicalStrain={canonicalStrain}
-      heroImageUrl={transformed?.heroImageUrl || null}
+      heroImageUrl={getBestImageUrl(transformed?.heroImageUrl)}
       plantHealth={plantHealth}
       packagingInsights={packagingInsights}
       labelInsights={labelInsights}

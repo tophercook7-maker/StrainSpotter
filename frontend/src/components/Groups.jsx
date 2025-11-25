@@ -333,6 +333,34 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     if (stored === 'true') setGuidelinesAccepted(true);
   }, [guidelinesKey, userId, adminUserId, profilePromptDismissed, deriveDisplayName, shouldPromptProfile]);
 
+  // Load messages function - defined early so it can be used in useEffect
+  const loadMessages = useCallback(async (groupId) => {
+    try {
+      console.log('📥 Loading messages for group:', groupId);
+      console.log('📥 API URL:', `${API_BASE}/api/groups/${groupId}/messages`);
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/messages`);
+      console.log('📥 Load messages response:', res.status, res.ok);
+      if (res.ok) {
+        const data = await res.json();
+        // Handle both old format (array) and new format (object with messages/pinnedMessages)
+        if (Array.isArray(data)) {
+          setMessages(data);
+          setPinnedMessages([]);
+        } else {
+          setMessages(data.messages || []);
+          setPinnedMessages(data.pinnedMessages || []);
+        }
+        console.log('📥 Loaded messages:', (data.messages || data).length, 'messages');
+        console.log('📥 Loaded pinned messages:', (data.pinnedMessages || []).length);
+        setLastRefresh(new Date());
+      } else {
+        console.error('❌ Failed to load messages:', res.status, res.statusText);
+      }
+    } catch (e) {
+      console.error('❌ Error loading messages:', e);
+    }
+  }, []);
+
   // Auto-refresh messages when a group is selected
   useEffect(() => {
     if (!selectedGroup || !groupDialogOpen) {
@@ -380,6 +408,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   // Load groups list
   const loadGroups = async () => {
     try {
+      setLoading(true);
       console.log('[Groups] Fetching from:', `${API_BASE}/api/groups`);
       const res = await fetch(`${API_BASE}/api/groups`);
       console.log('[Groups] Response status:', res.status, res.statusText);
@@ -390,44 +419,23 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           ? payload.filter(group => ALLOWED_GROUPS.includes(group.name))
           : [];
         console.log('[Groups] Filtered groups:', curated?.length || 0);
-        setGroups(curated);
+        setGroups(curated || []);
         if (!adminUserId && Array.isArray(payload) && payload.length) {
           setAdminUserId(payload[0]?.admin_user_id || null);
         }
       } else {
         console.error('[Groups] Failed to fetch groups:', res.status, res.statusText);
+        setGroups([]); // Set empty array on error
       }
     } catch (err) {
       console.error('[Groups] Fetch error:', err);
+      setGroups([]); // Set empty array on error
+    } finally {
+      setLoading(false);
     }
   };
 
-  const loadMessages = async (groupId) => {
-    try {
-      console.log('📥 Loading messages for group:', groupId);
-      console.log('📥 API URL:', `${API_BASE}/api/groups/${groupId}/messages`);
-      const res = await fetch(`${API_BASE}/api/groups/${groupId}/messages`);
-      console.log('📥 Load messages response:', res.status, res.ok);
-      if (res.ok) {
-        const data = await res.json();
-        // Handle both old format (array) and new format (object with messages/pinnedMessages)
-        if (Array.isArray(data)) {
-          setMessages(data);
-          setPinnedMessages([]);
-        } else {
-          setMessages(data.messages || []);
-          setPinnedMessages(data.pinnedMessages || []);
-        }
-        console.log('📥 Loaded messages:', (data.messages || data).length, 'messages');
-        console.log('📥 Loaded pinned messages:', (data.pinnedMessages || []).length);
-        setLastRefresh(new Date());
-      } else {
-        console.error('❌ Failed to load messages:', res.status, res.statusText);
-      }
-    } catch (e) {
-      console.error('❌ Error loading messages:', e);
-    }
-  };
+  // loadMessages is now defined above using useCallback
 
   // Pin/unpin handlers
   const canPin = ['grower', 'dispensary', 'moderator', 'admin'].includes(userRole);
@@ -698,11 +706,10 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     setDirectMessages(prev => [...prev, optimisticMessage]);
     setInput('');
 
+    const apiUrl = `${API_BASE}/api/direct-messages`;
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-      const apiUrl = `${API_BASE}/api/direct-messages`;
 
       console.log('🚀 Sending direct message to:', apiUrl);
       console.log('📝 Message content:', content);
@@ -850,8 +857,8 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     setMessages([]);
   }, []);
 
-  const sendMessage = async () => {
-    const content = input.trim();
+  const sendMessage = async (textOverride = null, attachmentsOverride = null) => {
+    const content = (textOverride || input).trim();
     if (!content || !selectedGroup) return;
     if (sending) return; // Prevent double sends
     
@@ -918,7 +925,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         // Include reply_to_id if backend supports it (will be ignored if not)
         reply_to_id: replyToId,
         // Include attachments if provided (from parameter or state)
-        attachments: attachmentsToUse && attachmentsToUse.length > 0 ? attachmentsToUse : null,
+        attachments: (attachmentsOverride && attachmentsOverride.length > 0) ? attachmentsOverride : null,
       };
 
       const res = await fetch(apiUrl, {
@@ -975,9 +982,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         setSendError(errorMsg);
         
         // Restore input and reply if send failed
-        if (contentOverride === null) {
-          setInput(messageToSend);
-        }
+        setInput(messageToSend);
         if (replyToId) {
           // Try to restore replyTo from current messages
           const currentMessages = groupMessagesHook.messages || [];
@@ -1060,54 +1065,77 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   }, [groups, selectedGroup]);
 
   const sortedGroups = useMemo(() => {
-    const copy = [...groups];
-    return copy.sort((a, b) => {
-      const aTime = a?.last_message?.created_at || a?.created_at || 0;
-      const bTime = b?.last_message?.created_at || b?.created_at || 0;
-      return new Date(bTime).getTime() - new Date(aTime).getTime();
-    });
+    if (!Array.isArray(groups) || groups.length === 0) {
+      return [];
+    }
+    try {
+      const copy = [...groups];
+      return copy.sort((a, b) => {
+        if (!a || !b) return 0;
+        const aTime = a?.last_message?.created_at || a?.created_at || 0;
+        const bTime = b?.last_message?.created_at || b?.created_at || 0;
+        try {
+          return new Date(bTime).getTime() - new Date(aTime).getTime();
+        } catch {
+          return 0;
+        }
+      });
+    } catch (err) {
+      console.error('[Groups] Error sorting groups:', err);
+      return groups; // Return unsorted if sort fails
+    }
   }, [groups]);
 
   const renderGroupButton = (group) => {
-    const last = group.last_message;
-    const lastAuthor = last?.user?.display_name || last?.user?.username;
-    const snippet = last
-      ? `${lastAuthor ? `${lastAuthor}: ` : ''}${messageSnippet(last.content)}`
-      : 'No conversations yet.';
-    const timestamp = formatTimestamp(last?.created_at || group.created_at);
-    return (
-      <Button
-        key={group.id}
-        variant="outlined"
-        onClick={() => selectGroup(group)}
-        fullWidth
-        sx={{
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          textAlign: 'left',
-          p: 2,
-          borderRadius: 3,
-          borderColor: 'rgba(124,179,66,0.4)',
-          bgcolor: 'rgba(255,255,255,0.05)',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
-          color: '#CDDC39',
-          '&:hover': {
-            bgcolor: 'rgba(124,179,66,0.2)',
-            borderColor: 'rgba(124,179,66,0.6)'
-          }
-        }}
-      >
-        <Stack spacing={0.5} sx={{ flex: 1, pr: 2 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#CDDC39' }}>{group.name}</Typography>
-          <Typography variant="body2" sx={{ color: '#9CCC65' }}>{snippet}</Typography>
-          <Typography variant="caption" sx={{ color: '#7CB342' }}>
-            {group.member_count || 0} member{group.member_count === 1 ? '' : 's'}
-          </Typography>
-        </Stack>
-        <Typography variant="caption" sx={{ color: 'rgba(22,34,22,0.6)' }}>{timestamp}</Typography>
-      </Button>
-    );
+    if (!group || !group.id) {
+      return null; // Skip invalid groups
+    }
+    try {
+      const last = group?.last_message;
+      const lastAuthor = last?.user?.display_name || last?.user?.username;
+      const snippet = last
+        ? `${lastAuthor ? `${lastAuthor}: ` : ''}${messageSnippet(last?.content || '')}`
+        : 'No conversations yet.';
+      const timestamp = formatTimestamp(last?.created_at || group?.created_at);
+      return (
+        <Button
+          key={group.id}
+          variant="outlined"
+          onClick={() => selectGroup(group)}
+          fullWidth
+          sx={{
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            textAlign: 'left',
+            p: 2,
+            borderRadius: 3,
+            borderColor: 'rgba(124,179,66,0.4)',
+            bgcolor: 'rgba(255,255,255,0.05)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            color: '#CDDC39',
+            '&:hover': {
+              bgcolor: 'rgba(124,179,66,0.2)',
+              borderColor: 'rgba(124,179,66,0.6)'
+            }
+          }}
+        >
+          <Stack spacing={0.5} sx={{ flex: 1, pr: 2 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#CDDC39' }}>
+              {group?.name || 'Unnamed Group'}
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#9CCC65' }}>{snippet}</Typography>
+            <Typography variant="caption" sx={{ color: '#7CB342' }}>
+              {group?.member_count || 0} member{(group?.member_count || 0) === 1 ? '' : 's'}
+            </Typography>
+          </Stack>
+          <Typography variant="caption" sx={{ color: 'rgba(22,34,22,0.6)' }}>{timestamp}</Typography>
+        </Button>
+      );
+    } catch (err) {
+      console.error('[Groups] Error rendering group button:', err, group);
+      return null; // Return null if render fails
+    }
   };
 
   const renderMessageAuthor = (message) => {
@@ -1494,16 +1522,39 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                   </Button>
                 )}
                 {loading ? (
-                  <Typography variant="body2" sx={{ color: 'rgba(22,34,22,0.6)' }}>
-                    Loading...
-                  </Typography>
-                ) : sortedGroups.length === 0 ? (
-                  <Typography variant="body2" sx={{ color: '#9CCC65' }}>
-                    No groups yet.
-                  </Typography>
+                  <Box sx={{ textAlign: 'center', py: 3 }}>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                      Loading groups...
+                    </Typography>
+                  </Box>
+                ) : !Array.isArray(sortedGroups) || sortedGroups.length === 0 ? (
+                  <Stack spacing={1.5} sx={{ py: 2 }}>
+                    <Typography variant="body2" sx={{ color: '#9CCC65', textAlign: 'center' }}>
+                      {groups.length === 0 && !loading 
+                        ? 'No groups available. Make sure the backend is running and try refreshing.'
+                        : 'No groups match the filter.'}
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        setLoading(true);
+                        loadGroups();
+                      }}
+                      sx={{
+                        borderColor: 'rgba(124,179,66,0.4)',
+                        color: '#CDDC39',
+                        '&:hover': {
+                          borderColor: 'rgba(124,179,66,0.6)',
+                          bgcolor: 'rgba(124,179,66,0.1)'
+                        }
+                      }}
+                    >
+                      Refresh Groups
+                    </Button>
+                  </Stack>
                 ) : (
                   <Stack spacing={1.5}>
-                    {sortedGroups.map(renderGroupButton)}
+                    {sortedGroups.filter(g => g && g.id).map(renderGroupButton)}
                   </Stack>
                 )}
               </Stack>
@@ -1752,7 +1803,6 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       </Box>
 
       {/* Group Chat - Modern Layout */}
-      <>
       {groupDialogOpen && selectedGroup && (
         <Box
           sx={{
@@ -1764,7 +1814,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             zIndex: 1300,
             display: 'flex',
             flexDirection: 'column',
-            backgroundColor: 'rgba(0,0,0,0.95)',
+            bgcolor: '#0a0f0a', // Use same background as rest of app
             backdropFilter: 'blur(20px)',
           }}
         >
@@ -1862,606 +1912,6 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             </Box>
           )}
         </Box>
-      )}
-
-      {/* Legacy Dialog for backward compatibility - hidden but kept for structure */}
-      {false && (
-        <Dialog
-          open={false}
-          onClose={closeGroupDialog}
-          maxWidth="md"
-          fullWidth
-          fullScreen
-          PaperProps={{
-            sx: {
-              background: 'rgba(0, 0, 0, 0.3)',
-              backdropFilter: 'blur(30px)',
-              WebkitBackdropFilter: 'blur(30px)',
-              m: 0,
-              maxHeight: '100vh',
-              display: 'flex',
-              flexDirection: 'column',
-              border: '1px solid rgba(124,179,66,0.3)'
-            }
-          }}
-        >
-          <DialogContent sx={{
-            flex: 1,
-            minHeight: 0,
-            display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
-            p: 0,
-            overflow: 'hidden'
-          }}>
-          {/* User List Sidebar - Facebook Style */}
-          <Box sx={{
-            width: { xs: '100%', md: '280px' },
-            maxHeight: { xs: 220, md: 'unset' },
-            borderRight: { xs: 'none', md: '2px solid rgba(124,179,66,0.4)' },
-            borderBottom: { xs: '2px solid rgba(124,179,66,0.4)', md: 'none' },
-            background: 'rgba(0,0,0,0.3)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden'
-          }}>
-            <Box sx={{
-              p: 2,
-              borderBottom: '1px solid rgba(124,179,66,0.3)',
-              bgcolor: 'rgba(124,179,66,0.08)'
-            }}>
-              <Typography variant="subtitle2" sx={{ color: '#CDDC39', fontWeight: 700 }}>
-                Members ({members.length})
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#9CCC65', fontSize: '0.7rem' }}>
-                Click to send direct message
-              </Typography>
-            </Box>
-
-            {/* Scrollable User List */}
-            <Box sx={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: 'auto',
-              WebkitOverflowScrolling: 'touch',
-              p: 1
-            }}>
-              <Stack spacing={0.5}>
-                {members.map((m, idx) => {
-                  const memberDisplayName = m.users?.display_name
-                    || m.profile?.display_name
-                    || m.users?.username
-                    || m.users?.email?.split('@')[0]
-                    || `Member ${String(m.user_id || '').slice(0, 8)}`;
-                  const isCurrentUser = m.user_id === userId;
-
-                  return (
-                    <Button
-                      key={idx}
-                      onClick={() => {
-                        if (!isCurrentUser) {
-                          // Start DM with this user
-                          const chatUser = {
-                            user_id: m.user_id,
-                            username: memberDisplayName,
-                            email: m.users?.email
-                          };
-                          startDirectChat(chatUser);
-                          setGroupDialogOpen(false); // Close group chat
-                        }
-                      }}
-                      disabled={isCurrentUser}
-                      sx={{
-                        justifyContent: 'flex-start',
-                        textAlign: 'left',
-                        p: 1.5,
-                        borderRadius: 2,
-                        bgcolor: isCurrentUser ? 'rgba(124,179,66,0.15)' : 'rgba(255,255,255,0.03)',
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)',
-                        border: '1px solid rgba(124,179,66,0.2)',
-                        color: isCurrentUser ? '#7CB342' : '#CDDC39',
-                        '&:hover': {
-                          bgcolor: isCurrentUser ? 'rgba(124,179,66,0.15)' : 'rgba(124,179,66,0.2)',
-                          borderColor: 'rgba(124,179,66,0.5)'
-                        },
-                        cursor: isCurrentUser ? 'default' : 'pointer'
-                      }}
-                    >
-                      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
-                        <Avatar sx={{
-                          bgcolor: isCurrentUser ? 'rgba(124,179,66,0.5)' : 'rgba(124,179,66,0.35)',
-                          color: '#0c220f',
-                          width: 36,
-                          height: 36,
-                          fontSize: '0.9rem',
-                          fontWeight: 700
-                        }}>
-                          {memberDisplayName.slice(0, 2).toUpperCase()}
-                        </Avatar>
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontWeight: 600,
-                              color: isCurrentUser ? '#7CB342' : '#CDDC39',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }}
-                          >
-                            {memberDisplayName} {isCurrentUser && '(You)'}
-                          </Typography>
-                          {!isCurrentUser && (
-                            <Typography variant="caption" sx={{ color: '#9CCC65', fontSize: '0.7rem' }}>
-                              Click to message
-                            </Typography>
-                          )}
-                        </Box>
-                      </Stack>
-                    </Button>
-                  );
-                })}
-              </Stack>
-            </Box>
-          </Box>
-
-          {/* Main Chat Area */}
-          <Stack spacing={1.5} sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, p: 2 }}>
-            {!guidelinesAccepted && (
-              <Alert
-                severity="warning"
-                icon={false}
-                sx={{
-                  background: 'rgba(255,193,7,0.25)',
-                  color: '#CDDC39',
-                  border: '1px solid rgba(255,193,7,0.5)',
-                  flexShrink: 0
-                }}
-              >
-                By participating, you agree to our{' '}
-                <MuiLink
-                  component="button"
-                  onClick={() => onNavigate && onNavigate('guidelines')}
-                  sx={{ fontWeight: 700, color: '#fff', textDecoration: 'underline' }}
-                >
-                  Community Guidelines
-                </MuiLink>.
-              </Alert>
-            )}
-
-            <Stack direction="row" spacing={2} sx={{ flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
-              <Typography variant="caption" sx={{ color: '#7CB342', fontWeight: 700 }}>
-                📂 Group: {selectedGroup?.name || 'Unknown'}
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#7CB342', fontWeight: 700 }}>
-                • {messages.length} message{messages.length !== 1 ? 's' : ''}
-                {lastRefresh && ` • Updated ${new Date(lastRefresh).toLocaleTimeString()}`}
-              </Typography>
-            </Stack>
-
-            {/* Pinned Messages Bar */}
-            {pinnedMessages.length > 0 && (
-              <Box
-                sx={{
-                  mb: 2,
-                  p: 1.5,
-                  borderRadius: 2,
-                  bgcolor: 'rgba(205, 220, 57, 0.15)',
-                  border: '2px solid rgba(205, 220, 57, 0.4)',
-                  backdropFilter: 'blur(10px)',
-                }}
-              >
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    color: '#CDDC39',
-                    fontWeight: 700,
-                    mb: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.5,
-                  }}
-                >
-                  <PushPinIcon fontSize="small" />
-                  Pinned Messages
-                </Typography>
-                <Stack spacing={1}>
-                  {pinnedMessages.slice(0, 3).map((pm) => (
-                    <Box
-                      key={pm.id}
-                      sx={{
-                        p: 1,
-                        borderRadius: 1,
-                        bgcolor: 'rgba(0, 0, 0, 0.2)',
-                        border: '1px solid rgba(205, 220, 57, 0.2)',
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: '#F1F8E9',
-                          fontSize: '0.875rem',
-                          mb: 0.5,
-                        }}
-                      >
-                        {pm.content}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{ color: '#9CCC65', fontSize: '0.75rem' }}
-                      >
-                        {pm.users?.display_name || pm.users?.username || 'Member'} • {new Date(pm.created_at).toLocaleDateString()}
-                      </Typography>
-                    </Box>
-                  ))}
-                  {pinnedMessages.length > 3 && (
-                    <Typography
-                      variant="caption"
-                      sx={{ color: '#9CCC65', fontSize: '0.75rem', textAlign: 'center', mt: 0.5 }}
-                    >
-                      + {pinnedMessages.length - 3} more pinned message{pinnedMessages.length - 3 > 1 ? 's' : ''}
-                    </Typography>
-                  )}
-                </Stack>
-              </Box>
-            )}
-
-            {/* Message Limit Notice */}
-            <Alert
-              severity="info"
-              sx={{
-                flexShrink: 0,
-                bgcolor: 'rgba(124,179,66,0.08)',
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)',
-                color: '#CDDC39',
-                border: '1px solid rgba(124,179,66,0.3)',
-                '& .MuiAlert-icon': {
-                  color: '#CDDC39'
-                }
-              }}
-            >
-              <Typography variant="caption" sx={{ fontSize: '0.75rem' }}>
-                💬 Only the most recent 1,000 messages are shown. Older messages are automatically archived.
-              </Typography>
-            </Alert>
-
-            {/* Messages - Scrollable */}
-            <Box 
-              ref={groupMessagesHook.scrollContainerRef}
-              onScroll={groupMessagesHook.handleScroll}
-              sx={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: 'auto',
-                WebkitOverflowScrolling: 'touch',
-                border: '2px solid rgba(124,179,66,0.4)',
-                borderRadius: 2,
-                p: 2,
-                background: 'rgba(0,0,0,0.2)',
-                backdropFilter: 'blur(15px)',
-                WebkitBackdropFilter: 'blur(15px)',
-                boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.3)'
-              }}
-            >
-              {/* Load older messages button */}
-              {groupMessagesHook.hasMore && (
-                <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
-                  <Button
-                    onClick={groupMessagesHook.loadMore}
-                    disabled={groupMessagesHook.isLoadingMore}
-                    variant="outlined"
-                    size="small"
-                    sx={{
-                      color: '#9CCC65',
-                      borderColor: 'rgba(124,179,66,0.4)',
-                      '&:hover': {
-                        borderColor: 'rgba(124,179,66,0.6)',
-                        bgcolor: 'rgba(124,179,66,0.1)'
-                      }
-                    }}
-                  >
-                    {groupMessagesHook.isLoadingMore ? 'Loading…' : 'Load earlier messages'}
-                  </Button>
-                </Box>
-              )}
-
-              {groupMessagesHook.isLoadingInitial && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                  <Typography variant="body2" sx={{ color: '#9CCC65' }}>
-                    Loading messages...
-                  </Typography>
-                </Box>
-              )}
-
-              <List sx={{ p: 0 }}>
-                {!groupMessagesHook.isLoadingInitial && groupMessagesHook.messages.length === 0 ? (
-                  <ListItem>
-                    <ListItemText
-                      secondary={
-                        <Typography variant="body2" sx={{ color: '#9CCC65' }}>
-                          Be the first to say hello! Share what brings you here or ask a quick question to get the conversation rolling.
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                ) : (
-                  // Filter out pinned messages from regular list (they're shown in pinned bar)
-                  groupMessagesHook.messages.filter(m => !m.isPinned).map((m) => {
-                    // Use raw message for compatibility with existing render logic
-                    const msg = m.raw || m;
-                    return (
-                    <ListItem
-                      key={m.id}
-                      alignItems="flex-start"
-                      sx={{
-                        alignItems: 'flex-start',
-                        bgcolor: isAdminMessage(m) ? 'rgba(124,179,66,0.15)' : 'rgba(255,255,255,0.03)',
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)',
-                        borderLeft: isAdminMessage(m) ? '4px solid rgba(205,220,57,0.9)' : '4px solid rgba(124,179,66,0.3)',
-                        mb: 1.5,
-                        borderRadius: 2,
-                        pr: 6,
-                        border: '1px solid rgba(124,179,66,0.2)',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                      }}
-                      secondaryAction={
-                        <Stack direction="row" spacing={0.5}>
-                          {canPin && (
-                            <Tooltip title={m.pinned_at ? 'Unpin message' : 'Pin message'}>
-                              <IconButton
-                                edge="end"
-                                size="small"
-                                onClick={() => m.pinned_at ? handleUnpin(m) : handlePin(m)}
-                                sx={{
-                                  color: m.pinned_at ? '#CDDC39' : '#9CCC65',
-                                  opacity: m.pinned_at ? 1 : 0.7,
-                                }}
-                              >
-                                <PushPinIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          <Tooltip title="Reply to this message">
-                            <IconButton
-                              edge="end"
-                              size="small"
-                              onClick={() => {
-                                setReplyTo(m);
-                                // Scroll to composer (if needed)
-                                setTimeout(() => {
-                                  const composer = document.querySelector('[data-message-composer]');
-                                  composer?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                                }, 100);
-                              }}
-                              sx={{ color: '#9CCC65', opacity: 0.7 }}
-                            >
-                              <ChatIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Report this message">
-                            <IconButton
-                              edge="end"
-                              size="small"
-                              onClick={() => {
-                                setReportingMessage(m);
-                                setReportDialogOpen(true);
-                              }}
-                              sx={{ color: '#9CCC65' }}
-                            >
-                              <FlagIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Stack>
-                      }
-                    >
-                      {renderMessageAuthor(m)}
-                      <ListItemText
-                        primary={
-                          <Typography variant="body2" sx={{ color: '#CDDC39', fontWeight: 500 }}>
-                            {m.content}
-                          </Typography>
-                        }
-                        secondary={
-                          <Typography variant="caption" sx={{ color: '#9CCC65' }}>
-                            {(m.users?.display_name
-                              || m.profile?.display_name
-                              || m.users?.username
-                              || (m.users?.email ? m.users.email.split('@')[0] : `Member ${String(m.user_id || '').slice(0, 8)}`))
-                            } • {new Date(m.created_at).toLocaleString()}
-                            {m.optimistic ? ' • sending…' : ''}
-                          </Typography>
-                        }
-                      />
-                    </ListItem>
-                    );
-                  })
-                )}
-              </List>
-              
-              {/* Scroll anchor for auto-scroll */}
-              <div ref={groupMessagesHook.scrollToBottomRef} />
-            </Box>
-
-            {/* Message Composer - Fixed at bottom */}
-            {isMember ? (
-              <Box
-                data-message-composer
-                sx={{
-                  flexShrink: 0,
-                  p: '8px 12px',
-                  paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)',
-                  borderTop: '1px solid rgba(255,255,255,0.05)',
-                  backgroundColor: 'rgba(0,0,0,0.85)',
-                  backdropFilter: 'blur(10px)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 0.75,
-                }}
-              >
-                {/* Reply preview */}
-                {replyTo && (
-                  <Box
-                    sx={{
-                      fontSize: '0.6875rem',
-                      p: '4px 8px',
-                      borderRadius: 1,
-                      backgroundColor: 'rgba(255,255,255,0.03)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      border: '1px solid rgba(124,179,66,0.2)',
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        color: '#9CCC65',
-                        fontSize: '0.6875rem',
-                        flex: 1,
-                      }}
-                    >
-                      Replying to <strong>{replyTo.users?.display_name || replyTo.users?.username || 'someone'}</strong>:{' '}
-                      <span style={{ opacity: 0.8 }}>
-                        {replyTo.content?.slice(0, 60) || ''}
-                        {replyTo.content?.length > 60 ? '…' : ''}
-                      </span>
-                    </Typography>
-                    <IconButton
-                      size="small"
-                      onClick={() => setReplyTo(null)}
-                      sx={{
-                        color: '#9CCC65',
-                        p: 0.25,
-                        minWidth: 'auto',
-                        width: 20,
-                        height: 20,
-                      }}
-                    >
-                      ×
-                    </IconButton>
-                  </Box>
-                )}
-
-                {/* Input row */}
-                <Stack direction="row" spacing={1} alignItems="flex-end">
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Type a message…"
-                    value={input}
-                    onChange={(e) => {
-                      setInput(e.target.value);
-                      setSendError(''); // Clear error when user types
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        sendMessage();
-                      }
-                    }}
-                    multiline
-                    maxRows={4}
-                    disabled={sending}
-                    error={!!sendError}
-                    sx={{
-                      '& .MuiInputBase-root': {
-                        bgcolor: 'rgba(5,12,8,0.95)',
-                        backdropFilter: 'blur(10px)',
-                        WebkitBackdropFilter: 'blur(10px)',
-                        border: sendError 
-                          ? '1px solid rgba(239,68,68,0.6)' 
-                          : '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '999px',
-                        '&:hover': {
-                          border: sendError
-                            ? '1px solid rgba(239,68,68,0.8)'
-                            : '1px solid rgba(124,179,66,0.4)'
-                        },
-                        '&.Mui-focused': {
-                          border: sendError
-                            ? '1px solid rgba(239,68,68,0.8)'
-                            : '1px solid rgba(205,220,57,0.8)',
-                          boxShadow: sendError
-                            ? '0 0 8px rgba(239,68,68,0.3)'
-                            : '0 0 8px rgba(124,179,66,0.4)'
-                        },
-                        '&.Mui-disabled': {
-                          opacity: 0.6,
-                        }
-                      },
-                      '& .MuiInputBase-input': {
-                        color: '#f5fff5',
-                        fontSize: '0.875rem',
-                        padding: '8px 12px',
-                        maxHeight: '100px',
-                        overflowY: 'auto',
-                      },
-                      '& .MuiInputBase-input::placeholder': {
-                        color: '#9CCC65',
-                        opacity: 0.7
-                      }
-                    }}
-                  />
-                  <Button
-                    variant="contained"
-                    onClick={sendMessage}
-                    disabled={sending || !input.trim()}
-                    sx={{
-                      minWidth: '80px',
-                      borderRadius: '999px',
-                      bgcolor: input.trim()
-                        ? 'linear-gradient(135deg, #7CB342, #9CCC65)'
-                        : 'rgba(255,255,255,0.1)',
-                      color: input.trim() ? '#04140a' : '#888',
-                      fontWeight: 600,
-                      fontSize: '0.875rem',
-                      boxShadow: input.trim()
-                        ? '0 4px 12px rgba(124,179,66,0.4)'
-                        : 'none',
-                      '&:hover': {
-                        bgcolor: input.trim()
-                          ? 'linear-gradient(135deg, #8BC34A, #AED581)'
-                          : 'rgba(255,255,255,0.1)',
-                        boxShadow: input.trim()
-                          ? '0 6px 16px rgba(124,179,66,0.6)'
-                          : 'none'
-                      },
-                      '&:disabled': {
-                        opacity: 0.5,
-                      }
-                    }}
-                  >
-                    {sending ? 'Sending…' : 'Send'}
-                  </Button>
-                </Stack>
-
-                {/* Error message */}
-                {sendError && (
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      fontSize: '0.6875rem',
-                      color: '#ff9b9b',
-                      ml: 1,
-                      mt: -0.5,
-                    }}
-                  >
-                    {sendError}
-                  </Typography>
-                )}
-              </Box>
-            ) : (
-              <Typography variant="body2" sx={{ textAlign: 'center', flexShrink: 0, color: '#9CCC65', p: 2 }}>
-                Join this group to send messages.
-              </Typography>
-            )}
-          </Stack>
-        </DialogContent>
-      </Dialog>
       )}
 
       {/* Direct Chat Dialog */}
@@ -2739,7 +2189,6 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           </Stack>
         </DialogContent>
       </Dialog>
-      </>
 
       {/* Report Dialog */}
       <Dialog open={reportDialogOpen} onClose={() => setReportDialogOpen(false)} maxWidth="sm" fullWidth>

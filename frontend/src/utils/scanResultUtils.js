@@ -244,22 +244,30 @@ export function getPrimaryNameForResult(result) {
 export function transformScanResult(scan) {
   if (!scan) return null;
 
-  const ai = scan.ai_summary || {};
-  const pkg = scan.packaging_insights || {};
-  const label = scan.label_insights || {};
-  const visual = scan.result?.visualMatches?.[0] || null;
-  const result = scan.result || {};
+  // Safely extract result data - handle both scan.result and direct properties
+  const result = scan.result || scan || {};
+  
+  // Safely extract nested data with fallbacks
+  const ai = result.ai_summary || scan.ai_summary || result.aiSummary || scan.aiSummary || {};
+  const pkg = result.packaging_insights || scan.packaging_insights || result.packagingInsights || scan.packagingInsights || {};
+  const label = result.label_insights || scan.label_insights || result.labelInsights || scan.labelInsights || {};
+  const visual = result.visualMatches?.[0] || scan.result?.visualMatches?.[0] || null;
 
   // CRITICAL: Read canonical strain from new backend fields
   // Priority: scan.canonicalStrain > result.canonicalStrain > legacy fields
   const canonicalStrain = 
     scan.canonicalStrain || 
-    result.canonicalStrain || 
+    result.canonicalStrain ||
+    result.canonical_strain ||
+    scan.canonical_strain ||
     null;
 
-  // Read seedBank and growProfile from result
-  const seedBank = result.seedBank || null;
-  const growProfile = result.growProfile || null;
+  // Read seedBank and growProfile from result (with fallbacks)
+  const seedBank = result.seedBank || result.seed_bank || null;
+  const growProfile = result.growProfile || result.grow_profile || null;
+  
+  // Read plant health data (for plant-only scans)
+  const plantHealth = result.plant_health || result.plantHealth || null;
 
   // Determine if this is a packaged product
   const isPackaged = !!pkg.strainName || !!label.strainName || canonicalStrain?.source === 'packaging';
@@ -370,33 +378,34 @@ export function transformScanResult(scan) {
     canonicalStrain, // Include canonical strain object
     seedBank, // Include seedBank data
     growProfile, // Include growProfile data
+    plantHealth, // Include plant health data (for plant-only scans)
     isPackagedProduct: isPackaged,
     isPackagedKnown,
     isBudUnknown,
     matchConfidence: canonicalStrain?.confidence ?? visualConfidence,
     thc,
     cbd,
-    effectsTags,
-    flavorTags,
+    effectsTags: Array.isArray(effectsTags) ? effectsTags : [],
+    flavorTags: Array.isArray(flavorTags) ? flavorTags : [],
     intensity: aiIntensity,
-    dispensaryNotes: aiDispensaryNotes,
-    growerNotes: aiGrowerNotes,
-    warnings: aiWarnings,
-    summary: aiSummaryText,
-    aromaTags: aiAromas, // New field for aromas
+    dispensaryNotes: Array.isArray(aiDispensaryNotes) ? aiDispensaryNotes : [],
+    growerNotes: Array.isArray(aiGrowerNotes) ? aiGrowerNotes : [],
+    warnings: Array.isArray(aiWarnings) ? aiWarnings : [],
+    summary: aiSummaryText || null,
+    aromaTags: Array.isArray(aiAromas) ? aiAromas : [], // New field for aromas
     heroImageUrl, // Hero image URL (strain hero or scan image)
     scanImageUrl, // Original scan image URL
     // Keep old field names for backward compatibility
     aiIntensity,
     aiSummaryText,
-    aiDispensaryNotes,
-    aiGrowerNotes,
-    aiWarnings,
+    aiDispensaryNotes: Array.isArray(aiDispensaryNotes) ? aiDispensaryNotes : [],
+    aiGrowerNotes: Array.isArray(aiGrowerNotes) ? aiGrowerNotes : [],
+    aiWarnings: Array.isArray(aiWarnings) ? aiWarnings : [],
     // Preserve original fields for backward compatibility
     packaging_insights: pkg,
     label_insights: label,
     ai_summary: ai,
-    result: scan.result,
+    result: scan.result || result,
   };
 }
 
@@ -407,9 +416,10 @@ export function transformScanResult(scan) {
  * NOTE: This function now uses transformScanResult for strain name determination.
  */
 export function normalizeScanResult(scan) {
-  if (!scan || !scan.result) return null;
+  if (!scan) return null;
 
-  const result = scan?.result || {};
+  // Handle both scan.result and direct scan properties (for plant-only scans)
+  const result = scan.result || scan || {};
   
   // First, transform the scan to get the canonical strain name
   const transformed = transformScanResult(scan);

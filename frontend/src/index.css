@@ -76,18 +76,21 @@
 html, body {
   margin: 0;
   padding: 0;
-  background-color: #020503; /* dark green/black like your app */
+  background-color: #0a0f0a; /* Clean dark green background - no scrolling */
   color: #fff;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow-x: hidden;
 }
 
 body {
   min-width: 320px;
   min-height: 100vh;
-  background: #020503;
-  overflow-x: hidden;
+  background: #0a0f0a; /* Solid background - won't scroll */
   /* Prevent double-tap zoom on mobile */
   touch-action: manipulation;
+  position: fixed; /* Prevent body scroll */
+  width: 100%;
+  height: 100%;
 }
 
 /* Fix button touch responsiveness */
@@ -99,7 +102,7 @@ button, a, [role="button"] {
 
 /* Web-specific styles */
 body.web-root {
-  background: #050705;
+  background: #0a0f0a; /* Clean, solid background */
 }
 
 .web-app-shell {

@@ -49,6 +49,8 @@ import profileGeneratorRoutes from './routes/profile-generator.js';
 import usersRoutes from './routes/users.js';
 import creditsRoutes from './routes/credits.js';
 import directMessagesRoutes from './routes/direct-messages.js';
+import strainImagesRoutes from './routes/strain-images.js';
+import cronRoutes from './routes/cron.js';
 import { matchStrainByVisuals } from './services/visualMatcher.js';
 import { resolveCanonicalStrain } from './services/strainResolution.js';
 import { generateLabelAISummary } from './services/aiLabelExplainer.js';
@@ -722,6 +724,19 @@ app.get('/', (req, res) => {
 });
 
 // --- Uploads & Scans ---
+
+// Ensure storage buckets exist on startup (best-effort)
+// Ensure strain-images bucket exists
+(async () => {
+  try {
+    const result = await ensureBucketExists('strain-images', { public: true });
+    if (result.ok) {
+      console.log(`[boot] Storage bucket 'strain-images' ${result.created ? 'created' : 'present'}.`);
+    }
+  } catch (err) {
+    console.warn('[boot] Could not ensure strain-images bucket:', err.message);
+  }
+})();
 
 // Ensure storage bucket exists on startup (best-effort)
 (async () => {
@@ -2627,6 +2642,8 @@ app.use('/api/users', usersRoutes);
 app.use('/api/credits', creditsRoutes);
 app.use('/api/direct-messages', directMessagesRoutes);
 app.use('/api/direct-chats', directMessagesRoutes);
+app.use('/api/strain-images', strainImagesRoutes);
+app.use('/api/cron', cronRoutes);
 
 // Error logs viewer endpoint (only accessible in development)
 app.get('/api/errors/recent', (req, res) => {
@@ -5427,7 +5444,7 @@ app.get('/api/groups', async (req, res) => {
         business_only,
         is_public,
         created_at,
-        members:chat_group_members!left (
+        members:group_members!left (
           user_id
         )
       `)
@@ -5476,7 +5493,7 @@ app.get('/api/groups/:groupId', async (req, res) => {
 
     // Get member count
     const { count: memberCount } = await supabaseAdmin
-      .from('chat_group_members')
+      .from('group_members')
       .select('*', { count: 'exact', head: true })
       .eq('group_id', groupId);
 
@@ -5514,7 +5531,7 @@ app.post('/api/groups/:groupId/join', express.json(), async (req, res) => {
     }
 
     const { error: insertErr } = await supabaseAdmin
-      .from('chat_group_members')
+      .from('group_members')
       .insert({ group_id: groupId, user_id: userId })
       .select('*')
       .maybeSingle();
@@ -5543,7 +5560,7 @@ app.post('/api/groups/:groupId/leave', express.json(), async (req, res) => {
     const groupId = req.params.groupId;
 
     await supabaseAdmin
-      .from('chat_group_members')
+      .from('group_members')
       .delete()
       .eq('group_id', groupId)
       .eq('user_id', userId);
@@ -5569,7 +5586,7 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
     const before = req.query.before;
 
     const { data: member, error: mErr } = await supabaseAdmin
-      .from('chat_group_members')
+      .from('group_members')
       .select('*')
       .eq('group_id', groupId)
       .eq('user_id', userId)
@@ -5579,12 +5596,12 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
       return res.status(403).json({ error: 'Join this group to see messages' });
     }
 
-    // Fetch pinned messages separately
+    // Fetch pinned messages separately (if pinned_at column exists)
     const { data: pinned, error: pinnedError } = await supabaseAdmin
-      .from('chat_group_messages')
-      .select('id, group_id, sender_id, text, attachments, created_at, is_pinned, pinned_at')
+      .from('messages')
+      .select('id, group_id, user_id, content, created_at, pinned_at, pinned_by')
       .eq('group_id', groupId)
-      .eq('is_pinned', true)
+      .not('pinned_at', 'is', null)
       .order('created_at', { ascending: false })
       .limit(20);
 
@@ -5593,12 +5610,12 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
     }
 
     // Fetch regular (non-pinned) messages
-    // Use explicit column list to avoid errors if columns don't exist yet
+    // Use the actual messages table with correct column names
     let query = supabaseAdmin
-      .from('chat_group_messages')
-      .select('id, group_id, sender_id, text, attachments, created_at, is_pinned, pinned_at')
+      .from('messages')
+      .select('id, group_id, user_id, content, created_at, pinned_at, pinned_by')
       .eq('group_id', groupId)
-      .eq('is_pinned', false)
+      .is('pinned_at', null)
       .order('created_at', { ascending: false })
       .limit(limit + 1); // Fetch one extra to check if there are more
 
@@ -5621,9 +5638,24 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
       ? messagesToReturn[messagesToReturn.length - 1].created_at 
       : null;
 
+    // Transform messages to match frontend expectations
+    const transformMessage = (msg) => ({
+      id: msg.id,
+      group_id: msg.group_id,
+      sender_user_id: msg.user_id,
+      senderId: msg.user_id,
+      text: msg.content,
+      body: msg.content,
+      content: msg.content,
+      created_at: msg.created_at,
+      createdAt: msg.created_at,
+      pinned_at: msg.pinned_at,
+      pinned_by: msg.pinned_by,
+    });
+
     return res.json({
-      pinned: pinned || [],
-      messages: messagesToReturn.slice().reverse(), // Reverse to show oldest → newest
+      pinned: (pinned || []).map(transformMessage),
+      messages: messagesToReturn.slice().reverse().map(transformMessage), // Reverse to show oldest → newest
       hasMore: hasMore || false,
       nextCursor,
     });
@@ -5651,7 +5683,7 @@ app.post('/api/groups/:groupId/messages', express.json(), async (req, res) => {
     }
 
     const { data: member } = await supabaseAdmin
-      .from('chat_group_members')
+      .from('group_members')
       .select('*')
       .eq('group_id', groupId)
       .eq('user_id', userId)
@@ -5673,25 +5705,29 @@ app.post('/api/groups/:groupId/messages', express.json(), async (req, res) => {
     }
 
     // Handle attachments: if attachments array provided, use first image URL as image_url for backward compatibility
-    // Also store full attachments JSONB if column exists
     const firstImageUrl = imageUrl || (attachments && attachments.length > 0 && attachments[0].type === 'image' ? attachments[0].url : null);
     
-    const insertPayload = {
+    // Use messages table with correct column names
+    const messagePayload = {
       group_id: groupId,
-      sender_user_id: userId,
-      body: body || null,
-      image_url: firstImageUrl || null,
-      is_pinned: pin && isBusinessUser ? true : false,
+      user_id: userId,
+      content: body || (firstImageUrl ? `[Image]` : ''),
     };
     
-    // Add attachments as JSONB if column exists (will be ignored if column doesn't exist)
-    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
-      insertPayload.attachments = attachments;
+    // Add image_url if column exists (for backward compatibility)
+    if (firstImageUrl) {
+      messagePayload.image_url = firstImageUrl;
     }
-
+    
+    // Add pinned_at if pinning is requested
+    if (pin && isBusinessUser) {
+      messagePayload.pinned_at = new Date().toISOString();
+      messagePayload.pinned_by = userId;
+    }
+    
     const { data: message, error: msgErr } = await supabaseAdmin
-      .from('chat_group_messages')
-      .insert(insertPayload)
+      .from('messages')
+      .insert(messagePayload)
       .select('*')
       .single();
 
@@ -5719,7 +5755,7 @@ app.post('/api/groups/:groupId/messages/:messageId/pin', express.json(), async (
 
     // Verify user is a member
     const { data: membership } = await supabaseAdmin
-      .from('chat_group_members')
+      .from('group_members')
       .select('role')
       .eq('group_id', groupId)
       .eq('user_id', user.id)
@@ -5743,8 +5779,8 @@ app.post('/api/groups/:groupId/messages/:messageId/pin', express.json(), async (
 
     // Verify message exists and belongs to this group
     const { data: message } = await supabaseAdmin
-      .from('chat_group_messages')
-      .select('id, is_pinned')
+      .from('messages')
+      .select('id, pinned_at')
       .eq('id', messageId)
       .eq('group_id', groupId)
       .single();
@@ -5754,9 +5790,14 @@ app.post('/api/groups/:groupId/messages/:messageId/pin', express.json(), async (
     }
 
     // Toggle pin status
+    // Toggle pin: if pinned_at is null, set it to now; otherwise set to null
+    const updatePayload = message.pinned_at 
+      ? { pinned_at: null, pinned_by: null }
+      : { pinned_at: new Date().toISOString(), pinned_by: userId };
+    
     const { data: updatedMessage, error: updateError } = await supabaseAdmin
-      .from('chat_group_messages')
-      .update({ is_pinned: !message.is_pinned })
+      .from('messages')
+      .update(updatePayload)
       .eq('id', messageId)
       .select('*')
       .single();
@@ -5782,7 +5823,7 @@ app.get('/api/groups/my', async (req, res) => {
     }
 
     const { data: memberships, error: membershipError } = await supabaseAdmin
-      .from('chat_group_members')
+      .from('group_members')
       .select(`
         *,
         group: chat_groups (*)
