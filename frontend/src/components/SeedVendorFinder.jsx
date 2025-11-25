@@ -13,6 +13,7 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import PaymentIcon from '@mui/icons-material/Payment';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import { API_BASE } from '../config';
+import { BackHeader } from './BackHeader';
 
 // Static seed vendor list as fallback
 const STATIC_SEED_VENDORS = [

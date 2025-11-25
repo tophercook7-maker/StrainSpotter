@@ -5612,7 +5612,13 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
     const { data: messages, error } = await query;
 
     if (error) {
-      console.error('[api/groups/:groupId/messages] Supabase error', { groupId, error });
+      console.error('[api/groups/:groupId/messages] Supabase error', { 
+        groupId, 
+        error: error.message || error,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
       // Don't 500 on empty table or missing column - return empty array instead
       return res.status(200).json({ messages: [], pinned: [], hasMore: false, error: 'unavailable' });
     }
@@ -5651,7 +5657,12 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
       nextCursor,
     });
   } catch (e) {
-    console.error('[api/groups/:groupId/messages] error', e);
+    console.error('[api/groups/:groupId/messages] error', {
+      message: e.message,
+      stack: e.stack,
+      groupId: req.params.groupId,
+      userId: user?.id
+    });
     // Never 500 - return empty array to keep frontend alive
     return res.status(200).json({ messages: [], pinned: [], hasMore: false, error: 'unavailable' });
   }
