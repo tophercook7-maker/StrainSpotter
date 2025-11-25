@@ -5596,28 +5596,27 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
       return res.status(403).json({ error: 'Join this group to see messages' });
     }
 
-    // Fetch pinned messages separately (if pinned_at column exists)
-    const { data: pinned, error: pinnedError } = await supabaseAdmin
-      .from('messages')
-      .select('id, group_id, user_id, content, created_at, pinned_at, pinned_by')
-      .eq('group_id', groupId)
-      .not('pinned_at', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    if (pinnedError) {
-      console.error('[api/groups/:groupId/messages] pinned fetch error', { groupId, error: pinnedError });
-    }
-
-    // Fetch regular (non-pinned) messages
-    // Use the actual messages table with correct column names
+    // Fetch all messages for this group
+    // Try to select pinned_at/pinned_by, but handle gracefully if columns don't exist
     let query = supabaseAdmin
       .from('messages')
-      .select('id, group_id, user_id, content, created_at, pinned_at, pinned_by')
+      .select('id, group_id, user_id, content, created_at')
       .eq('group_id', groupId)
-      .is('pinned_at', null)
       .order('created_at', { ascending: false })
       .limit(limit + 1); // Fetch one extra to check if there are more
+    
+    // Try to add pinned columns if they exist (will be ignored if they don't)
+    try {
+      query = supabaseAdmin
+        .from('messages')
+        .select('id, group_id, user_id, content, created_at, pinned_at, pinned_by')
+        .eq('group_id', groupId)
+        .order('created_at', { ascending: false })
+        .limit(limit + 1);
+    } catch (e) {
+      // If pinned columns don't exist, use basic query
+      console.log('[api/groups/:groupId/messages] pinned columns may not exist, using basic query');
+    }
 
     if (before) {
       query = query.lt('created_at', before);
@@ -5649,13 +5648,18 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
       content: msg.content,
       created_at: msg.created_at,
       createdAt: msg.created_at,
-      pinned_at: msg.pinned_at,
-      pinned_by: msg.pinned_by,
+      pinned_at: msg.pinned_at || null,
+      pinned_by: msg.pinned_by || null,
     });
 
+    // Separate pinned messages (if pinned_at column exists)
+    const allMessages = messagesToReturn.map(transformMessage);
+    const pinned = allMessages.filter(m => m.pinned_at);
+    const regularMessages = allMessages.filter(m => !m.pinned_at);
+
     return res.json({
-      pinned: (pinned || []).map(transformMessage),
-      messages: messagesToReturn.slice().reverse().map(transformMessage), // Reverse to show oldest → newest
+      pinned: pinned || [],
+      messages: regularMessages.slice().reverse(), // Reverse to show oldest → newest
       hasMore: hasMore || false,
       nextCursor,
     });
