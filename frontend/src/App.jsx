@@ -21,27 +21,17 @@ if (typeof window !== 'undefined') {
   debugLog('Setting React globally in App.jsx...');
   debugLog('window.React before:', typeof window.React);
   
-  // Ensure React is set globally and is not overwritable
+  // Set React globally - use direct assignment to avoid readonly errors
   if (!window.React) {
     debugLog('window.React is missing, setting it now');
-    Object.defineProperty(window, 'React', {
-      value: React,
-      writable: false,
-      configurable: false,
-      enumerable: true
-    });
+    window.React = React;
   } else {
     debugLog('window.React already exists');
   }
   
   if (typeof globalThis !== 'undefined' && !globalThis.React) {
     debugLog('Setting React on globalThis');
-    Object.defineProperty(globalThis, 'React', {
-      value: React,
-      writable: false,
-      configurable: false,
-      enumerable: true
-    });
+    globalThis.React = React;
   }
   
   debugLog('window.React after:', typeof window.React, window.React ? 'EXISTS' : 'MISSING');
