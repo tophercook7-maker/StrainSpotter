@@ -131,7 +131,7 @@ export default function Garden({ onBack, onNavigate }) {
         openScreen('growers', () => setShowGrowerDirectory(true));
         return;
       case 'feedback-reader':
-        openScreen('home', () => setShowFeedbackReader(true));
+        // Handled via header button only
         return;
       default:
         setSelectedFeature(featureName);
@@ -157,19 +157,8 @@ export default function Garden({ onBack, onNavigate }) {
     { title: 'Dispensaries', icon: <StoreIcon />, nav: 'dispensaries', color: '#c5e1a5', description: 'Find nearby shops', image: '🏪', useEmoji: true },
   ];
 
-  // Add admin-only tiles
-  if (isAdmin) {
-    tiles.push({
-      title: 'Feedback Reader',
-      icon: <FeedbackIcon />,
-      nav: 'feedback-reader',
-      color: '#ff6b6b',
-      description: 'Admin feedback tool',
-      adminOnly: true,
-      image: '📋',
-      useEmoji: true
-    });
-  }
+  // Feedback Reader is only accessible via header button for admins
+  // No need for a separate tile
 
   const resetScreens = (nextNav = 'home') => {
     setShowScan(false);
@@ -189,6 +178,47 @@ export default function Garden({ onBack, onNavigate }) {
     openCallback?.();
   };
 
+  // Handle scan complete - defined before early returns to avoid conditional hook call
+  const handleScanComplete = useCallback((scan) => {
+    console.log('[GardenScanner] scan complete:', scan);
+
+    if (!scan || (!scan.id && !scan.scanId && !scan.scan_id)) {
+      console.warn('[GardenScanner] scan complete but no scan/id', scan);
+      // Optionally show error, but do NOT crash - just return without navigating
+      return;
+    }
+
+    // ScanWizard already normalizes the scan object, so we can use it directly
+    // Just store it and switch to result view (NOT history)
+    setActiveScan(scan);
+    setActiveView('result');
+    setShowScan(false);
+  }, []);
+
+  // Detect if running in Capacitor (mobile app)
+  const isCapacitor = typeof window !== 'undefined' && 
+    (window.Capacitor || window.location.protocol === 'capacitor:' || 
+     /iPhone|iPad|iPod|Android/i.test(window.navigator.userAgent));
+  const GARDEN_TOP_PAD = isCapacitor ? 'calc(env(safe-area-inset-top) + 8px)' : '8px';
+
+  const renderWithNav = (content, navActive = navValue) => (
+    <Box sx={{ 
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      width: '100%',
+      maxWidth: '100vw',
+      overflow: 'hidden',
+      overflowX: 'hidden',
+      backgroundColor: 'background.default',
+    }}>
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden', overflowX: 'hidden', width: '100%', maxWidth: '100vw', left: 0, right: 0, position: 'relative' }}>
+        {content}
+      </Box>
+      {/* GardenNavBar removed per user request */}
+    </Box>
+  );
+
   if (loading) {
     return (
       <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -205,8 +235,11 @@ export default function Garden({ onBack, onNavigate }) {
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
+          width: '100%',
+          maxWidth: '100%',
           overflow: 'hidden',
-          bgcolor: '#000',
+          overflowX: 'hidden',
+          bgcolor: 'transparent',
         }}
       >
         {/* Fixed header with back button */}
@@ -219,7 +252,7 @@ export default function Garden({ onBack, onNavigate }) {
             p: 2,
             pt: 'calc(env(safe-area-inset-top) + 8px)',
             borderBottom: '1px solid rgba(255,255,255,0.08)',
-            bgcolor: 'rgba(0,0,0,0.3)',
+            bgcolor: 'transparent',
             backdropFilter: 'blur(8px)',
             zIndex: 1,
           }}
@@ -250,8 +283,14 @@ export default function Garden({ onBack, onNavigate }) {
           sx={{
             flex: 1,
             minHeight: 0,
+            width: '100%',
+            maxWidth: '100vw',
             overflowY: 'auto',
+            overflowX: 'hidden',
             WebkitOverflowScrolling: 'touch',
+            left: 0,
+            right: 0,
+            position: 'relative',
             paddingBottom: 'calc(env(safe-area-inset-bottom) + 80px)',
             px: 2,
             py: 2,
@@ -270,22 +309,6 @@ export default function Garden({ onBack, onNavigate }) {
 
   // Show ScanWizard if user clicked AI Scan
   if (showScan) {
-    const handleScanComplete = useCallback((scan) => {
-      console.log('[GardenScanner] scan complete:', scan);
-
-      if (!scan || (!scan.id && !scan.scanId && !scan.scan_id)) {
-        console.warn('[GardenScanner] scan complete but no scan/id', scan);
-        // Optionally show error, but do NOT crash - just return without navigating
-        return;
-      }
-
-      // ScanWizard already normalizes the scan object, so we can use it directly
-      // Just store it and switch to result view (NOT history)
-      setActiveScan(scan);
-      setActiveView('result');
-      setShowScan(false);
-    }, []);
-
     return (
       <ScanWizard 
         onBack={() => {
@@ -357,39 +380,6 @@ export default function Garden({ onBack, onNavigate }) {
     }
   };
 
-  // Detect if running in Capacitor (mobile app)
-  const isCapacitor = typeof window !== 'undefined' && 
-    (window.Capacitor || window.location.protocol === 'capacitor:' || 
-     /iPhone|iPad|iPod|Android/i.test(window.navigator.userAgent));
-  const GARDEN_TOP_PAD = isCapacitor ? 'calc(env(safe-area-inset-top) + 8px)' : '8px';
-
-  const renderWithNav = (content, navActive = navValue) => (
-    <Box sx={{ 
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100vh',
-      overflow: 'hidden',
-      backgroundColor: 'background.default',
-    }}>
-      <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        {content}
-      </Box>
-      <Box sx={{ flexShrink: 0 }}>
-        <GardenNavBar
-          value={navActive}
-          onChange={handleNavChange}
-          items={[
-            { value: 'home', label: 'Garden', icon: <SpaIcon /> },
-            { value: 'scan', label: 'Scan', icon: <CameraAltIcon /> },
-            { value: 'groups', label: 'Groups', icon: <GroupsIcon /> },
-            { value: 'dispensaries', label: 'Shops', icon: <StoreIcon /> },
-            { value: 'growers', label: 'Growers', icon: <PeopleIcon /> }
-          ]}
-        />
-      </Box>
-    </Box>
-  );
-
   if (loading) {
     return renderWithNav(
       <Box sx={{ minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -408,7 +398,7 @@ export default function Garden({ onBack, onNavigate }) {
             flexDirection: 'column',
             height: '100%',
             overflow: 'hidden',
-            bgcolor: '#000',
+            bgcolor: 'transparent',
           }}
         >
           {/* Fixed header with back button */}
@@ -420,7 +410,7 @@ export default function Garden({ onBack, onNavigate }) {
               gap: 1.5,
               p: 2,
               borderBottom: '1px solid rgba(255,255,255,0.08)',
-              bgcolor: 'rgba(0,0,0,0.3)',
+              bgcolor: 'transparent',
               backdropFilter: 'blur(8px)',
               zIndex: 1,
             }}
@@ -445,7 +435,10 @@ export default function Garden({ onBack, onNavigate }) {
             sx={{
               flex: 1,
               minHeight: 0,
+              width: '100%',
+              maxWidth: '100%',
               overflowY: 'auto',
+              overflowX: 'hidden',
               WebkitOverflowScrolling: 'touch',
               paddingBottom: 'calc(env(safe-area-inset-bottom) + 80px)',
               px: 2,
@@ -512,26 +505,56 @@ export default function Garden({ onBack, onNavigate }) {
     return renderWithNav(<GrowerDirectory onBack={() => resetScreens('home')} />, 'growers');
   }
   if (showFeedbackReader) {
-    return renderWithNav(<FeedbackReader user={user} onBack={() => resetScreens('home')} />);
+    return renderWithNav(
+      <FeedbackReader 
+        user={user} 
+        onBack={() => resetScreens('home')}
+        onSendFeedback={() => setShowFeedback(true)}
+        onMessageUser={isAdmin ? ((senderId, sender) => {
+          // Navigate to Groups and open DM with this user (admins only)
+          resetScreens('home');
+          setShowGroups(true);
+          // Store the user info to auto-open DM (Groups component will handle this)
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('openDMWith', JSON.stringify({ user_id: senderId, ...sender }));
+          }
+        }) : undefined}
+      />
+    );
   }
 
   return renderWithNav(
-    <Box sx={{
+      <Box sx={{
       display: 'flex',
       flexDirection: 'column',
-      height: '100%',
+      height: '100dvh', // Use dynamic viewport height for better mobile support
+      width: '100%',
+      maxWidth: '100vw',
       overflow: 'hidden',
-      backgroundColor: 'background.default',
+      overflowX: 'hidden',
+      position: 'relative',
+      backgroundImage: 'url(./strainspotter-bg.jpg)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'scroll', // Changed from 'fixed' for better mobile support
+      backgroundRepeat: 'no-repeat',
     }}>
+      {/* Very light background overlay for readability - minimal opacity */}
+      <Box sx={{
+        position: 'absolute',
+        inset: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+        zIndex: 0,
+      }} />
       {/* Fixed header */}
       <Box sx={{
         position: 'sticky',
         top: 0,
         zIndex: 10,
-        paddingTop: 'calc(env(safe-area-inset-top) + 8px)',
-        paddingBottom: 8,
+        paddingTop: 'calc(env(safe-area-inset-top) * 0.3 + 8px)',
+        paddingBottom: 1,
         px: 2,
-        bgcolor: '#0a0f0a', // Clean, solid background
+        backgroundColor: 'transparent',
         backdropFilter: 'blur(4px)',
         flexShrink: 0,
       }}>
@@ -540,54 +563,109 @@ export default function Garden({ onBack, onNavigate }) {
           <Alert
             severity="error"
             icon={<WarningIcon />}
-            sx={{ mb: 1.5, py: 0.5, fontSize: '0.75rem', width: '100%', maxWidth: '600px' }}
+            sx={{ mb: 2, py: 0.75, fontSize: '0.85rem', width: '100%' }}
           >
             Payment overdue. Update payment to continue.
           </Alert>
         )}
 
-        {/* Premium Glassmorphism Header */}
+        {/* Premium Glassmorphism Header - Mobile Optimized */}
         <Paper sx={{
         p: 1.5,
-        mb: 1.5,
-        background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.15) 0%, rgba(156, 204, 101, 0.1) 100%)',
-        backdropFilter: 'blur(20px)',
-        border: '1.5px solid rgba(124, 179, 66, 0.4)',
-        borderRadius: 3,
-        boxShadow: '0 4px 20px rgba(124, 179, 66, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+        mb: 0,
+        background: 'transparent',
+        backdropFilter: 'blur(8px)',
+        border: '1px solid rgba(124, 179, 66, 0.2)',
+        borderRadius: 2,
+        boxShadow: 'none',
         transition: 'all 0.15s ease',
         width: '100%',
-        maxWidth: '600px'
+        maxWidth: '100%',
+        overflowX: 'hidden',
+        overflow: 'hidden'
       }}>
         {/* Compact buttons and welcome in one row */}
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-          <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
             <Avatar
               src="/hero.png?v=13"
               alt="StrainSpotter"
               sx={{
-                width: 40,
-                height: 40,
+                width: 48,
+                height: 48,
                 borderRadius: '50%',
                 overflow: 'hidden',
                 border: '2px solid rgba(124, 179, 66, 0.6)',
                 boxShadow: '0 0 12px rgba(124, 179, 66, 0.4)',
+                flexShrink: 0
               }}
             />
-            <Box>
-              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, fontSize: '1.4rem', lineHeight: 1.2, mb: 0.25 }}>
-                The Garden (v2)
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, fontSize: '1.25rem', lineHeight: 1.2, mb: 0 }}>
+                The Garden
               </Typography>
-              <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.75rem' }}>
-                {isAdmin ? '✓ Member • Admin & Moderator' : '✓ Member'}
+              <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.85rem' }}>
+                {isAdmin ? '✓ Admin' : '✓ Member'}
               </Typography>
             </Box>
           </Stack>
-          <Stack direction="row" spacing={0.5} alignItems="center">
+          <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.5, justifyContent: 'flex-end' }}>
             {/* Credit Balance */}
             <Box onClick={() => setShowBuyScans(true)} sx={{ cursor: 'pointer' }}>
               <CreditBalance />
             </Box>
+            {/* Feedback Button - Members send feedback, Admins view feedback */}
+            {isAdmin ? (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setShowFeedbackReader(true)}
+                startIcon={<FeedbackIcon />}
+                sx={{
+                  color: '#CDDC39',
+                  borderColor: 'rgba(124, 179, 66, 0.5)',
+                  fontSize: '0.75rem',
+                  py: 0.5,
+                  px: 1,
+                  minWidth: 'auto',
+                  background: 'rgba(124, 179, 66, 0.1)',
+                  backdropFilter: 'blur(5px)',
+                  transition: 'all 0.15s ease',
+                  '&:hover': {
+                    borderColor: 'rgba(124, 179, 66, 1)',
+                    background: 'rgba(124, 179, 66, 0.2)',
+                    color: '#fff'
+                  }
+                }}
+              >
+                View Feedback
+              </Button>
+            ) : (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setShowFeedback(true)}
+                startIcon={<FeedbackIcon />}
+                sx={{
+                  color: '#CDDC39',
+                  borderColor: 'rgba(124, 179, 66, 0.5)',
+                  fontSize: '0.75rem',
+                  py: 0.5,
+                  px: 1,
+                  minWidth: 'auto',
+                  background: 'rgba(124, 179, 66, 0.1)',
+                  backdropFilter: 'blur(5px)',
+                  transition: 'all 0.15s ease',
+                  '&:hover': {
+                    borderColor: 'rgba(124, 179, 66, 1)',
+                    background: 'rgba(124, 179, 66, 0.2)',
+                    color: '#fff'
+                  }
+                }}
+              >
+                Send Feedback
+              </Button>
+            )}
             {onBack && (
               <Button
                 variant="outlined"
@@ -596,22 +674,17 @@ export default function Garden({ onBack, onNavigate }) {
                 sx={{
                   color: '#CDDC39',
                   borderColor: 'rgba(124, 179, 66, 0.5)',
-                  fontSize: '0.7rem',
+                  fontSize: '0.75rem',
                   py: 0.5,
                   px: 1,
                   minWidth: 'auto',
                   background: 'rgba(124, 179, 66, 0.1)',
                   backdropFilter: 'blur(5px)',
-                  transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transition: 'all 0.15s ease',
                   '&:hover': {
                     borderColor: 'rgba(124, 179, 66, 1)',
                     background: 'rgba(124, 179, 66, 0.2)',
-                    transform: 'scale(1.05)',
                     color: '#fff'
-                  },
-                  '&:active': {
-                    transform: 'scale(0.95)',
-                    transition: 'all 0.05s ease'
                   }
                 }}
               >
@@ -625,22 +698,17 @@ export default function Garden({ onBack, onNavigate }) {
               sx={{
                 color: '#CDDC39',
                 borderColor: 'rgba(124, 179, 66, 0.5)',
-                fontSize: '0.7rem',
+                fontSize: '0.75rem',
                 py: 0.5,
                 px: 1,
                 minWidth: 'auto',
                 background: 'rgba(124, 179, 66, 0.1)',
                 backdropFilter: 'blur(5px)',
-                transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                transition: 'all 0.15s ease',
                 '&:hover': {
                   borderColor: 'rgba(124, 179, 66, 1)',
                   background: 'rgba(124, 179, 66, 0.2)',
-                  transform: 'scale(1.05)',
                   color: '#fff'
-                },
-                '&:active': {
-                  transform: 'scale(0.95)',
-                  transition: 'all 0.05s ease'
                 }
               }}
             >
@@ -651,76 +719,70 @@ export default function Garden({ onBack, onNavigate }) {
       </Paper>
       </Box>
 
-      {/* Scrollable content */}
+      {/* Content - scrollable for better layout with bigger buttons */}
       <Box
         sx={{
           flex: 1,
           minHeight: 0,
+          width: '100%',
+          maxWidth: '100%',
           overflowY: 'auto',
+          overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',
-          px: 2,
-          pb: 3,
+          px: 1,
+          pb: 'calc(env(safe-area-inset-bottom) + 16px)',
+          pt: 1,
+          position: 'relative',
+          zIndex: 1,
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        {/* Welcome & Info Section */}
-        <Paper sx={{
-        p: 2,
-        mb: 2,
-        background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.08) 0%, rgba(156, 204, 101, 0.05) 100%)',
-        backdropFilter: 'blur(15px)',
-        border: '1.5px solid rgba(124, 179, 66, 0.25)',
-        borderRadius: 3,
-        boxShadow: '0 2px 12px rgba(0, 0, 0, 0.2)',
-        width: '100%',
-        maxWidth: '600px'
-      }}>
-        <Typography variant="h6" sx={{
-          color: '#CDDC39',
-          fontWeight: 700,
-          fontSize: '1.1rem',
-          mb: 1,
-          textShadow: '0 1px 3px rgba(0, 0, 0, 0.5)'
-        }}>
-          <Stack direction="row" alignItems="center" spacing={1} justifyContent="center">
-            <span>Welcome to The Garden</span>
-            <Box component="img" src="/hero.png?v=13" alt="" sx={{ width: 20, height: 20, borderRadius: '50%', filter: 'drop-shadow(0 0 4px rgba(124, 179, 66, 0.6))' }} />
-          </Stack>
-        </Typography>
-        <Typography variant="body2" sx={{
-          color: '#e8e8e8',
-          fontSize: '0.85rem',
-          lineHeight: 1.6,
-          textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
-        }}>
-          Your premium cannabis companion. Identify strains instantly, track your favorites, find nearby dispensaries, and connect with the community. Every feature is designed to enhance your cannabis experience.
-        </Typography>
-      </Paper>
-
-        {/* All Feature Tiles - 2 per row, compact (Strain Browser is now same size as others) */}
-        <Grid container spacing={1.5} sx={{ width: '100%', maxWidth: '600px', justifyContent: 'center', mx: 'auto' }}>
+        {/* All Feature Tiles - Fill screen width */}
+        <Grid 
+          container
+          spacing={1.5} 
+          sx={{ 
+            width: '100%',
+            maxWidth: '100%',
+            justifyContent: 'flex-start', 
+            mx: 0,
+            flex: 1,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            WebkitOverflowScrolling: 'touch',
+            display: 'flex',
+            alignContent: 'flex-start',
+            alignItems: 'stretch',
+            py: 1,
+            px: { xs: 1, sm: 2, md: 3 },
+          }}
+        >
           {tiles.map((tile) => (
-          <Grid item xs={6} key={tile.nav} sx={{ display: 'flex', justifyContent: 'center' }}>
+          <Grid item xs={6} key={tile.nav} sx={{ display: 'flex', justifyContent: 'center', minHeight: '120px' }}>
             <Paper
               onClick={() => handleFeatureClick(tile.title, tile.nav)}
               sx={{
-                p: 1.5,
+                p: 2,
                 textAlign: 'center',
                 cursor: 'pointer',
-                background: 'rgba(255,255,255,0.05)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                border: '1.5px solid rgba(124, 179, 66, 0.3)',
-                borderRadius: 2.5,
-                transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+                background: 'rgba(0, 0, 0, 0.3)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '2px solid rgba(124, 179, 66, 0.3)',
+                borderRadius: 3,
+                transition: 'all 0.2s ease',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
                 position: 'relative',
                 overflow: 'hidden',
                 width: '100%',
-                height: '100px',
+                height: '100%',
+                minHeight: '120px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
                 alignItems: 'center',
+                gap: 0.75,
                 '&::before': {
                   content: '""',
                   position: 'absolute',
@@ -728,32 +790,32 @@ export default function Garden({ onBack, onNavigate }) {
                   left: '-50%',
                   width: '200%',
                   height: '200%',
-                  background: 'radial-gradient(circle, rgba(124, 179, 66, 0.1) 0%, transparent 70%)',
+                  background: 'radial-gradient(circle, rgba(124, 179, 66, 0.15) 0%, transparent 70%)',
                   opacity: 0,
-                  transition: 'opacity 0.15s ease'
+                  transition: 'opacity 0.2s ease'
                 },
                 '&:hover': {
                   background: 'rgba(124, 179, 66, 0.15)',
-                  border: '1.5px solid rgba(124, 179, 66, 0.6)',
+                  border: '2px solid rgba(124, 179, 66, 0.6)',
                   transform: 'translateY(-2px) scale(1.03)',
-                  boxShadow: '0 8px 24px rgba(124, 179, 66, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                  boxShadow: '0 6px 20px rgba(124, 179, 66, 0.4)',
                   '&::before': {
                     opacity: 1
                   }
                 },
                 '&:active': {
-                  transform: 'translateY(-1px) scale(1.01)',
-                  transition: 'all 0.05s ease'
+                  transform: 'translateY(0px) scale(0.98)',
+                  transition: 'all 0.1s ease'
                 }
               }}
             >
               {tile.useEmoji ? (
                 <Box sx={{
-                  fontSize: '2.5rem',
+                  fontSize: '3rem',
                   lineHeight: 1,
                   mb: 0.5,
-                  filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                  transition: 'all 0.15s ease',
+                  filter: 'drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4))',
+                  transition: 'all 0.2s ease',
                   textAlign: 'center',
                   width: '100%'
                 }}>
@@ -761,18 +823,18 @@ export default function Garden({ onBack, onNavigate }) {
                 </Box>
               ) : (
                 <Box sx={{
-                  width: 40,
-                  height: 40,
+                  width: '56px',
+                  height: '56px',
                   mb: 0.5,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderRadius: '50%',
                   border: '2px solid rgba(124, 179, 66, 0.5)',
-                  boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)',
+                  boxShadow: '0 0 16px rgba(124, 179, 66, 0.4)',
                   overflow: 'hidden',
                   background: 'transparent',
-                  transition: 'all 0.15s ease',
+                  transition: 'all 0.2s ease',
                   mx: 'auto'
                 }}>
                   <img
@@ -782,97 +844,24 @@ export default function Garden({ onBack, onNavigate }) {
                   />
                 </Box>
               )}
-              <Typography variant="body2" sx={{
+              <Typography variant="body1" sx={{
                 color: '#CDDC39',
                 fontWeight: 700,
-                fontSize: '0.8rem',
-                lineHeight: 1.1,
-                mb: 0.25,
+                fontSize: '1rem',
+                lineHeight: 1.2,
+                mb: 0,
                 display: 'block',
-                textShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
-                transition: 'all 0.15s ease',
+                textShadow: '0 2px 4px rgba(0, 0, 0, 0.7)',
+                transition: 'all 0.2s ease',
                 textAlign: 'center',
                 width: '100%'
               }}>
                 {tile.title}
               </Typography>
-              <Typography variant="caption" sx={{
-                color: '#9CCC65',
-                fontSize: '0.65rem',
-                lineHeight: 1.2,
-                display: 'block',
-                textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)',
-                textAlign: 'center',
-                width: '100%'
-              }}>
-                {tile.description}
-              </Typography>
             </Paper>
           </Grid>
           ))}
         </Grid>
-
-        <Paper
-          sx={{
-            p: 1.5,
-            mt: 1.5,
-            background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.12) 0%, rgba(156, 204, 101, 0.08) 100%)',
-            backdropFilter: 'blur(15px)',
-            border: '1.5px solid rgba(124, 179, 66, 0.3)',
-            borderRadius: 3,
-            boxShadow: '0 2px 12px rgba(124, 179, 66, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-            width: '100%',
-            maxWidth: '600px',
-            mx: 'auto'
-          }}
-        >
-        <Stack spacing={1}>
-          <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-            <Typography
-              variant="caption"
-              sx={{ color: '#e8e8e8', fontSize: '0.75rem', textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)' }}
-            >
-              <strong style={{ color: '#CDDC39' }}>Plan:</strong> {isAdmin ? 'Creator Access' : 'Member • $4.99/mo • 200 scans'}
-            </Typography>
-            <Button
-              variant="text"
-              size="small"
-              sx={{
-                color: '#ffeb3b',
-                fontSize: '0.7rem',
-                py: 0.25,
-                px: 1.2,
-                minWidth: 'auto',
-                border: '1px solid rgba(255, 235, 59, 0.4)',
-                borderRadius: 999,
-                '&:hover': {
-                  bgcolor: 'rgba(255, 235, 59, 0.15)',
-                  transform: 'scale(1.05)'
-                }
-              }}
-              onClick={() => setShowBuyScans(true)}
-            >
-              Manage plan
-            </Button>
-          </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between">
-            <Typography variant="body2" sx={{ color: '#f5f5f5b5' }}>
-              Initial unlock: <strong>$5.99 • 20 scans</strong>
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#f5f5f5b5' }}>
-              Membership: <strong>$4.99/mo • 200 scans</strong>
-            </Typography>
-            <Button
-              variant="outlined"
-              size="small"
-              sx={{ color: '#CDDC39', borderColor: 'rgba(124, 179, 66, 0.5)', borderRadius: 2, px: 2 }}
-              onClick={() => setShowBuyScans(true)}
-            >
-              Buy top-ups
-            </Button>
-          </Stack>
-        </Stack>
-        </Paper>
       </Box>
 
       {/* Logout Warning Dialog */}
@@ -983,28 +972,7 @@ export default function Garden({ onBack, onNavigate }) {
         </DialogContent>
       </Dialog>
 
-      {/* Floating Feedback Button */}
-      <Tooltip title="Send Feedback" placement="left">
-        <Fab
-          color="primary"
-          onClick={() => setShowFeedback(true)}
-          sx={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            zIndex: 1000,
-            background: 'linear-gradient(135deg, #7CB342 0%, #9CCC65 100%)',
-            boxShadow: '0 8px 30px rgba(124, 179, 66, 0.4)',
-            '&:hover': {
-              background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)',
-              boxShadow: '0 12px 40px rgba(124, 179, 66, 0.6)',
-              transform: 'scale(1.05)'
-            }
-          }}
-        >
-          <FeedbackIcon />
-        </Fab>
-      </Tooltip>
+      {/* Floating Feedback Button removed per user request */}
 
       {/* Feedback Modal */}
       <FeedbackModal

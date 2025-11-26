@@ -71,26 +71,281 @@
   /* Remove 300ms tap delay on mobile */
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  max-width: 100vw;
+}
+
+/* Prevent any element from causing horizontal overflow */
+*,
+*::before,
+*::after {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* Ensure all containers respect viewport width */
+div,
+section,
+article,
+main,
+header,
+footer,
+aside,
+nav,
+form {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  width: 100%;
+  position: relative;
+}
+
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100vw;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  position: fixed;
+  -webkit-overflow-scrolling: touch;
 }
 
 html, body {
   margin: 0;
   padding: 0;
-  background-color: #0a0f0a; /* Clean dark green background - no scrolling */
+  background-image: url(./strainspotter-bg.jpg);
+  background-size: cover;
+  background-position: center;
+  background-attachment: scroll; /* Changed from 'fixed' for better mobile support */
+  background-repeat: no-repeat;
   color: #fff;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  overflow-x: hidden;
+  overflow-x: hidden !important;
+  overflow-y: hidden;
+  width: 100%;
+  max-width: 100vw;
+  height: 100%;
+  position: fixed;
+  -webkit-overflow-scrolling: touch;
 }
 
 body {
   min-width: 320px;
   min-height: 100vh;
-  background: #0a0f0a; /* Solid background - won't scroll */
+  background-image: url(./strainspotter-bg.jpg);
+  background-size: cover;
+  background-position: center;
+  background-attachment: scroll; /* Changed from 'fixed' for better mobile support */
+  background-repeat: no-repeat;
   /* Prevent double-tap zoom on mobile */
   touch-action: manipulation;
   position: fixed; /* Prevent body scroll */
   width: 100%;
+  max-width: 100vw;
   height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  width: 100%;
+  max-width: 100vw;
+  height: 100%;
+  overflow: hidden;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Prevent MUI components from causing overflow */
+.MuiBox-root,
+.MuiContainer-root,
+.MuiGrid-root,
+.MuiGrid-container,
+.MuiGrid-item,
+.MuiPaper-root,
+.MuiStack-root,
+.MuiTypography-root,
+.MuiCard-root,
+.MuiCardContent-root,
+.MuiButton-root,
+.MuiTextField-root,
+.MuiInputBase-root,
+.MuiAlert-root,
+.MuiTabs-root,
+.MuiTabPanel-root {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  width: 100%;
+}
+
+/* Ensure Grid containers don't overflow */
+.MuiGrid-container {
+  width: 100% !important;
+  max-width: 100vw !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.MuiGrid-item {
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
+
+/* Prevent flex containers from overflowing */
+[style*="display: flex"],
+[style*="display:flex"] {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Prevent images and media from causing overflow */
+img,
+video,
+iframe,
+svg,
+canvas {
+  max-width: 100vw !important;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+/* Prevent tables from causing overflow */
+table {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+/* Prevent long text from causing overflow */
+p,
+span,
+div,
+h1, h2, h3, h4, h5, h6,
+label,
+button {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  max-width: 100%;
+}
+
+/* Force all absolutely positioned elements to respect viewport */
+[style*="position: absolute"],
+[style*="position:absolute"],
+[style*="position: fixed"],
+[style*="position:fixed"] {
+  max-width: 100vw;
+  left: 0;
+  right: 0;
+}
+
+/* Prevent transform from causing overflow */
+[style*="transform"] {
+  max-width: 100%;
+}
+
+/* Prevent horizontal scroll on all scrollable containers */
+[style*="overflow"]:not([style*="overflow-x: visible"]):not([style*="overflow-x:visible"]) {
+  overflow-x: hidden !important;
+}
+
+/* Ensure all direct children of root containers respect viewport */
+#root > *,
+body > *,
+html > * {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  width: 100%;
+  position: relative;
+}
+
+/* Force all absolutely positioned elements to respect viewport */
+[style*="position: absolute"],
+[style*="position:absolute"],
+[style*="position: fixed"],
+[style*="position:fixed"] {
+  max-width: 100vw !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100vw !important;
+}
+
+/* Prevent transform from causing overflow */
+[style*="transform"] {
+  max-width: 100vw !important;
+}
+
+/* Prevent horizontal scroll on all scrollable containers */
+[style*="overflow"]:not([style*="overflow-x: visible"]):not([style*="overflow-x:visible"]) {
+  overflow-x: hidden !important;
+}
+
+/* Nuclear option: Prevent any element from exceeding viewport */
+body * {
+  max-width: 100vw !important;
+}
+
+/* Prevent flex containers from overflowing */
+[style*="display: flex"],
+[style*="display:flex"],
+.MuiStack-root {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  flex-wrap: wrap;
+}
+
+/* Force all positioned elements to respect viewport */
+[style*="position"] {
+  max-width: 100vw !important;
+  left: 0 !important;
+  right: 0 !important;
+}
+
+/* Prevent any negative margins from causing overflow */
+* {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Ensure padding doesn't cause overflow */
+body,
+#root,
+html {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Force all Box components to respect viewport */
+.MuiBox-root {
+  max-width: 100vw !important;
+  width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Prevent horizontal scroll on touch devices */
+@media (max-width: 768px) {
+  * {
+    -webkit-overflow-scrolling: touch;
+    overflow-x: hidden !important;
+  }
+  
+  body,
+  html,
+  #root {
+    position: fixed !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+}
+
+/* Ensure all MUI Grid items don't overflow */
+.MuiGrid-item {
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* Fix button touch responsiveness */
@@ -122,6 +377,7 @@ body.web-root {
   top: 0;
   z-index: 1000;
   background: rgba(5, 7, 5, 0.95);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
 }
 
