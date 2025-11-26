@@ -149,8 +149,8 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: buildDir, // Separate output directories
-    // Target modern browsers for better performance
-    target: 'es2020',
+      // Target modern browsers for better performance
+      target: 'es2020',
     // Enable code splitting for faster initial load
     rollupOptions: {
       output: {
