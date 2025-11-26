@@ -540,16 +540,15 @@ export default function Garden({ onBack, onNavigate }) {
       backgroundRepeat: 'no-repeat',
     }}>
       {/* Overlay removed per user request */}
-      {/* Fixed header */}
+      {/* Fixed header - no overlay */}
       <Box sx={{
         position: 'sticky',
         top: 0,
         zIndex: 10,
-        paddingTop: 'calc(env(safe-area-inset-top) * 0.3 + 8px)',
-        paddingBottom: 1,
-        px: 2,
+        paddingTop: 'calc(env(safe-area-inset-top) * 0.2 + 4px)',
+        paddingBottom: 0.5,
+        px: 1,
         backgroundColor: 'transparent',
-        backdropFilter: 'blur(4px)',
         flexShrink: 0,
       }}>
         {/* Expired Membership Warning */}
@@ -563,70 +562,58 @@ export default function Garden({ onBack, onNavigate }) {
           </Alert>
         )}
 
-        {/* Compact Header - Reduced size */}
+        {/* Ultra Compact Header */}
         <Paper sx={{
-        p: 0.75,
+        p: 0.5,
         mb: 0,
         background: 'transparent',
-        backdropFilter: 'blur(8px)',
-        border: '1px solid rgba(124, 179, 66, 0.2)',
-        borderRadius: 2,
+        border: 'none',
         boxShadow: 'none',
-        transition: 'all 0.15s ease',
         width: '100%',
         maxWidth: '100%',
         overflowX: 'hidden',
         overflow: 'hidden'
       }}>
         {/* Compact buttons and welcome in one row */}
-        <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="space-between" sx={{ flexWrap: 'wrap', gap: 0.25 }}>
+        <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="space-between" sx={{ flexWrap: 'nowrap', gap: 0.25 }}>
           <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
             <Avatar
               src="/hero.png?v=13"
               alt="StrainSpotter"
               sx={{
-                width: 32,
-                height: 32,
+                width: 24,
+                height: 24,
                 borderRadius: '50%',
                 overflow: 'hidden',
-                border: '2px solid rgba(124, 179, 66, 0.6)',
-                boxShadow: '0 0 8px rgba(124, 179, 66, 0.4)',
+                border: '1px solid rgba(124, 179, 66, 0.6)',
                 flexShrink: 0
               }}
             />
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="subtitle1" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.2, mb: 0 }}>
+              <Typography variant="body2" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.8rem', lineHeight: 1.1, mb: 0 }}>
                 The Garden
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.7rem' }}>
-                {isAdmin ? '✓ Admin' : '✓ Member'}
               </Typography>
             </Box>
           </Stack>
-          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.25, justifyContent: 'flex-end' }}>
+          <Stack direction="row" spacing={0.25} alignItems="center" sx={{ flexWrap: 'nowrap', gap: 0.25, justifyContent: 'flex-end' }}>
             {/* Credit Balance */}
             <Box onClick={() => setShowBuyScans(true)} sx={{ cursor: 'pointer' }}>
               <CreditBalance />
             </Box>
             {onBack && (
               <Button
-                variant="outlined"
+                variant="text"
                 size="small"
                 onClick={onBack}
                 sx={{
                   color: '#CDDC39',
-                  borderColor: 'rgba(124, 179, 66, 0.5)',
-                  fontSize: '0.7rem',
-                  py: 0.25,
-                  px: 0.75,
+                  fontSize: '0.65rem',
+                  py: 0.15,
+                  px: 0.5,
                   minWidth: 'auto',
-                  background: 'rgba(124, 179, 66, 0.1)',
-                  backdropFilter: 'blur(5px)',
-                  transition: 'all 0.15s ease',
+                  textTransform: 'none',
                   '&:hover': {
-                    borderColor: 'rgba(124, 179, 66, 1)',
-                    background: 'rgba(124, 179, 66, 0.2)',
-                    color: '#fff'
+                    background: 'rgba(124, 179, 66, 0.2)'
                   }
                 }}
               >
@@ -634,23 +621,18 @@ export default function Garden({ onBack, onNavigate }) {
               </Button>
             )}
             <Button
-              variant="outlined"
+              variant="text"
               size="small"
               onClick={handleLogout}
               sx={{
                 color: '#CDDC39',
-                borderColor: 'rgba(124, 179, 66, 0.5)',
-                fontSize: '0.7rem',
-                py: 0.25,
-                px: 0.75,
+                fontSize: '0.65rem',
+                py: 0.15,
+                px: 0.5,
                 minWidth: 'auto',
-                background: 'rgba(124, 179, 66, 0.1)',
-                backdropFilter: 'blur(5px)',
-                transition: 'all 0.15s ease',
+                textTransform: 'none',
                 '&:hover': {
-                  borderColor: 'rgba(124, 179, 66, 1)',
-                  background: 'rgba(124, 179, 66, 0.2)',
-                  color: '#fff'
+                  background: 'rgba(124, 179, 66, 0.2)'
                 }
               }}
             >

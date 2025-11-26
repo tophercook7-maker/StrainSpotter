@@ -1206,34 +1206,57 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
         <Tab icon={<NoteAlt />} iconPosition="start" label="Logbook" />
       </Tabs>
 
-      <Alert 
-        severity="info" 
-        icon={<AutoAwesome />}
+      <Paper 
+        elevation={0}
         sx={{ 
           mb: 1.5, 
-          bgcolor: 'rgba(124, 179, 66, 0.1)',
-          border: '1px solid rgba(124, 179, 66, 0.3)',
-          '& .MuiAlert-icon': { color: '#7CB342' }
+          p: 2,
+          bgcolor: 'rgba(124, 179, 66, 0.2)',
+          border: '2px solid rgba(124, 179, 66, 0.6)',
+          borderRadius: 3,
+          boxShadow: '0 0 20px rgba(124, 179, 66, 0.3)',
         }}
-        action={
+      >
+        <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between">
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1 }}>
+            <Box sx={{
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 0 20px rgba(124, 179, 66, 0.5)',
+            }}>
+              <AutoAwesome sx={{ color: '#fff', fontSize: 28 }} />
+            </Box>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="h6" fontWeight={800} sx={{ fontSize: '1.1rem', color: '#E8F5E9', mb: 0.5 }}>
+                🤖 AI Grow Coach
+              </Typography>
+              <Typography variant="body2" sx={{ fontSize: '0.9rem', color: '#C5E1A5' }}>
+                Ask questions, get instant recommendations
+                {questionsRemaining > 0 && (
+                  <span style={{ marginLeft: 8, fontWeight: 600 }}>
+                    ({questionsRemaining} questions left today)
+                  </span>
+                )}
+              </Typography>
+            </Box>
+          </Stack>
           <IconButton
-            size="small"
             onClick={() => setChatOpen(!chatOpen)}
-            sx={{ color: '#7CB342' }}
+            sx={{ 
+              color: '#7CB342',
+              bgcolor: 'rgba(124, 179, 66, 0.2)',
+              '&:hover': { bgcolor: 'rgba(124, 179, 66, 0.3)' }
+            }}
           >
             {chatOpen ? <ExpandLess /> : <ExpandMore />}
           </IconButton>
-        }
-      >
-        <Typography variant="body2" sx={{ fontSize: '0.85rem', color: '#E8F5E9' }}>
-          <strong>AI-Powered:</strong> Ask questions, get instant recommendations, and track trends automatically.
-          {questionsRemaining > 0 && (
-            <span style={{ marginLeft: 8, opacity: 0.8 }}>
-              ({questionsRemaining} questions remaining today)
-            </span>
-          )}
-        </Typography>
-      </Alert>
+        </Stack>
+      </Paper>
       
       <Collapse in={chatOpen}>
         <Paper 

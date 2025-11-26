@@ -375,19 +375,32 @@ export default function GrowLogBook({ onBack: externalOnBack }) {
       >
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mb: 1.5 }}>
           <Box sx={{ flex: 1 }}>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-              <AutoAwesome sx={{ color: '#7CB342', fontSize: 20 }} />
-              <Typography variant="h6" fontWeight={800} sx={{ fontSize: '1.1rem', color: '#E8F5E9' }}>
-                🤖 AI-Powered Log Entry
-              </Typography>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
+              <Box sx={{
+                width: 48,
+                height: 48,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 20px rgba(124, 179, 66, 0.5)',
+              }}>
+                <AutoAwesome sx={{ color: '#fff', fontSize: 28 }} />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="h5" fontWeight={800} sx={{ fontSize: '1.3rem', color: '#E8F5E9', mb: 0.5 }}>
+                  🤖 AI-Powered Log Entry
+                </Typography>
+                <Typography variant="body1" sx={{ color: '#C5E1A5', fontSize: '0.95rem', maxWidth: '100%', wordBreak: 'break-word', overflowWrap: 'break-word', fontWeight: 600 }}>
+                  AI analyzes your data and provides instant insights. Log metrics, photos, and observations—get recommendations automatically.
+                </Typography>
+              </Box>
             </Stack>
-            <Typography variant="body2" sx={{ color: '#C5E1A5', fontSize: '0.85rem', maxWidth: '100%', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-              AI analyzes your data and provides instant insights. Log metrics, photos, and observations—get recommendations automatically.
-            </Typography>
           </Box>
           <Stack direction="row" spacing={1}>
             <Tooltip title="Refresh entries">
-              <IconButton onClick={loadUserAndLogs} color="success">
+              <IconButton onClick={loadUserAndLogs} color="success" sx={{ color: '#7CB342' }}>
                 <Refresh />
               </IconButton>
             </Tooltip>
