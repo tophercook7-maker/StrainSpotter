@@ -44,6 +44,7 @@ import membershipRoutes from './routes/membership.js';
 import pipelineRoutes from './routes/pipeline.js';
 import moderationRoutes from './routes/moderation.js';
 import moderatorActionsRoutes from './routes/moderator-actions.js';
+import growCoachRoutes from './routes/grow-coach.js';
 import messagesRoutes from './routes/messages.js';
 import profileGeneratorRoutes from './routes/profile-generator.js';
 import usersRoutes from './routes/users.js';
@@ -85,6 +86,7 @@ import {
   refreshStarterWindow
 } from './services/scanCredits.js';
 import * as scanCreditsV2 from './services/scanCreditsV2.js';
+import { isFounder } from './services/scanCreditsV2.js';
 import { checkAccess, enforceTrialLimit } from './middleware/membershipCheck.js';
 import { schemaSync } from './services/schemaSync.js';
 import { safeUpdateScan, isSchemaError } from './services/safeWrites.js';
@@ -446,6 +448,7 @@ const DEFAULT_ORIGINS = [
   'https://strainspotter-frontend.vercel.app',
   'https://frontend-goaqagqo9-tophercook7-makers-projects.vercel.app',
   'https://frontend-gmgc1mgxt-tophercook7-makers-projects.vercel.app',
+  'https://strainspotter.app',  // Production domain on Netlify
   'capacitor://localhost',  // iOS/Android Capacitor app
   'ionic://localhost',      // Alternative Capacitor protocol
   'http://localhost',       // Capacitor fallback
@@ -500,6 +503,11 @@ function isAllowedOrigin(origin) {
       )
     ) {
       console.log('[CORS] Allowed (Vercel wildcard dev):', origin);
+      return true;
+    }
+    // Allow Netlify domains (including custom domains)
+    if (host === 'strainspotter.app' || host.endsWith('.netlify.app')) {
+      console.log('[CORS] Allowed (Netlify domain):', origin);
       return true;
     }
   } catch {}
@@ -2644,6 +2652,7 @@ app.use('/api/direct-messages', directMessagesRoutes);
 app.use('/api/direct-chats', directMessagesRoutes);
 app.use('/api/strain-images', strainImagesRoutes);
 app.use('/api/cron', cronRoutes);
+app.use('/api/grow-coach', growCoachRoutes);
 
 // Error logs viewer endpoint (only accessible in development)
 app.get('/api/errors/recent', (req, res) => {
