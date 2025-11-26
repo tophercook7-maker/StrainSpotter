@@ -280,6 +280,28 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
             Pair this roadmap with the Stage Timelines tab for detailed weekly objectives.
           </>
         )
+      },
+      {
+        title: 'USA Climate Zones & Adjustments',
+        body: (
+          <>
+            <strong>Hot & Dry (Southwest - AZ, NV, CA desert):</strong> Use AC/dehumidifier combo. Target 75-78°F day, 68-72°F night. RH 40-50% flower. Increase watering frequency. Consider CO₂ supplementation to offset high temps. LED preferred over HPS to reduce heat load.<br /><br />
+            <strong>Hot & Humid (Southeast - FL, GA, SC):</strong> Dehumidifier essential. Target 76-80°F day, 70-74°F night. RH 45-55% veg, 40-48% flower. Increase airflow, use exhaust fan 24/7. Watch for powdery mildew and botrytis. Consider shorter flowering strains (7-8 weeks).<br /><br />
+            <strong>Temperate (Pacific Northwest, Northeast):</strong> Natural climate advantage. Target 72-78°F day, 65-70°F night. RH 50-60% veg, 45-55% flower. May need heating in winter, cooling in summer. Excellent for longer flowering sativas (10-12 weeks).<br /><br />
+            <strong>Cold & Dry (Mountain states, Northern Midwest):</strong> Heating required. Target 74-78°F day, 68-72°F night. RH 50-60% veg, 45-50% flower. Use humidifier in winter. Insulate grow space. LED preferred for lower heat output. Consider indica-dominant strains for faster finish.<br /><br />
+            <strong>Cold & Humid (Great Lakes, New England):</strong> Heating + dehumidifier. Target 74-78°F day, 68-72°F night. RH 50-60% veg, 40-48% flower. Prevent condensation on walls. Excellent airflow critical. Shorter flowering strains recommended (8-9 weeks).
+          </>
+        )
+      },
+      {
+        title: 'Skill Level Guides',
+        body: (
+          <>
+            <strong>Newbie (First 1-2 grows):</strong> Start with autoflowers or easy indica-dominant strains. Use pre-mixed living soil or simple two-part nutrients. Focus on environment control (temp/RH) over advanced techniques. Keep detailed logs. Don't overwater—let pots dry between waterings. Simple LST only, no HST. Target 0.5-1.0g per watt yield is excellent for first runs.<br /><br />
+            <strong>Intermediate (3-10 grows):</strong> Try photoperiod strains, experiment with training (LST, topping, SCROG). Learn to read runoff EC/pH. Start adjusting nutrients based on plant feedback. Try different mediums (coco vs soil). Master VPD basics. Target 1.0-1.5g per watt. Begin tracking trends with AI logs.<br /><br />
+            <strong>Professional/Advanced (10+ grows):</strong> Fine-tune environment to cultivar-specific needs. Advanced training (manifolding, mainlining, advanced SCROG). Master nutrient ratios and custom feed schedules. Optimize CO₂ supplementation. Dial in VPD precisely for each stage. Experiment with different light spectrums. Target 1.5-2.0+ g per watt. Use AI analytics to optimize every variable.
+          </>
+        )
       }
     ],
     []
@@ -1131,7 +1153,7 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
           sx={{
             py: 1.5,
             px: { xs: 0.75, sm: 1 },
-            background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.1) 0%, rgba(76, 175, 80, 0.05) 100%)',
+            background: 'transparent',
             width: '100%',
             maxWidth: '100%',
             overflow: 'hidden',
@@ -1141,30 +1163,182 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
             mx: 0,
           }}
         >
-          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1.5 }}>
-            <Box
-              sx={{
-                width: 40,
-                height: 40,
+          {/* AI Chat - Always visible, no dropdown */}
+          <Paper 
+            elevation={0}
+            sx={{ 
+              mb: 1.5, 
+              p: 2,
+              bgcolor: 'rgba(124, 179, 66, 0.2)',
+              border: '2px solid rgba(124, 179, 66, 0.6)',
+              borderRadius: 3,
+              boxShadow: '0 0 20px rgba(124, 179, 66, 0.3)',
+            }}
+          >
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+              <Box sx={{
+                width: 48,
+                height: 48,
                 borderRadius: '50%',
                 background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)',
+                boxShadow: '0 0 20px rgba(124, 179, 66, 0.5)',
+              }}>
+                <AutoAwesome sx={{ color: '#fff', fontSize: 28 }} />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="h6" fontWeight={800} sx={{ fontSize: '1.1rem', color: '#E8F5E9', mb: 0.5 }}>
+                  🤖 AI Grow Coach
+                </Typography>
+                <Typography variant="body2" sx={{ fontSize: '0.9rem', color: '#C5E1A5' }}>
+                  Ask questions, get instant recommendations
+                  {questionsRemaining > 0 && (
+                    <span style={{ marginLeft: 8, fontWeight: 600 }}>
+                      ({questionsRemaining} questions left today)
+                    </span>
+                  )}
+                </Typography>
+              </Box>
+            </Stack>
+            
+            {/* Messages - Always visible */}
+            <Box 
+              sx={{ 
+                flex: 1, 
+                overflowY: 'auto', 
+                mb: 1.5, 
+                minHeight: '200px',
+                maxHeight: '300px',
+                p: 1.5,
+                bgcolor: 'rgba(124, 179, 66, 0.05)',
+                borderRadius: 2
+              }}
+            >
+              {messages.length === 0 ? (
+                <Typography variant="body2" sx={{ color: '#C5E1A5', fontStyle: 'italic' }}>
+                  Ask me anything about growing! Examples:
+                  <br />• "What's the ideal VPD for week 3 of flower?"
+                  <br />• "How do I fix yellowing leaves?"
+                  <br />• "When should I start flushing?"
+                </Typography>
+              ) : (
+                <Stack spacing={1.5}>
+                  {messages.map((msg, idx) => (
+                    <Box
+                      key={idx}
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2,
+                        bgcolor: msg.role === 'user' ? 'rgba(124, 179, 66, 0.2)' : 'rgba(76, 175, 80, 0.15)',
+                        border: msg.role === 'user' ? '1px solid rgba(124, 179, 66, 0.4)' : '1px solid rgba(124, 179, 66, 0.3)',
+                        alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                        maxWidth: '85%'
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ color: '#E8F5E9', fontSize: '0.85rem' }}>
+                        {msg.content}
+                      </Typography>
+                    </Box>
+                  ))}
+                  {loading && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1 }}>
+                      <CircularProgress size={16} sx={{ color: '#7CB342' }} />
+                      <Typography variant="body2" sx={{ color: '#C5E1A5', fontSize: '0.8rem' }}>
+                        Thinking...
+                      </Typography>
+                    </Box>
+                  )}
+                  <div ref={chatEndRef} />
+                </Stack>
+              )}
+            </Box>
+            
+            {/* Input - Always visible */}
+            <Stack direction="row" spacing={1}>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder={questionsRemaining > 0 ? "Ask a question..." : "Daily limit reached. Try again tomorrow!"}
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAskQuestion();
+                  }
+                }}
+                disabled={loading || questionsRemaining <= 0}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'rgba(124, 179, 66, 0.15)',
+                    fontSize: '0.85rem',
+                    color: '#E8F5E9',
+                    '& fieldset': {
+                      borderColor: 'rgba(124, 179, 66, 0.3)'
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(124, 179, 66, 0.5)'
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: 'rgba(124, 179, 66, 0.6)'
+                    },
+                    '& input': {
+                      color: '#E8F5E9',
+                      '&::placeholder': {
+                        color: '#C5E1A5',
+                        opacity: 0.7
+                      }
+                    }
+                  }
+                }}
+              />
+              <IconButton
+                onClick={handleAskQuestion}
+                disabled={!question.trim() || loading || questionsRemaining <= 0}
+                sx={{
+                  bgcolor: 'rgba(124, 179, 66, 0.2)',
+                  color: '#7CB342',
+                  '&:hover': { bgcolor: 'rgba(124, 179, 66, 0.3)' },
+                  '&:disabled': { opacity: 0.5 }
+                }}
+              >
+                {loading ? <CircularProgress size={20} /> : <Send />}
+              </IconButton>
+            </Stack>
+            
+            {questionsRemaining <= 0 && (
+              <Typography variant="caption" sx={{ mt: 1, color: '#C5E1A5', fontSize: '0.75rem' }}>
+                You've used all 5 questions today. The limit resets tomorrow!
+              </Typography>
+            )}
+          </Paper>
+
+          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1.5 }}>
+            <Box
+              sx={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 12px rgba(124, 179, 66, 0.4)',
                 flexShrink: 0
               }}
             >
-              <AutoAwesome sx={{ color: '#fff', fontSize: 20 }} />
+              <AutoAwesome sx={{ color: '#fff', fontSize: 18 }} />
             </Box>
             <Box sx={{ flex: 1 }}>
               <Stack direction="row" alignItems="center" spacing={1}>
-                <Typography variant="h6" fontWeight={800} sx={{ color: '#E8F5E9' }}>
-                  {tab === LOGBOOK_TAB_INDEX ? "AI Grow Logbook" : "🤖 AI Grow Coach"}
+                <Typography variant="h6" fontWeight={800} sx={{ color: '#E8F5E9', fontSize: '1rem' }}>
+                  {tab === LOGBOOK_TAB_INDEX ? "AI Grow Logbook" : "Grow Coach"}
                 </Typography>
               </Stack>
               <Typography variant="caption" sx={{ color: '#C5E1A5', fontSize: '0.75rem' }}>
-                AI-powered guidance for every stage
+                Comprehensive guides for every stage
               </Typography>
             </Box>
           </Stack>
@@ -1206,188 +1380,6 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
         <Tab icon={<NoteAlt />} iconPosition="start" label="Logbook" />
       </Tabs>
 
-      <Paper 
-        elevation={0}
-        sx={{ 
-          mb: 1.5, 
-          p: 2,
-          bgcolor: 'rgba(124, 179, 66, 0.2)',
-          border: '2px solid rgba(124, 179, 66, 0.6)',
-          borderRadius: 3,
-          boxShadow: '0 0 20px rgba(124, 179, 66, 0.3)',
-        }}
-      >
-        <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between">
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1 }}>
-            <Box sx={{
-              width: 48,
-              height: 48,
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 0 20px rgba(124, 179, 66, 0.5)',
-            }}>
-              <AutoAwesome sx={{ color: '#fff', fontSize: 28 }} />
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="h6" fontWeight={800} sx={{ fontSize: '1.1rem', color: '#E8F5E9', mb: 0.5 }}>
-                🤖 AI Grow Coach
-              </Typography>
-              <Typography variant="body2" sx={{ fontSize: '0.9rem', color: '#C5E1A5' }}>
-                Ask questions, get instant recommendations
-                {questionsRemaining > 0 && (
-                  <span style={{ marginLeft: 8, fontWeight: 600 }}>
-                    ({questionsRemaining} questions left today)
-                  </span>
-                )}
-              </Typography>
-            </Box>
-          </Stack>
-          <IconButton
-            onClick={() => setChatOpen(!chatOpen)}
-            sx={{ 
-              color: '#7CB342',
-              bgcolor: 'rgba(124, 179, 66, 0.2)',
-              '&:hover': { bgcolor: 'rgba(124, 179, 66, 0.3)' }
-            }}
-          >
-            {chatOpen ? <ExpandLess /> : <ExpandMore />}
-          </IconButton>
-        </Stack>
-      </Paper>
-      
-      <Collapse in={chatOpen}>
-        <Paper 
-          elevation={0}
-          sx={{ 
-            mb: 1.5, 
-            p: 2, 
-            borderRadius: 3, 
-            bgcolor: 'rgba(124, 179, 66, 0.1)',
-            border: '1px solid rgba(124, 179, 66, 0.3)',
-            maxHeight: '400px',
-            display: 'flex',
-            flexDirection: 'column'
-          }}
-        >
-          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: '#E8F5E9' }}>
-            Ask Grow Coach AI
-          </Typography>
-          
-          {/* Messages */}
-          <Box 
-            sx={{ 
-              flex: 1, 
-              overflowY: 'auto', 
-              mb: 1.5, 
-              minHeight: '200px',
-              maxHeight: '250px',
-              p: 1,
-              bgcolor: 'rgba(0,0,0,0.02)',
-              borderRadius: 2
-            }}
-          >
-            {messages.length === 0 ? (
-              <Typography variant="body2" sx={{ color: '#C5E1A5', fontStyle: 'italic' }}>
-                Ask me anything about growing! Examples:
-                <br />• "What's the ideal VPD for week 3 of flower?"
-                <br />• "How do I fix yellowing leaves?"
-                <br />• "When should I start flushing?"
-              </Typography>
-            ) : (
-              <Stack spacing={1.5}>
-                {messages.map((msg, idx) => (
-                  <Box
-                    key={idx}
-                    sx={{
-                      p: 1.5,
-                      borderRadius: 2,
-                      bgcolor: msg.role === 'user' ? 'rgba(124, 179, 66, 0.2)' : 'rgba(76, 175, 80, 0.15)',
-                      border: msg.role === 'user' ? '1px solid rgba(124, 179, 66, 0.4)' : '1px solid rgba(124, 179, 66, 0.3)',
-                      alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                      maxWidth: '85%'
-                    }}
-                  >
-                    <Typography variant="body2" sx={{ color: '#E8F5E9', fontSize: '0.85rem' }}>
-                      {msg.content}
-                    </Typography>
-                  </Box>
-                ))}
-                {loading && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1 }}>
-                    <CircularProgress size={16} sx={{ color: '#7CB342' }} />
-                    <Typography variant="body2" sx={{ color: '#C5E1A5', fontSize: '0.8rem' }}>
-                      Thinking...
-                    </Typography>
-                  </Box>
-                )}
-                <div ref={chatEndRef} />
-              </Stack>
-            )}
-          </Box>
-          
-          {/* Input */}
-          <Stack direction="row" spacing={1}>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder={questionsRemaining > 0 ? "Ask a question..." : "Daily limit reached. Try again tomorrow!"}
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleAskQuestion();
-                }
-              }}
-              disabled={loading || questionsRemaining <= 0}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  bgcolor: 'rgba(124, 179, 66, 0.15)',
-                  fontSize: '0.85rem',
-                  color: '#E8F5E9',
-                  '& fieldset': {
-                    borderColor: 'rgba(124, 179, 66, 0.3)'
-                  },
-                  '&:hover fieldset': {
-                    borderColor: 'rgba(124, 179, 66, 0.5)'
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderColor: 'rgba(124, 179, 66, 0.6)'
-                  },
-                  '& input': {
-                    color: '#E8F5E9',
-                    '&::placeholder': {
-                      color: '#C5E1A5',
-                      opacity: 0.7
-                    }
-                  }
-                }
-              }}
-            />
-            <IconButton
-              onClick={handleAskQuestion}
-              disabled={!question.trim() || loading || questionsRemaining <= 0}
-              sx={{
-                bgcolor: 'rgba(124, 179, 66, 0.2)',
-                color: '#7CB342',
-                '&:hover': { bgcolor: 'rgba(124, 179, 66, 0.3)' },
-                '&:disabled': { opacity: 0.5 }
-              }}
-            >
-              {loading ? <CircularProgress size={20} /> : <Send />}
-            </IconButton>
-          </Stack>
-          
-          {questionsRemaining <= 0 && (
-            <Typography variant="caption" sx={{ mt: 1, color: '#C5E1A5', fontSize: '0.75rem' }}>
-              You've used all 5 questions today. The limit resets tomorrow!
-            </Typography>
-          )}
-        </Paper>
-      </Collapse>
 
           {renderContent()}
         </Box>

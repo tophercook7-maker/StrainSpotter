@@ -121,23 +121,33 @@ function isLikelyCannabisPlace(place, searchedWithKeyword = false) {
   const types = Array.isArray(place.types) ? place.types : [];
 
   // If we searched with a cannabis keyword and got this result, trust Google's keyword matching
-  // Google Places keyword search is generally accurate, so be very lenient
+  // Google Places keyword search is generally accurate, so be VERY lenient
   if (searchedWithKeyword) {
-    // Only filter out obvious false positives
+    // Only filter out obvious false positives - be extremely permissive
     const haystack = `${name} ${vicinity} ${types.join(' ')}`.toLowerCase();
     
-    // Filter out obvious non-cannabis businesses
-    if (containsNonCannabisKeywords(haystack)) {
+    // Only filter if it's clearly NOT a dispensary (very strict filtering)
+    const hasStrongNonCannabisIndicator = 
+      containsNonCannabisKeywords(haystack) &&
+      (haystack.includes('lawn') || haystack.includes('garden center') || haystack.includes('nursery') || haystack.includes('pest control'));
+    
+    if (hasStrongNonCannabisIndicator) {
       return false;
     }
 
-    // Filter obvious non-dispensary types (e.g. Walmart, Costco, grocery stores)
-    if (types.some(type => DISALLOWED_TYPES.includes(type))) {
+    // Only filter obvious non-dispensary types (e.g. Walmart, Costco, grocery stores)
+    // But be lenient - if Google returned it for a cannabis keyword, it's probably right
+    const hasDisallowedType = types.some(type => 
+      DISALLOWED_TYPES.includes(type) && 
+      (type === 'supermarket' || type === 'grocery_or_supermarket' || type === 'department_store')
+    );
+    
+    if (hasDisallowedType) {
       return false;
     }
 
     // If we searched with a cannabis keyword and Google returned it, trust it
-    // This is more lenient because Google's keyword search is accurate
+    // This is very lenient because Google's keyword search is accurate
     return true;
   }
 
@@ -266,12 +276,13 @@ async function searchGooglePlaces(lat, lng, radius, overrideKeyword) {
     const seenPlaceIds = new Set();
 
     // Search with each keyword and combine results
-    // Use more keywords for better coverage - always use at least 8 keywords
+    // Use more keywords for better coverage - always use at least 10 keywords
     const configsToUse = overrideKeyword
       ? [{ keyword: overrideKeyword }]
-      : searchConfigs.slice(0, Math.min(searchConfigs.length, radius > 30 ? 12 : radius > 15 ? 10 : 8));
+      : searchConfigs.slice(0, Math.min(searchConfigs.length, radius > 30 ? 15 : radius > 15 ? 12 : 10));
     
     console.log(`[dispensaries-live] Using ${configsToUse.length} search keywords: ${configsToUse.map(c => c.keyword).join(', ')}`);
+    console.log(`[dispensaries-live] Search location: ${lat}, ${lng}, radius: ${radius} miles (${radiusMeters.toFixed(0)} meters)`);
 
     const tasks = configsToUse.map(({ keyword, type }) => async () => {
       const typeParam = type ? `&type=${encodeURIComponent(type)}` : '';
@@ -291,7 +302,7 @@ async function searchGooglePlaces(lat, lng, radius, overrideKeyword) {
       }
 
       if (data.status === 'OK' && data.results) {
-        console.log(`[dispensaries-live] Google Places returned ${data.results.length} results for keyword search`);
+        console.log(`[dispensaries-live] Google Places returned ${data.results.length} results for keyword: "${keyword}"`);
         for (const place of data.results) {
           const isClosed = place.business_status?.includes('CLOSED');
           const isBlacklisted = CLOSED_DISPENSARIES.some(closed => place.name?.includes(closed));
@@ -301,15 +312,20 @@ async function searchGooglePlaces(lat, lng, radius, overrideKeyword) {
           if (!seenPlaceIds.has(place.place_id) && !isClosed && !isBlacklisted && looksLikeDispensary) {
             seenPlaceIds.add(place.place_id);
             allResults.push(place);
-            console.log(`[dispensaries-live] Added dispensary: ${place.name}`);
+            console.log(`[dispensaries-live] ✅ Added: ${place.name} (${place.vicinity || place.formatted_address})`);
           } else {
-            console.log(`[dispensaries-live] Filtered out: ${place.name} (closed: ${isClosed}, blacklisted: ${isBlacklisted}, looksLikeDispensary: ${looksLikeDispensary})`);
+            const reasons = [];
+            if (seenPlaceIds.has(place.place_id)) reasons.push('duplicate');
+            if (isClosed) reasons.push('closed');
+            if (isBlacklisted) reasons.push('blacklisted');
+            if (!looksLikeDispensary) reasons.push('filtered');
+            console.log(`[dispensaries-live] ❌ Filtered: ${place.name} (${reasons.join(', ')})`);
           }
         }
       } else if (data.status && data.status !== 'ZERO_RESULTS') {
-        console.error('[dispensaries-live] Google Places API error:', data.status, data.error_message);
+        console.error(`[dispensaries-live] Google Places API error for "${keyword}":`, data.status, data.error_message);
       } else if (data.status === 'ZERO_RESULTS') {
-        console.log('[dispensaries-live] Google Places returned zero results for this keyword');
+        console.log(`[dispensaries-live] Zero results for keyword: "${keyword}"`);
       }
     }
 
