@@ -151,8 +151,8 @@ export default defineConfig(({ mode }) => {
       outDir: buildDir, // Separate output directories
       // Target modern browsers for better performance
       target: 'es2020',
-    // Enable code splitting for faster initial load
-    rollupOptions: {
+      // Enable code splitting for faster initial load
+      rollupOptions: {
       output: {
         // Split vendor libraries into separate chunks
         manualChunks: (id) => {
@@ -196,7 +196,7 @@ export default defineConfig(({ mode }) => {
             return 'assets/mui-[hash].js';
           }
           return 'assets/[name]-[hash].js';
-        },
+        }
       }
     },
     chunkSizeWarningLimit: 1000,
