@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Alert,
   Box,
@@ -12,10 +12,15 @@ import {
   Stack,
   Tab,
   Tabs,
-  Typography
+  Typography,
+  TextField,
+  IconButton,
+  Collapse,
+  CircularProgress
 } from '@mui/material';
 import {
   ArrowBack,
+  AutoAwesome,
   BugReport,
   Checklist,
   Engineering,
@@ -29,9 +34,14 @@ import {
   Timeline,
   NoteAlt,
   WaterDrop,
-  WbSunny
+  WbSunny,
+  Send,
+  ExpandMore,
+  ExpandLess
 } from '@mui/icons-material';
 import GrowLogBook from './GrowLogBook';
+import { BackHeader } from './BackHeader';
+import { API_BASE } from '../config';
 
 function Section({ title, children }) {
   return (
@@ -40,15 +50,20 @@ function Section({ title, children }) {
         mb: 3,
         p: 2,
         borderRadius: 3,
-        backgroundColor: 'rgba(255,255,255,0.95)',
-        border: '1px solid rgba(0,0,0,0.08)',
-        boxShadow: '0 6px 18px rgba(20,40,20,0.08)'
+        backgroundColor: 'rgba(124, 179, 66, 0.08)',
+        border: '1px solid rgba(124, 179, 66, 0.2)',
+        boxShadow: '0 6px 18px rgba(20,40,20,0.15)',
+        width: '100%',
+        maxWidth: '100%',
+        overflow: 'hidden', // Prevent overflow
+        wordWrap: 'break-word', // Break long words
+        overflowWrap: 'break-word', // Modern word break
       }}
     >
-      <Typography variant="subtitle1" fontWeight={800} gutterBottom sx={{ color: '#000' }}>
+      <Typography variant="subtitle1" fontWeight={800} gutterBottom sx={{ color: '#E8F5E9', wordBreak: 'break-word', overflowWrap: 'break-word', px: 0, mx: 0, fontSize: '1rem' }}>
         {title}
       </Typography>
-      <Typography variant="body2" sx={{ color: '#000' }}>
+      <Typography variant="body2" sx={{ color: '#E8F5E9', wordBreak: 'break-word', overflowWrap: 'break-word', px: 0, mx: 0, width: '100%', boxSizing: 'border-box', fontSize: '0.9rem', lineHeight: 1.6 }}>
         {children}
       </Typography>
     </Box>
@@ -58,8 +73,136 @@ function Section({ title, children }) {
 export const LOGBOOK_TAB_INDEX = 13;
 
 export default function GrowCoach({ onBack, initialTab = 0 }) {
+  // Ensure onBack is always available - provide default if missing
+  const handleBack = onBack || (() => {
+    if (window.history.length > 1) {
+      window.history.back();
+    }
+  });
   const [tab, setTab] = useState(initialTab);
   const [timelineIndex, setTimelineIndex] = useState(0);
+  
+  // AI Chat state - default to expanded for better UX
+  const [chatOpen, setChatOpen] = useState(true);
+  const [question, setQuestion] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [questionsRemaining, setQuestionsRemaining] = useState(5); // Daily limit
+  const chatEndRef = useRef(null);
+  
+  // Load questions remaining from localStorage
+  useEffect(() => {
+    const today = new Date().toDateString();
+    const stored = localStorage.getItem('growCoach_questions');
+    if (stored) {
+      const { date, count } = JSON.parse(stored);
+      if (date === today) {
+        setQuestionsRemaining(Math.max(0, 5 - count));
+      }
+    }
+  }, []);
+  
+  // Scroll to bottom when new message arrives
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+  
+  const handleAskQuestion = async () => {
+    if (!question.trim() || loading || questionsRemaining <= 0) return;
+    
+    const userMessage = question.trim();
+    setQuestion('');
+    setLoading(true);
+    
+    // Add user message
+    const newMessages = [...messages, { role: 'user', content: userMessage }];
+    setMessages(newMessages);
+    
+    // Update daily limit
+    const today = new Date().toDateString();
+    const stored = localStorage.getItem('growCoach_questions');
+    let count = 1;
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed.date === today) {
+        count = parsed.count + 1;
+      }
+    }
+    localStorage.setItem('growCoach_questions', JSON.stringify({ date: today, count }));
+    setQuestionsRemaining(Math.max(0, 5 - count));
+    
+    try {
+      const endpoint = `${API_BASE}/api/grow-coach/ask`;
+      console.log('[GrowCoach] Calling AI endpoint:', endpoint);
+      
+      // Call AI endpoint with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: userMessage }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[GrowCoach] API error:', response.status, errorText);
+        console.error('[GrowCoach] Endpoint URL:', endpoint);
+        console.error('[GrowCoach] API_BASE:', API_BASE);
+        
+        let errorMessage = `Server error (${response.status})`;
+        
+        // Handle 404 Not Found specifically
+        if (response.status === 404) {
+          errorMessage = 'AI endpoint not found. The backend server may not be running or the route is misconfigured.';
+        } else if (response.status === 401) {
+          errorMessage = 'Authentication required. Please sign in and try again.';
+        } else {
+          try {
+            const errorData = JSON.parse(errorText);
+            // Prefer 'answer' field if available (for fallback responses)
+            errorMessage = errorData.answer || errorData.error || errorMessage;
+          } catch (e) {
+            // Use default error message
+          }
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log('[GrowCoach] AI response received:', data);
+      
+      // Handle both { answer: ... } and { error: ... } response formats
+      const responseText = data.answer || data.error || 'I apologize, but I couldn\'t generate a response. Please try again later.';
+      setMessages([...newMessages, { role: 'assistant', content: responseText }]);
+    } catch (error) {
+      console.error('[GrowCoach] AI question error:', error);
+      
+      let errorMessage = 'I\'m having trouble connecting right now.';
+      
+      if (error.name === 'AbortError') {
+        errorMessage = 'The request timed out. Please check your connection and try again.';
+      } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        errorMessage = 'Unable to reach the server. Please check your internet connection and try again.';
+      } else if (error.message) {
+        errorMessage = `Connection issue: ${error.message}. Please try again in a moment.`;
+      }
+      
+      // Fallback: provide a helpful message
+      setMessages([...newMessages, { 
+        role: 'assistant', 
+        content: `${errorMessage} For now, try checking the relevant tab above for detailed guidance. You can also try asking again in a moment.` 
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     setTab(initialTab);
@@ -91,12 +234,12 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
                 { stage: 'Dry + Cure', temp: '60-65°F', rh: '55-60% RH', vpd: '0.7-0.8 kPa', light: 'Complete darkness' }
               ].map((row) => (
                 <Grid item xs={12} sm={6} key={row.stage}>
-                  <Paper elevation={0} sx={{ p: 2, borderRadius: 3, background: 'rgba(255,255,255,0.96)', border: '1px solid rgba(0,0,0,0.06)' }}>
-                    <Typography variant="subtitle2" fontWeight={700}>{row.stage}</Typography>
-                    <Typography variant="body2">Temperature: {row.temp}</Typography>
-                    <Typography variant="body2">Humidity: {row.rh}</Typography>
-                    <Typography variant="body2">VPD: {row.vpd}</Typography>
-                    <Typography variant="body2">Lighting: {row.light}</Typography>
+                  <Paper elevation={0} sx={{ p: 2, borderRadius: 3, background: 'rgba(124, 179, 66, 0.1)', border: '1px solid rgba(124, 179, 66, 0.3)' }}>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#E8F5E9' }}>{row.stage}</Typography>
+                    <Typography variant="body2" sx={{ color: '#E8F5E9' }}>Temperature: {row.temp}</Typography>
+                    <Typography variant="body2" sx={{ color: '#E8F5E9' }}>Humidity: {row.rh}</Typography>
+                    <Typography variant="body2" sx={{ color: '#E8F5E9' }}>VPD: {row.vpd}</Typography>
+                    <Typography variant="body2" sx={{ color: '#E8F5E9' }}>Lighting: {row.light}</Typography>
                   </Paper>
                 </Grid>
               ))}
@@ -491,10 +634,10 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
                 { name: 'Magnesium', deficiency: 'Interveinal yellowing on older leaves.', toxicity: 'Can antagonise calcium uptake.' }
               ].map((row) => (
                 <Grid item xs={12} sm={6} key={row.name}>
-                  <Paper elevation={0} sx={{ p: 2, borderRadius: 3, background: 'rgba(255,255,255,0.96)', border: '1px solid rgba(0,0,0,0.06)' }}>
-                    <Typography variant="subtitle2" fontWeight={700}>{row.name}</Typography>
-                    <Typography variant="body2"><strong>Deficiency:</strong> {row.deficiency}</Typography>
-                    <Typography variant="body2"><strong>Toxicity:</strong> {row.toxicity}</Typography>
+                  <Paper elevation={0} sx={{ p: 2, borderRadius: 3, background: 'rgba(124, 179, 66, 0.1)', border: '1px solid rgba(124, 179, 66, 0.3)' }}>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#E8F5E9' }}>{row.name}</Typography>
+                    <Typography variant="body2" sx={{ color: '#E8F5E9' }}><strong>Deficiency:</strong> {row.deficiency}</Typography>
+                    <Typography variant="body2" sx={{ color: '#E8F5E9' }}><strong>Toxicity:</strong> {row.toxicity}</Typography>
                   </Paper>
                 </Grid>
               ))}
@@ -540,10 +683,10 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
                 { pest: 'Bud Rot (Botrytis)', sign: 'Gray mould inside buds.', action: 'Remove infected material immediately, lower RH to &lt;45%, increase airflow, consider hydrogen peroxide spray on surrounding area.' }
               ].map((row) => (
                 <Grid item xs={12} sm={6} key={row.pest}>
-                  <Paper elevation={0} sx={{ p: 2, borderRadius: 3, background: 'rgba(255,255,255,0.96)', border: '1px solid rgba(0,0,0,0.06)' }}>
-                    <Typography variant="subtitle2" fontWeight={700}>{row.pest}</Typography>
-                    <Typography variant="body2"><strong>Signs:</strong> {row.sign}</Typography>
-                    <Typography variant="body2"><strong>Response:</strong> {row.action}</Typography>
+                  <Paper elevation={0} sx={{ p: 2, borderRadius: 3, background: 'rgba(124, 179, 66, 0.1)', border: '1px solid rgba(124, 179, 66, 0.3)' }}>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#E8F5E9' }}>{row.pest}</Typography>
+                    <Typography variant="body2" sx={{ color: '#E8F5E9' }}><strong>Signs:</strong> {row.sign}</Typography>
+                    <Typography variant="body2" sx={{ color: '#E8F5E9' }}><strong>Response:</strong> {row.action}</Typography>
                   </Paper>
                 </Grid>
               ))}
@@ -834,17 +977,17 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
   const renderDailyPlaybook = () => (
     <Stack spacing={3}>
       {dailyPlaybook.map(({ stage, tasks }) => (
-        <Paper key={stage} elevation={0} sx={{ p: 3, borderRadius: 3, background: 'rgba(255,255,255,0.96)', border: '1px solid rgba(0,0,0,0.06)' }}>
-          <Typography variant="h6" fontWeight={800} gutterBottom sx={{ color: '#000' }}>
+        <Paper key={stage} elevation={0} sx={{ p: 3, borderRadius: 3, background: 'rgba(124, 179, 66, 0.1)', border: '1px solid rgba(124, 179, 66, 0.3)' }}>
+          <Typography variant="h6" fontWeight={800} gutterBottom sx={{ color: '#E8F5E9' }}>
             {stage}
           </Typography>
           <Grid container spacing={2}>
             {Object.entries(tasks).map(([time, list]) => (
               <Grid item xs={12} sm={4} key={time}>
-                <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#000' }}>{time}</Typography>
+                <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#E8F5E9' }}>{time}</Typography>
                 <Stack spacing={0.5} sx={{ mt: 1 }}>
                   {list.map((item) => (
-                    <Typography key={item} variant="body2" sx={{ color: '#000' }}>• {item}</Typography>
+                    <Typography key={item} variant="body2" sx={{ color: '#E8F5E9' }}>• {item}</Typography>
                   ))}
                 </Stack>
               </Grid>
@@ -858,7 +1001,7 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
   const renderTimeline = () => (
     <Box>
       <Stack spacing={2} sx={{ mb: 3 }}>
-        <Typography variant="subtitle1" fontWeight={800} sx={{ color: '#000' }}>
+            <Typography variant="subtitle1" fontWeight={800} sx={{ color: '#E8F5E9' }}>
           Weekly Timeline
         </Typography>
         <Slider
@@ -873,35 +1016,35 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
           }}
         />
       </Stack>
-      <Paper elevation={0} sx={{ p: 3, borderRadius: 3, background: 'rgba(255,255,255,0.97)', border: '1px solid rgba(0,0,0,0.06)' }}>
+      <Paper elevation={0} sx={{ p: 3, borderRadius: 3, background: 'rgba(124, 179, 66, 0.1)', border: '1px solid rgba(124, 179, 66, 0.3)' }}>
         {currentTimeline ? (
           <>
-            <Typography variant="h6" fontWeight={800} gutterBottom sx={{ color: '#000' }}>
+            <Typography variant="h6" fontWeight={800} gutterBottom sx={{ color: '#E8F5E9' }}>
               {currentTimeline.stage}
             </Typography>
             <Chip label={`Focus: ${currentTimeline.focus}`} color="success" size="small" sx={{ mb: 2 }} />
-            <Divider sx={{ mb: 2 }} />
-            <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#000' }}>Core Tasks</Typography>
+            <Divider sx={{ mb: 2, borderColor: 'rgba(124, 179, 66, 0.3)' }} />
+            <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#E8F5E9' }}>Core Tasks</Typography>
             <Stack spacing={0.5} sx={{ mt: 1, mb: 2 }}>
               {currentTimeline.tasks.map((task) => (
-                <Typography key={task} variant="body2" sx={{ color: '#000' }}>• {task}</Typography>
+                <Typography key={task} variant="body2" sx={{ color: '#E8F5E9' }}>• {task}</Typography>
               ))}
             </Stack>
-            <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#000' }}>AI Prompts</Typography>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#E8F5E9' }}>AI Prompts</Typography>
             <Stack spacing={0.5} sx={{ mt: 1, mb: 2 }}>
               {currentTimeline.aiPrompts.map((prompt) => (
-                <Typography key={prompt} variant="body2" sx={{ color: '#000' }}>• {prompt}</Typography>
+                <Typography key={prompt} variant="body2" sx={{ color: '#E8F5E9' }}>• {prompt}</Typography>
               ))}
             </Stack>
-            <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#000' }}>Target Metrics</Typography>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#E8F5E9' }}>Target Metrics</Typography>
             <Stack spacing={0.5} sx={{ mt: 1 }}>
               {currentTimeline.metrics.map((metric) => (
-                <Typography key={metric} variant="body2" sx={{ color: '#000' }}>• {metric}</Typography>
+                <Typography key={metric} variant="body2" sx={{ color: '#E8F5E9' }}>• {metric}</Typography>
               ))}
             </Stack>
           </>
         ) : (
-          <Typography variant="body2" sx={{ color: '#000' }}>
+          <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
             Timeline data unavailable.
           </Typography>
         )}
@@ -938,7 +1081,11 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
       case 12:
         return renderSections(sensorSections);
       case LOGBOOK_TAB_INDEX:
-        return <GrowLogBook />;
+        return (
+          <Box sx={{ width: '100%', maxWidth: '100%', mx: 0, px: 0 }}>
+            <GrowLogBook />
+          </Box>
+        );
       default:
         return null;
     }
@@ -953,28 +1100,14 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
         overflow: 'hidden',
       }}
     >
-      {/* Fixed header */}
+      {/* Fixed header - Always show back button */}
       <Box
         sx={{
           flexShrink: 0,
-          pt: 'calc(env(safe-area-inset-top) + 20px)',
-          pb: 2,
-          px: { xs: 2, sm: 3 },
-          background: 'rgba(248,252,248,0.96)',
-          backdropFilter: 'blur(20px)',
-          borderBottom: '1px solid rgba(0,0,0,0.12)',
           zIndex: 2
         }}
       >
-        {onBack && (
-          <Button
-            onClick={onBack}
-            startIcon={<ArrowBack />}
-            sx={{ mb: 1, textTransform: 'none', fontWeight: 700, color: '#000' }}
-          >
-            Back to Garden
-          </Button>
-        )}
+        <BackHeader title={tab === LOGBOOK_TAB_INDEX ? "AI Grow Logbook" : "Grow Coach"} onBack={handleBack} />
       </Box>
 
       {/* Scrollable content */}
@@ -986,56 +1119,68 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
           WebkitOverflowScrolling: 'touch',
         }}
       >
-        <Container
-          maxWidth="md"
-          sx={{
-            py: 3,
-            px: { xs: 2, sm: 3 },
-            background: 'rgba(248,252,248,0.96)',
-          }}
-        >
-          <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }}>
-        {/* Hero Image Icon */}
         <Box
           sx={{
-            width: 50,
-            height: 50,
-            borderRadius: '50%',
-            background: 'transparent',
-            border: '2px solid rgba(124, 179, 66, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)',
+            py: 1.5,
+            px: { xs: 0.75, sm: 1 },
+            background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.1) 0%, rgba(76, 175, 80, 0.05) 100%)',
+            width: '100%',
+            maxWidth: '100%',
             overflow: 'hidden',
-            flexShrink: 0
+            wordWrap: 'break-word',
+            overflowWrap: 'break-word',
+            boxSizing: 'border-box',
+            mx: 0,
           }}
         >
-          <img
-            src="/hero.png?v=13"
-            alt="StrainSpotter"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        </Box>
-        <Box>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <MenuBook sx={{ color: '#7CB342' }} />
-            <Typography variant="h5" fontWeight={900} sx={{ color: '#000' }}>
-              Grow Coach
-            </Typography>
+          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1.5 }}>
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)',
+                flexShrink: 0
+              }}
+            >
+              <AutoAwesome sx={{ color: '#fff', fontSize: 20 }} />
+            </Box>
+            <Box sx={{ flex: 1 }}>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography variant="h6" fontWeight={800} sx={{ color: '#E8F5E9' }}>
+                  {tab === LOGBOOK_TAB_INDEX ? "AI Grow Logbook" : "🤖 AI Grow Coach"}
+                </Typography>
+              </Stack>
+              <Typography variant="caption" sx={{ color: '#C5E1A5', fontSize: '0.75rem' }}>
+                AI-powered guidance for every stage
+              </Typography>
+            </Box>
           </Stack>
-        </Box>
-      </Stack>
-      <Typography variant="body2" sx={{ mb: 2, color: '#000' }}>
-        Complete, step-by-step guidance from seed selection to curing, tailored for consistent mobile use. Follow the tabs in order and log every action so StrainSpotter AI can spot trends early.
-      </Typography>
 
       <Tabs
         value={tab}
         onChange={(e, value) => setTab(value)}
         variant="scrollable"
         allowScrollButtonsMobile
-        sx={{ mb: 2 }}
+        scrollButtons="auto"
+        sx={{ 
+          mb: 1.5, 
+          '& .MuiTab-root': { 
+            minHeight: 44, 
+            fontSize: '0.8rem', 
+            px: 1,
+            textTransform: 'none',
+            fontWeight: 600
+          },
+          '& .MuiTabs-scrollButtons': {
+            width: 32,
+            '&.Mui-disabled': { opacity: 0.3 }
+          }
+        }}
       >
         <Tab icon={<LocalFlorist />} iconPosition="start" label="Overview" />
         <Tab icon={<Engineering />} iconPosition="start" label="Setup" />
@@ -1053,12 +1198,168 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
         <Tab icon={<NoteAlt />} iconPosition="start" label="Logbook" />
       </Tabs>
 
-      <Alert severity="info" sx={{ mb: 3 }}>
-        Use this coach in tandem with StrainSpotter Grow Logs. Capture photos, enter metrics, and ask AI follow-up questions whenever something looks unfamiliar.
+      <Alert 
+        severity="info" 
+        icon={<AutoAwesome />}
+        sx={{ 
+          mb: 1.5, 
+          bgcolor: 'rgba(124, 179, 66, 0.1)',
+          border: '1px solid rgba(124, 179, 66, 0.3)',
+          '& .MuiAlert-icon': { color: '#7CB342' }
+        }}
+        action={
+          <IconButton
+            size="small"
+            onClick={() => setChatOpen(!chatOpen)}
+            sx={{ color: '#7CB342' }}
+          >
+            {chatOpen ? <ExpandLess /> : <ExpandMore />}
+          </IconButton>
+        }
+      >
+        <Typography variant="body2" sx={{ fontSize: '0.85rem', color: '#E8F5E9' }}>
+          <strong>AI-Powered:</strong> Ask questions, get instant recommendations, and track trends automatically.
+          {questionsRemaining > 0 && (
+            <span style={{ marginLeft: 8, opacity: 0.8 }}>
+              ({questionsRemaining} questions remaining today)
+            </span>
+          )}
+        </Typography>
       </Alert>
+      
+      <Collapse in={chatOpen}>
+        <Paper 
+          elevation={0}
+          sx={{ 
+            mb: 1.5, 
+            p: 2, 
+            borderRadius: 3, 
+            bgcolor: 'rgba(124, 179, 66, 0.1)',
+            border: '1px solid rgba(124, 179, 66, 0.3)',
+            maxHeight: '400px',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: '#E8F5E9' }}>
+            Ask Grow Coach AI
+          </Typography>
+          
+          {/* Messages */}
+          <Box 
+            sx={{ 
+              flex: 1, 
+              overflowY: 'auto', 
+              mb: 1.5, 
+              minHeight: '200px',
+              maxHeight: '250px',
+              p: 1,
+              bgcolor: 'rgba(0,0,0,0.02)',
+              borderRadius: 2
+            }}
+          >
+            {messages.length === 0 ? (
+              <Typography variant="body2" sx={{ color: '#C5E1A5', fontStyle: 'italic' }}>
+                Ask me anything about growing! Examples:
+                <br />• "What's the ideal VPD for week 3 of flower?"
+                <br />• "How do I fix yellowing leaves?"
+                <br />• "When should I start flushing?"
+              </Typography>
+            ) : (
+              <Stack spacing={1.5}>
+                {messages.map((msg, idx) => (
+                  <Box
+                    key={idx}
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 2,
+                      bgcolor: msg.role === 'user' ? 'rgba(124, 179, 66, 0.2)' : 'rgba(76, 175, 80, 0.15)',
+                      border: msg.role === 'user' ? '1px solid rgba(124, 179, 66, 0.4)' : '1px solid rgba(124, 179, 66, 0.3)',
+                      alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                      maxWidth: '85%'
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ color: '#E8F5E9', fontSize: '0.85rem' }}>
+                      {msg.content}
+                    </Typography>
+                  </Box>
+                ))}
+                {loading && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1 }}>
+                    <CircularProgress size={16} sx={{ color: '#7CB342' }} />
+                    <Typography variant="body2" sx={{ color: '#C5E1A5', fontSize: '0.8rem' }}>
+                      Thinking...
+                    </Typography>
+                  </Box>
+                )}
+                <div ref={chatEndRef} />
+              </Stack>
+            )}
+          </Box>
+          
+          {/* Input */}
+          <Stack direction="row" spacing={1}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder={questionsRemaining > 0 ? "Ask a question..." : "Daily limit reached. Try again tomorrow!"}
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleAskQuestion();
+                }
+              }}
+              disabled={loading || questionsRemaining <= 0}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  bgcolor: 'rgba(124, 179, 66, 0.15)',
+                  fontSize: '0.85rem',
+                  color: '#E8F5E9',
+                  '& fieldset': {
+                    borderColor: 'rgba(124, 179, 66, 0.3)'
+                  },
+                  '&:hover fieldset': {
+                    borderColor: 'rgba(124, 179, 66, 0.5)'
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: 'rgba(124, 179, 66, 0.6)'
+                  },
+                  '& input': {
+                    color: '#E8F5E9',
+                    '&::placeholder': {
+                      color: '#C5E1A5',
+                      opacity: 0.7
+                    }
+                  }
+                }
+              }}
+            />
+            <IconButton
+              onClick={handleAskQuestion}
+              disabled={!question.trim() || loading || questionsRemaining <= 0}
+              sx={{
+                bgcolor: 'rgba(124, 179, 66, 0.2)',
+                color: '#7CB342',
+                '&:hover': { bgcolor: 'rgba(124, 179, 66, 0.3)' },
+                '&:disabled': { opacity: 0.5 }
+              }}
+            >
+              {loading ? <CircularProgress size={20} /> : <Send />}
+            </IconButton>
+          </Stack>
+          
+          {questionsRemaining <= 0 && (
+            <Typography variant="caption" sx={{ mt: 1, color: '#C5E1A5', fontSize: '0.75rem' }}>
+              You've used all 5 questions today. The limit resets tomorrow!
+            </Typography>
+          )}
+        </Paper>
+      </Collapse>
 
           {renderContent()}
-        </Container>
+        </Box>
       </Box>
     </Box>
   );
