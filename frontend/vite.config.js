@@ -26,15 +26,9 @@ function ensureReactFirst() {
         if (typeof globalThis !== 'undefined') {
           globalThis.React = ReactModule;
         }
-        try {
-          Object.defineProperty(window, 'React', {
-            value: ReactModule,
-            writable: false,
-            configurable: false,
-            enumerable: true
-          });
-        } catch(e) {
-          // Property already defined, that's okay
+        // Don't use defineProperty - just assign directly to avoid readonly errors
+        if (!window.React) {
+          window.React = ReactModule;
         }
       }
     }

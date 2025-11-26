@@ -42,15 +42,15 @@ if (typeof window !== 'undefined') {
   }
   
   // Ensure React is available before any module evaluation
+  // Don't use defineProperty with writable:false as it can cause readonly errors
+  // Just assign directly - simpler and works better
   try {
-    Object.defineProperty(window, 'React', {
-      value: React,
-      writable: false,
-      configurable: false
-    });
-    debugLog('React property defined on window');
+    if (!window.React) {
+      window.React = React;
+    }
+    debugLog('React property set on window');
   } catch (e) {
-    debugLog('Error defining React property:', e);
+    debugLog('Error setting React property:', e);
   }
   
   debugLog('Final check - window.React:', typeof window.React, window.React ? 'EXISTS' : 'MISSING');
