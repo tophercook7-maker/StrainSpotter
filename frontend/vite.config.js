@@ -93,7 +93,7 @@ function ensureReactFirst() {
             const otherPreloadsFiltered = otherPreloads.filter(m => !m.includes('vendor'))
             
             const orderedPreloads = [
-              ...reactPreloads,
+                ...reactPreloads,
               ...vendorPreloads,
               ...otherPreloadsFiltered
             ]
@@ -144,46 +144,50 @@ export default defineConfig(({ mode }) => {
   const chunkSizeLimit = isMobile ? mobileChunkSize : webChunkSize;
   
   return {
-    plugins: [
+  plugins: [
       react({
         // Optimize React for production
         jsxRuntime: 'automatic',
         jsxImportSource: 'react'
       }),
       ensureReactFirst()
-    ],
-    base: './', // Use relative paths for Capacitor compatibility
-    server: {
-      port: 5173,
-      host: true
-    },
-    build: {
-      outDir: buildDir,
-      // Target modern browsers for better performance
-      target: isMobile ? 'es2020' : 'es2022', // Mobile: broader support, Web: latest features
+  ],
+  base: './', // Use relative paths for Capacitor compatibility
+  server: {
+    port: 5173,
+    host: true
+  },
+  build: {
+        outDir: buildDir,
+    // Target modern browsers for better performance
+        target: isMobile ? 'es2020' : 'es2022', // Mobile: broader support, Web: latest features
+        // Use esbuild minification to avoid circular dependency issues
+        minify: 'esbuild',
+        // Don't use terser as it can cause initialization order issues
       // CSS code splitting for better caching
       cssCodeSplit: true,
       // Optimize asset inlining threshold
       assetsInlineLimit: isMobile ? 4096 : 8192, // Mobile: inline smaller assets
-      // Enable code splitting for faster initial load
-      rollupOptions: {
-        output: {
+    // Enable code splitting for faster initial load
+    rollupOptions: {
+      output: {
           // Advanced code splitting strategy
-          manualChunks: (id) => {
+        manualChunks: (id) => {
             // CRITICAL: Keep React, React DOM, MUI, and Emotion ALL together
-            if (id.includes('react/') || 
-                id.includes('react-dom/') || 
-                id.includes('/scheduler/') ||
-                id.includes('react/jsx-runtime') ||
+            // This prevents circular dependency and initialization order issues
+          if (id.includes('react/') || 
+              id.includes('react-dom/') || 
+              id.includes('/scheduler/') ||
+              id.includes('react/jsx-runtime') ||
                 id.includes('react-is') ||
                 id.includes('react/jsx-dev-runtime') ||
                 id.includes('@emotion/') || 
                 id.includes('@mui/') ||
                 id.includes('mui')) {
-              return 'react-vendor';
-            }
+            return 'react-vendor';
+          }
             
-            // Router and related deps
+            // Router should be separate but can depend on React
             if (id.includes('node_modules') && (
                 id.includes('react-router') ||
                 id.includes('history')
@@ -191,23 +195,13 @@ export default defineConfig(({ mode }) => {
               return 'router-vendor';
             }
             
-            // Supabase client (large, used frequently)
-            if (id.includes('node_modules') && id.includes('@supabase')) {
-              return 'supabase-vendor';
-            }
-            
-            // Charts library (large, lazy-loaded)
-            if (id.includes('node_modules') && id.includes('recharts')) {
-              return 'charts-vendor';
-            }
-            
-            // For mobile: be more conservative with chunking to avoid circular deps
-            // Other node_modules - keep together to avoid initialization issues
-            if (id.includes('node_modules')) {
-              return 'vendor';
-            }
-          },
-          format: 'es',
+            // Keep all other vendor code together to avoid circular dependencies
+            // Splitting too much can cause "Cannot access before initialization" errors
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        },
+        format: 'es',
           // Optimize chunk file names for better caching
           chunkFileNames: (chunkInfo) => {
             if (chunkInfo.name === 'react-vendor') {
@@ -254,12 +248,12 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: chunkSizeLimit,
       // Disable source maps in production for smaller bundle
       sourcemap: !isProduction,
-      // Enhanced minification - use esbuild for better ES module support
-      minify: isProduction ? 'esbuild' : false,
+      // Enhanced minification - disable for mobile to prevent initialization issues
+      minify: isProduction && !isMobile ? 'esbuild' : false, // No minification on mobile
       // CommonJS options
-      commonjsOptions: {
-        transformMixedEsModules: true,
-        include: [/node_modules/],
+    commonjsOptions: {
+      transformMixedEsModules: true,
+      include: [/node_modules/],
         // Optimize require calls
         requireReturnsDefault: 'auto'
       },
@@ -269,19 +263,19 @@ export default defineConfig(({ mode }) => {
       copyPublicDir: true
     },
     // Optimize dependencies
-    optimizeDeps: {
-      include: [
+  optimizeDeps: {
+    include: [
         'react', 
         'react-dom', 
         'react/jsx-runtime',
         'scheduler',
-        '@emotion/react',
-        '@emotion/styled',
-        '@mui/material', 
+      '@emotion/react',
+      '@emotion/styled',
+      '@mui/material', 
         '@mui/icons-material'
-      ],
+    ],
       exclude: isMobile ? ['recharts'] : [], // Exclude large libs on mobile, lazy-load instead
-      esbuildOptions: {
+    esbuildOptions: {
         target: isMobile ? 'es2015' : 'es2020',
         // Optimize for size
         minifyIdentifiers: isProduction,
@@ -292,25 +286,25 @@ export default defineConfig(({ mode }) => {
       force: false // Only force when needed
     },
     // Resolve optimizations
-    resolve: {
-      dedupe: ['react', 'react-dom', 'scheduler', '@emotion/react', '@emotion/styled'],
-      alias: {
-        '@emotion/react': '@emotion/react',
-        '@emotion/styled': '@emotion/styled'
-      }
+  resolve: {
+    dedupe: ['react', 'react-dom', 'scheduler', '@emotion/react', '@emotion/styled'],
+    alias: {
+      '@emotion/react': '@emotion/react',
+      '@emotion/styled': '@emotion/styled'
+    }
     },
     // Performance optimizations - be conservative for mobile to avoid initialization issues
     esbuild: {
-      // Drop console and debugger in production
-      drop: isProduction && !isMobile ? ['console', 'debugger'] : [], // Keep console on mobile for debugging
+      // Drop console and debugger in production (only for web)
+      drop: isProduction && !isMobile ? ['console', 'debugger'] : [],
       // Legal comments
       legalComments: 'none',
-      // Minify - but preserve names to avoid initialization issues
-      minifyIdentifiers: isProduction && !isMobile, // Don't mangle on mobile
-      minifySyntax: isProduction,
-      minifyWhitespace: isProduction,
-      // Keep class names and function names to prevent circular dependency issues
-      keepNames: isMobile
+      // NO minification on mobile to prevent initialization issues
+      minifyIdentifiers: false, // Never mangle identifiers
+      minifySyntax: isProduction && !isMobile, // Only minify syntax for web
+      minifyWhitespace: isProduction && !isMobile, // Only minify whitespace for web
+      // Always keep names to prevent circular dependency issues
+      keepNames: true
     },
     // CSS optimizations
     css: {
