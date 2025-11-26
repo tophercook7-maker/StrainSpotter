@@ -42,6 +42,7 @@ import {
 import GrowLogBook from './GrowLogBook';
 import { BackHeader } from './BackHeader';
 import { API_BASE } from '../config';
+import { supabase } from '../supabaseClient';
 
 function Section({ title, children }) {
   return (
