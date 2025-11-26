@@ -275,12 +275,14 @@ export default defineConfig(({ mode }) => {
         '@mui/icons-material'
     ],
       exclude: isMobile ? ['recharts'] : [], // Exclude large libs on mobile, lazy-load instead
-    esbuildOptions: {
+      esbuildOptions: {
         target: isMobile ? 'es2015' : 'es2020',
-        // Optimize for size
-        minifyIdentifiers: isProduction,
-        minifySyntax: isProduction,
-        minifyWhitespace: isProduction
+        // NO minification for mobile to prevent initialization issues
+        minifyIdentifiers: isProduction && !isMobile,
+        minifySyntax: isProduction && !isMobile,
+        minifyWhitespace: isProduction && !isMobile,
+        // Always keep names for mobile
+        keepNames: isMobile || true
       },
       // Force pre-bundling
       force: false // Only force when needed
