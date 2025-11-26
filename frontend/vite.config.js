@@ -235,5 +235,5 @@ export default defineConfig(({ mode }) => {
       '@emotion/react': '@emotion/react',
       '@emotion/styled': '@emotion/styled'
     }
-  };
+  }
 });
