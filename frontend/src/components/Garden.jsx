@@ -31,8 +31,6 @@ import GardenNavBar from './GardenNavBar';
 export default function Garden({ onBack, onNavigate }) {
   const { user, isExpired, canLogout, loading } = useMembershipGuard();
   const [showLogoutWarning, setShowLogoutWarning] = useState(false);
-  const [showComingSoon, setShowComingSoon] = useState(false);
-  const [selectedFeature, setSelectedFeature] = useState('');
   const [showScan, setShowScan] = useState(false);
   const [showStrainBrowser, setShowStrainBrowser] = useState(false);
   const [showReviews, setShowReviews] = useState(false);
@@ -134,8 +132,14 @@ export default function Garden({ onBack, onNavigate }) {
         // Handled via header button only
         return;
       default:
-        setSelectedFeature(featureName);
-        setShowComingSoon(true);
+        // All features have handlers, this should never happen
+        console.warn('Unknown feature clicked:', featureName, nav);
+        // Fallback: try to navigate based on feature name
+        if (featureName.toLowerCase().includes('scan')) {
+          openScreen('scan', () => setShowScan(true));
+        } else {
+          openScreen('home', () => setShowGroups(true));
+        }
     }
   };
 
@@ -854,47 +858,6 @@ export default function Garden({ onBack, onNavigate }) {
         </DialogContent>
       </Dialog>
 
-      {/* Coming Soon Dialog */}
-      <Dialog
-        open={showComingSoon}
-        onClose={() => setShowComingSoon(false)}
-        fullScreen
-        PaperProps={{
-          sx: {
-            background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.95) 0%, rgba(104, 159, 56, 0.95) 100%)',
-            backdropFilter: 'blur(20px)',
-            borderRadius: { xs: 0, sm: 4 },
-            border: '2px solid rgba(255, 255, 255, 0.2)',
-            m: 0,
-            maxHeight: '100vh'
-          }
-        }}
-      >
-        <DialogTitle sx={{ color: '#fff', fontWeight: 700, borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-          🚧 Coming Soon!
-        </DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', p: 4 }}>
-          <Typography sx={{ color: '#fff', mb: 2 }}>
-            <strong>{selectedFeature}</strong> is currently under development.
-          </Typography>
-          <Typography sx={{ color: '#e0e0e0', mb: 2 }}>
-            We're working hard to bring you this feature soon! In the meantime, enjoy scanning strains and exploring the community.
-          </Typography>
-          <Button
-            variant="contained"
-            fullWidth
-            sx={{
-              mt: 2,
-              bgcolor: '#fff',
-              color: '#7cb342',
-              '&:hover': { bgcolor: '#f0f0f0' }
-            }}
-            onClick={() => setShowComingSoon(false)}
-          >
-            Got it!
-          </Button>
-        </DialogContent>
-      </Dialog>
 
       {/* Floating Feedback Button at bottom right */}
       <Fab

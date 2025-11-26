@@ -1,0 +1,573 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800;900&display=swap');
+
+:root {
+  /* Modern Font Stack */
+  --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  --font-display: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Enhanced Color Palette */
+  --color-primary: #7CB342;
+  --color-primary-light: #9CCC65;
+  --color-primary-dark: #558B2F;
+  --color-secondary: #9E9D24;
+  --color-accent: #00897b;
+
+  /* Backgrounds */
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #1a1a1a;
+  --bg-card: #2c2c2c;
+  --bg-elevated: #1f3a1f;
+
+  /* Text Colors */
+  --text-primary: #ffffff;
+  --text-secondary: #b0b0b0;
+  --text-muted: #808080;
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #7CB342 0%, #9CCC65 100%);
+  --gradient-dark: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%);
+  --gradient-hero: linear-gradient(180deg, rgba(10,10,10,0.4) 0%, rgba(10,10,10,0.8) 100%);
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 30px rgba(124, 179, 66, 0.3);
+
+  /* Spacing */
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 1rem;
+  --spacing-md: 1.5rem;
+  --spacing-lg: 2rem;
+  --spacing-xl: 3rem;
+
+  /* Border Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  font-family: var(--font-primary);
+  line-height: 1.6;
+  font-weight: 400;
+  color-scheme: dark;
+  color: var(--text-primary);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  /* Remove 300ms tap delay on mobile */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  max-width: 100vw;
+}
+
+/* Prevent any element from causing horizontal overflow */
+
+*,
+*::before,
+*::after {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* Ensure all containers respect viewport width */
+
+div,
+section,
+article,
+main,
+header,
+footer,
+aside,
+nav,
+form {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  width: 100%;
+  position: relative;
+}
+
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100vw;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  position: fixed;
+  -webkit-overflow-scrolling: touch;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-image: url(./strainspotter-bg.jpg);
+  background-size: cover;
+  background-position: center;
+  background-attachment: scroll; /* Changed from 'fixed' for better mobile support */
+  background-repeat: no-repeat;
+  color: #fff;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow-x: hidden !important;
+  overflow-y: hidden;
+  width: 100%;
+  max-width: 100vw;
+  height: 100%;
+  position: fixed;
+  -webkit-overflow-scrolling: touch;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  background-image: url(./strainspotter-bg.jpg);
+  background-size: cover;
+  background-position: center;
+  background-attachment: scroll; /* Changed from 'fixed' for better mobile support */
+  background-repeat: no-repeat;
+  /* Prevent double-tap zoom on mobile */
+  touch-action: manipulation;
+  position: fixed; /* Prevent body scroll */
+  width: 100%;
+  max-width: 100vw;
+  height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  width: 100%;
+  max-width: 100vw;
+  height: 100%;
+  overflow: hidden;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Prevent MUI components from causing overflow */
+
+.MuiBox-root,
+.MuiContainer-root,
+.MuiGrid-root,
+.MuiGrid-container,
+.MuiGrid-item,
+.MuiPaper-root,
+.MuiStack-root,
+.MuiTypography-root,
+.MuiCard-root,
+.MuiCardContent-root,
+.MuiButton-root,
+.MuiTextField-root,
+.MuiInputBase-root,
+.MuiAlert-root,
+.MuiTabs-root,
+.MuiTabPanel-root {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  width: 100%;
+}
+
+/* Ensure Grid containers don't overflow */
+
+.MuiGrid-container {
+  width: 100% !important;
+  max-width: 100vw !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.MuiGrid-item {
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
+
+/* Prevent flex containers from overflowing */
+
+[style*="display: flex"],
+[style*="display:flex"] {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Prevent images and media from causing overflow */
+
+img,
+video,
+iframe,
+svg,
+canvas {
+  max-width: 100vw !important;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+/* Prevent tables from causing overflow */
+
+table {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+/* Prevent long text from causing overflow */
+
+p,
+span,
+div,
+h1, h2, h3, h4, h5, h6,
+label,
+button {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  max-width: 100%;
+}
+
+/* Force all absolutely positioned elements to respect viewport */
+
+[style*="position: absolute"],
+[style*="position:absolute"],
+[style*="position: fixed"],
+[style*="position:fixed"] {
+  max-width: 100vw;
+  left: 0;
+  right: 0;
+}
+
+/* Prevent transform from causing overflow */
+
+[style*="transform"] {
+  max-width: 100%;
+}
+
+/* Prevent horizontal scroll on all scrollable containers */
+
+[style*="overflow"]:not([style*="overflow-x: visible"]):not([style*="overflow-x:visible"]) {
+  overflow-x: hidden !important;
+}
+
+/* Ensure all direct children of root containers respect viewport */
+
+#root > *,
+body > *,
+html > * {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  width: 100%;
+  position: relative;
+}
+
+/* Force all absolutely positioned elements to respect viewport */
+
+[style*="position: absolute"],
+[style*="position:absolute"],
+[style*="position: fixed"],
+[style*="position:fixed"] {
+  max-width: 100vw !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100vw !important;
+}
+
+/* Prevent transform from causing overflow */
+
+[style*="transform"] {
+  max-width: 100vw !important;
+}
+
+/* Prevent horizontal scroll on all scrollable containers */
+
+[style*="overflow"]:not([style*="overflow-x: visible"]):not([style*="overflow-x:visible"]) {
+  overflow-x: hidden !important;
+}
+
+/* Nuclear option: Prevent any element from exceeding viewport */
+
+body * {
+  max-width: 100vw !important;
+}
+
+/* Prevent flex containers from overflowing */
+
+[style*="display: flex"],
+[style*="display:flex"],
+.MuiStack-root {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  flex-wrap: wrap;
+}
+
+/* Force all positioned elements to respect viewport */
+
+[style*="position"] {
+  max-width: 100vw !important;
+  left: 0 !important;
+  right: 0 !important;
+}
+
+/* Prevent any negative margins from causing overflow */
+
+* {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Ensure padding doesn't cause overflow */
+
+body,
+#root,
+html {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Force all Box components to respect viewport */
+
+.MuiBox-root {
+  max-width: 100vw !important;
+  width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Prevent horizontal scroll on touch devices */
+
+@media (max-width: 768px) {
+  * {
+    -webkit-overflow-scrolling: touch;
+    overflow-x: hidden !important;
+  }
+  
+  body,
+  html,
+  #root {
+    position: fixed !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+}
+
+/* Ensure all MUI Grid items don't overflow */
+
+.MuiGrid-item {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Fix button touch responsiveness */
+
+button, a, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+/* Web-specific styles */
+
+body.web-root {
+  background: #0a0f0a; /* Clean, solid background */
+}
+
+.web-app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.web-app-main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.web-nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: rgba(5, 7, 5, 0.95);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.web-nav-logo {
+  transition: opacity 0.2s;
+}
+
+.web-nav-logo:hover {
+  opacity: 0.8;
+}
+
+.web-nav-links a {
+  transition: color 0.2s;
+}
+
+.web-hero {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 80px 20px 60px;
+}
+
+.web-section {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 60px 20px;
+}
+
+.web-footer {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+a {
+  font-weight: 500;
+  color: var(--color-primary-light);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--color-primary);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+h1 {
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-weight: 900;
+}
+
+h2 {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 800;
+}
+
+h3 {
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-weight: 700;
+}
+
+/* Smooth Scrolling */
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom Scrollbar */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-primary-dark);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
+/* Utility Classes */
+
+.gradient-text {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glass-effect {
+  background: rgba(44, 44, 44, 0.6);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(124, 179, 66, 0.2);
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-slow) ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp var(--transition-slow) ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 20px rgba(124, 179, 66, 0.3);
+  }
+  to {
+    box-shadow: 0 0 40px rgba(124, 179, 66, 0.6);
+  }
+}
+
+/* Scan button spinner */
+
+.scan-button-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(5, 7, 5, 0.1);
+  border-top-color: #050705;
+  animation: scanBtnSpin 0.7s linear infinite;
+}
+
+@keyframes scanBtnSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
