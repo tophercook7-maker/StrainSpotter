@@ -2,13 +2,63 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 export default function WebLanding() {
+  const features = [
+    {
+      emoji: '📷',
+      title: 'AI Strain Scan',
+      description: 'Snap a photo of any cannabis flower, and our advanced AI instantly identifies the strain from our database of over 35,000 varieties. Get detailed strain information including genetics, effects, terpene profiles, and growing characteristics in seconds.',
+    },
+    {
+      emoji: '🌿',
+      title: 'Strain Browser',
+      description: 'Explore our comprehensive database of 35,000+ cannabis strains. Search by name, effects, terpenes, THC/CBD content, or growing difficulty. Discover new favorites, compare strains, and learn about genetics, lineage, and cultivation tips for each variety.',
+    },
+    {
+      emoji: '⭐',
+      title: 'Reviews Hub',
+      description: 'Read and share authentic strain reviews from real users. Get insights on effects, taste, growing experience, and medical benefits. Rate your experiences and help the community discover the best strains for their needs.',
+    },
+    {
+      emoji: '👥',
+      title: 'Community Groups',
+      description: 'Connect with fellow growers, enthusiasts, and cannabis professionals. Join discussions, share grow diaries, ask questions, and build your network. Whether you\'re a beginner or master cultivator, find your tribe here.',
+    },
+    {
+      emoji: '🌱',
+      title: 'Grow Coach',
+      description: 'Access expert growing tips, guides, and tutorials covering everything from seed to harvest. Learn about lighting, nutrients, pest management, training techniques, and harvesting. Level up your cultivation skills with proven strategies.',
+    },
+    {
+      emoji: '📓',
+      title: 'Grow Logbook',
+      description: 'Track every stage of your grow with detailed journaling. Record watering schedules, nutrient feeds, environmental conditions, and observations. Monitor progress with photos, set reminders, and build a searchable history of all your grows.',
+    },
+    {
+      emoji: '🧑‍🌾',
+      title: 'Grower Directory',
+      description: 'Find local cultivators, breeders, and cannabis professionals in your area. Browse profiles, connect with growers, share knowledge, and discover local expertise. Whether you\'re looking for mentors or collaborators, find them here.',
+    },
+    {
+      emoji: '🌾',
+      title: 'Seed Vendors',
+      description: 'Discover trusted seed banks and breeders with verified reviews from the community. Compare prices, shipping options, and genetics. Find the perfect seeds for your next grow with confidence from reputable sources.',
+    },
+    {
+      emoji: '🏪',
+      title: 'Dispensaries',
+      description: 'Locate nearby dispensaries using your location. Find shops with your favorite strains in stock, check hours and menus, read reviews, and get directions. Never wonder where to find quality cannabis again.',
+    }
+  ];
+
   return (
     <div
       style={{
         minHeight: '100vh',
-        background: 'linear-gradient(to bottom, rgba(5,7,5,0.95), rgba(10,20,10,0.98))',
+        backgroundColor: '#0a0f0a',
         color: '#f5fff5',
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+        width: '100%',
+        overflowX: 'hidden',
       }}
     >
       {/* Hero Section */}
@@ -22,11 +72,28 @@ export default function WebLanding() {
       >
         <div
           style={{
-            fontSize: '64px',
-            marginBottom: '16px',
+            width: '120px',
+            height: '120px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, rgba(124, 179, 66, 0.2) 0%, rgba(156, 204, 101, 0.2) 100%)',
+            border: '3px solid rgba(124, 179, 66, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 24px',
+            boxShadow: '0 0 40px rgba(124, 179, 66, 0.6), 0 0 80px rgba(124, 179, 66, 0.3)',
           }}
         >
-          🍃
+          <img
+            src="/hero.png?v=13"
+            alt="StrainSpotter"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              borderRadius: '50%',
+            }}
+          />
         </div>
         <h1
           style={{
@@ -98,326 +165,89 @@ export default function WebLanding() {
         </div>
       </div>
 
-      {/* Features Sections */}
+      {/* All Features Showcase */}
       <div
         style={{
-          maxWidth: '960px',
+          maxWidth: '1200px',
           margin: '0 auto',
           padding: '60px 20px',
         }}
       >
-        {/* For Consumers */}
-        <section
+        <h2
           style={{
-            marginBottom: '60px',
-            padding: '40px',
-            borderRadius: '16px',
-            background: 'rgba(124,179,66,0.08)',
-            border: '1px solid rgba(124,179,66,0.2)',
+            fontSize: '2.5rem',
+            fontWeight: 700,
+            textAlign: 'center',
+            margin: '0 0 48px',
+            color: '#CDDC39',
           }}
         >
-          <h2
-            style={{
-              fontSize: '2rem',
-              fontWeight: 700,
-              margin: '0 0 16px',
-              color: '#CDDC39',
-            }}
-          >
-            For Consumers
-          </h2>
-          <p
-            style={{
-              fontSize: '1.125rem',
-              lineHeight: 1.7,
-              opacity: 0.9,
-              marginBottom: '24px',
-            }}
-          >
-            Point your camera at any cannabis package or bud. StrainSpotter instantly:
-          </p>
-          <ul
-            style={{
-              listStyle: 'none',
-              padding: 0,
-              margin: 0,
-            }}
-          >
-            <li style={{ marginBottom: '12px', paddingLeft: '24px', position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 0 }}>📸</span>
-              <strong>Scans labels & packages</strong> — Reads THC/CBD, batch info, lab results
-            </li>
-            <li style={{ marginBottom: '12px', paddingLeft: '24px', position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 0 }}>🔍</span>
-              <strong>Matches strains visually</strong> — AI identifies closest strain matches
-            </li>
-            <li style={{ marginBottom: '12px', paddingLeft: '24px', position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 0 }}>💬</span>
-              <strong>Connects you to community</strong> — Join groups, chat with growers & dispensaries
-            </li>
-            <li style={{ marginBottom: '12px', paddingLeft: '24px', position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 0 }}>📊</span>
-              <strong>AI summaries</strong> — Effects, use cases, and grower notes
-            </li>
-          </ul>
-        </section>
-
-        {/* For Growers */}
-        <section
+          Everything You Need for Cannabis
+        </h2>
+        
+        <div
           style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: '24px',
             marginBottom: '60px',
-            padding: '40px',
-            borderRadius: '16px',
-            background: 'rgba(205,220,57,0.08)',
-            border: '1px solid rgba(205,220,57,0.2)',
           }}
         >
-          <h2
-            style={{
-              fontSize: '2rem',
-              fontWeight: 700,
-              margin: '0 0 16px',
-              color: '#CDDC39',
-            }}
-          >
-            For Growers
-          </h2>
-          <p
-            style={{
-              fontSize: '1.125rem',
-              lineHeight: 1.7,
-              opacity: 0.9,
-              marginBottom: '24px',
-            }}
-          >
-            Share your expertise and connect with the community:
-          </p>
-          <ul
-            style={{
-              listStyle: 'none',
-              padding: 0,
-              margin: 0,
-            }}
-          >
-            <li style={{ marginBottom: '12px', paddingLeft: '24px', position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 0 }}>📌</span>
-              <strong>Pin announcements</strong> — Highlight important updates in group chats
-            </li>
-            <li style={{ marginBottom: '12px', paddingLeft: '24px', position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 0 }}>📝</span>
-              <strong>Grow logs & journals</strong> — Document your cultivation journey
-            </li>
-            <li style={{ marginBottom: '12px', paddingLeft: '24px', position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 0 }}>👥</span>
-              <strong>Connect with dispensaries</strong> — Build relationships and share knowledge
-            </li>
-          </ul>
-        </section>
-
-        {/* For Dispensaries */}
-        <section
-          style={{
-            marginBottom: '60px',
-            padding: '40px',
-            borderRadius: '16px',
-            background: 'rgba(124,179,66,0.08)',
-            border: '1px solid rgba(124,179,66,0.2)',
-          }}
-        >
-          <h2
-            style={{
-              fontSize: '2rem',
-              fontWeight: 700,
-              margin: '0 0 16px',
-              color: '#CDDC39',
-            }}
-          >
-            For Dispensaries
-          </h2>
-          <p
-            style={{
-              fontSize: '1.125rem',
-              lineHeight: 1.7,
-              opacity: 0.9,
-              marginBottom: '24px',
-            }}
-          >
-            Engage customers and showcase your products:
-          </p>
-          <ul
-            style={{
-              listStyle: 'none',
-              padding: 0,
-              margin: 0,
-            }}
-          >
-            <li style={{ marginBottom: '12px', paddingLeft: '24px', position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 0 }}>📌</span>
-              <strong>Pin menus & batch info</strong> — Highlight new arrivals and lab results
-            </li>
-            <li style={{ marginBottom: '12px', paddingLeft: '24px', position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 0 }}>💬</span>
-              <strong>Customer support</strong> — Answer questions in group chats
-            </li>
-            <li style={{ marginBottom: '12px', paddingLeft: '24px', position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 0 }}>🌿</span>
-              <strong>Product discovery</strong> — Help customers find the right strains
-            </li>
-          </ul>
-        </section>
-
-        {/* How the scanner works */}
-        <section
-          style={{
-            marginBottom: '60px',
-            padding: '40px',
-            borderRadius: '16px',
-            background: 'rgba(124,179,66,0.08)',
-            border: '1px solid rgba(124,179,66,0.2)',
-          }}
-        >
-          <h2
-            style={{
-              fontSize: '2rem',
-              fontWeight: 700,
-              margin: '0 0 16px',
-              color: '#CDDC39',
-            }}
-          >
-            How the Scanner Works
-          </h2>
-          <p
-            style={{
-              fontSize: '1.125rem',
-              lineHeight: 1.7,
-              opacity: 0.9,
-              marginBottom: '24px',
-            }}
-          >
-            Our AI-powered scanner uses multiple steps to give you accurate results:
-          </p>
-          <ol
-            style={{
-              listStyle: 'none',
-              padding: 0,
-              margin: 0,
-              counterReset: 'step-counter',
-            }}
-          >
-            <li
+          {features.map((feature, index) => (
+            <div
+              key={index}
               style={{
-                marginBottom: '20px',
-                paddingLeft: '40px',
-                position: 'relative',
-                counterIncrement: 'step-counter',
+                padding: '32px',
+                borderRadius: '16px',
+                background: 'rgba(0, 0, 0, 0.4)',
+                border: '2px solid rgba(124, 179, 66, 0.3)',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(124, 179, 66, 0.15)';
+                e.currentTarget.style.borderColor = 'rgba(124, 179, 66, 0.6)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 0, 0, 0.4)';
+                e.currentTarget.style.borderColor = 'rgba(124, 179, 66, 0.3)';
+                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
-              <span
+              <div
                 style={{
-                  position: 'absolute',
-                  left: 0,
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '0.875rem',
-                  color: '#04140a',
+                  fontSize: '3rem',
+                  marginBottom: '16px',
+                  textAlign: 'center',
                 }}
               >
-                1
-              </span>
-              <strong>Vision & OCR</strong> — Google Vision API extracts text and labels from your photo
-            </li>
-            <li
-              style={{
-                marginBottom: '20px',
-                paddingLeft: '40px',
-                position: 'relative',
-                counterIncrement: 'step-counter',
-              }}
-            >
-              <span
+                {feature.emoji}
+              </div>
+              <h3
                 style={{
-                  position: 'absolute',
-                  left: 0,
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  fontSize: '1.5rem',
                   fontWeight: 700,
-                  fontSize: '0.875rem',
-                  color: '#04140a',
+                  margin: '0 0 12px',
+                  color: '#CDDC39',
+                  textAlign: 'center',
                 }}
               >
-                2
-              </span>
-              <strong>Visual Matching</strong> — AI compares your image against 35,000+ strains in our database
-            </li>
-            <li
-              style={{
-                marginBottom: '20px',
-                paddingLeft: '40px',
-                position: 'relative',
-                counterIncrement: 'step-counter',
-              }}
-            >
-              <span
+                {feature.title}
+              </h3>
+              <p
                 style={{
-                  position: 'absolute',
-                  left: 0,
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '0.875rem',
-                  color: '#04140a',
+                  fontSize: '1rem',
+                  lineHeight: 1.6,
+                  opacity: 0.9,
+                  margin: 0,
+                  color: '#d0d0d0',
                 }}
               >
-                3
-              </span>
-              <strong>Label Analysis</strong> — Extracts product info, batch numbers, and lab results
-            </li>
-            <li
-              style={{
-                marginBottom: '20px',
-                paddingLeft: '40px',
-                position: 'relative',
-                counterIncrement: 'step-counter',
-              }}
-            >
-              <span
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #7CB342, #9CCC65)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '0.875rem',
-                  color: '#04140a',
-                }}
-              >
-                4
-              </span>
-              <strong>AI Summary</strong> — Generates effects, use cases, warnings, and grower insights
-            </li>
-          </ol>
-        </section>
+                {feature.description}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Footer */}

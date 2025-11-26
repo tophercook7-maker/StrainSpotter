@@ -13,10 +13,9 @@ import {
   Tab,
   Tabs,
   Typography,
-  TextField,
-  IconButton,
-  Collapse,
-  CircularProgress
+      TextField,
+      IconButton,
+      CircularProgress
 } from '@mui/material';
 import {
   ArrowBack,
@@ -35,9 +34,7 @@ import {
   NoteAlt,
   WaterDrop,
   WbSunny,
-  Send,
-  ExpandMore,
-  ExpandLess
+      Send
 } from '@mui/icons-material';
 import GrowLogBook from './GrowLogBook';
 import { BackHeader } from './BackHeader';
@@ -83,8 +80,7 @@ export default function GrowCoach({ onBack, initialTab = 0 }) {
   const [tab, setTab] = useState(initialTab);
   const [timelineIndex, setTimelineIndex] = useState(0);
   
-  // AI Chat state - default to expanded for better UX
-  const [chatOpen, setChatOpen] = useState(true);
+  // AI Chat state - always visible, no collapse needed
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);

@@ -50,7 +50,7 @@ async function getUserEmail(userId) {
 /**
  * Check if user is a founder
  */
-async function isFounder(userId) {
+export async function isFounder(userId) {
   if (!userId) return false;
   const email = await getUserEmail(userId);
   return isFounderEmail(email);

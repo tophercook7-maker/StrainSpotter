@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Quick scraper status check
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+echo "🔍 Scraper Status Check"
+echo "======================"
+echo ""
+
+# Check if scraper is running
+if pgrep -f "scrapeStrainImagesFromSeedBanks.js" > /dev/null; then
+  PID=$(pgrep -f "scrapeStrainImagesFromSeedBanks.js" | head -1)
+  RUNTIME=$(ps -p "$PID" -o etime= 2>/dev/null | xargs || echo "unknown")
+  echo "✅ Scraper is RUNNING (PID: $PID, Runtime: $RUNTIME)"
+else
+  echo "❌ Scraper is NOT running"
+fi
+
+echo ""
+
+# Check database for image count
+echo "📊 Database Status:"
+node -e "
+import('dotenv/config').then(() => {
+  import('dotenv').then(dotenv => {
+    dotenv.config({ path: './env/.env.local' });
+    import('@supabase/supabase-js').then(({ createClient }) => {
+      const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+      Promise.all([
+        supabase.from('strain_images').select('*', { count: 'exact', head: true }),
+        supabase.from('strain_images').select('canonical_name').not('image_url', 'is', null).limit(5)
+      ]).then(([{ count, error: countError }, { data, error: dataError }]) => {
+        if (countError) {
+          console.log('❌ Database error:', countError.message);
+        } else {
+          console.log('✅ Images in database:', count || 0);
+          if (data && data.length > 0) {
+            console.log('📸 Sample strains:', data.map(d => d.canonical_name).slice(0, 3).join(', '));
+          }
+        }
+      }).catch(e => console.error('Error:', e.message));
+    });
+  });
+});
+" 2>&1 | grep -v "injecting env" | grep -v "tip:"
+
+echo ""
+
+# Check recent log activity
+if [ -f "backend/scraper.log" ]; then
+  LOG_LINES=$(wc -l < backend/scraper.log 2>/dev/null || echo "0")
+  echo "📝 Log file: $LOG_LINES lines"
+  
+  # Get recent success/failure counts
+  echo ""
+  echo "📈 Recent Activity (last 50 lines):"
+  tail -50 backend/scraper.log 2>/dev/null | grep -E "Success|Failed|Skipped|TOTALS|Iteration.*complete" | tail -3 || echo "  (no recent activity logged)"
+  
+  # Count 404s
+  ERROR_COUNT=$(grep -c "Non-200" backend/scraper.log 2>/dev/null || echo "0")
+  if [ "$ERROR_COUNT" -gt 0 ]; then
+    echo "⚠️  Failed requests: $ERROR_COUNT"
+  fi
+else
+  echo "📝 No log file found"
+fi
+
+echo ""
+echo "✅ Check complete"
+

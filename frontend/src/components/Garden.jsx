@@ -665,7 +665,7 @@ export default function Garden({ onBack, onNavigate }) {
         {/* All Feature Tiles - Fill screen width */}
         <Grid 
           container
-          spacing={1.5} 
+          spacing={1} 
           sx={{ 
             width: '100%',
             maxWidth: '100%',
@@ -678,35 +678,35 @@ export default function Garden({ onBack, onNavigate }) {
             display: 'flex',
             alignContent: 'flex-start',
             alignItems: 'stretch',
-            py: 1,
-            px: { xs: 1, sm: 2, md: 3 },
+            py: 0.5,
+            px: { xs: 0.5, sm: 1, md: 2 },
           }}
         >
           {tiles.map((tile) => (
-          <Grid item xs={6} key={tile.nav} sx={{ display: 'flex', justifyContent: 'center', minHeight: '120px' }}>
+          <Grid item xs={4} sm={3} key={tile.nav} sx={{ display: 'flex', justifyContent: 'center', minHeight: '80px' }}>
             <Paper
               onClick={() => handleFeatureClick(tile.title, tile.nav)}
               sx={{
-                p: 2,
+                p: 1,
                 textAlign: 'center',
                 cursor: 'pointer',
                 background: 'rgba(0, 0, 0, 0.3)',
                 backdropFilter: 'blur(12px)',
                 WebkitBackdropFilter: 'blur(12px)',
-                border: '2px solid rgba(124, 179, 66, 0.3)',
-                borderRadius: 3,
+                border: '1px solid rgba(124, 179, 66, 0.3)',
+                borderRadius: 2,
                 transition: 'all 0.2s ease',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                 position: 'relative',
                 overflow: 'hidden',
                 width: '100%',
                 height: '100%',
-                minHeight: '120px',
+                minHeight: '80px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
                 alignItems: 'center',
-                gap: 0.75,
+                gap: 0.5,
                 '&::before': {
                   content: '""',
                   position: 'absolute',
@@ -720,25 +720,25 @@ export default function Garden({ onBack, onNavigate }) {
                 },
                 '&:hover': {
                   background: 'rgba(124, 179, 66, 0.15)',
-                  border: '2px solid rgba(124, 179, 66, 0.6)',
-                  transform: 'translateY(-2px) scale(1.03)',
-                  boxShadow: '0 6px 20px rgba(124, 179, 66, 0.4)',
+                  border: '1px solid rgba(124, 179, 66, 0.6)',
+                  transform: 'translateY(-1px) scale(1.02)',
+                  boxShadow: '0 4px 12px rgba(124, 179, 66, 0.4)',
                   '&::before': {
                     opacity: 1
                   }
                 },
                 '&:active': {
-                  transform: 'translateY(0px) scale(0.98)',
+                  transform: 'translateY(0px) scale(0.99)',
                   transition: 'all 0.1s ease'
                 }
               }}
             >
               {tile.useEmoji ? (
                 <Box sx={{
-                  fontSize: '3rem',
+                  fontSize: '1.5rem',
                   lineHeight: 1,
-                  mb: 0.5,
-                  filter: 'drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4))',
+                  mb: 0.25,
+                  filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4))',
                   transition: 'all 0.2s ease',
                   textAlign: 'center',
                   width: '100%'
@@ -747,15 +747,15 @@ export default function Garden({ onBack, onNavigate }) {
                 </Box>
               ) : (
                 <Box sx={{
-                  width: '56px',
-                  height: '56px',
-                  mb: 0.5,
+                  width: '32px',
+                  height: '32px',
+                  mb: 0.25,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderRadius: '50%',
-                  border: '2px solid rgba(124, 179, 66, 0.5)',
-                  boxShadow: '0 0 16px rgba(124, 179, 66, 0.4)',
+                  border: '1px solid rgba(124, 179, 66, 0.5)',
+                  boxShadow: '0 0 8px rgba(124, 179, 66, 0.4)',
                   overflow: 'hidden',
                   background: 'transparent',
                   transition: 'all 0.2s ease',
@@ -768,14 +768,14 @@ export default function Garden({ onBack, onNavigate }) {
                   />
                 </Box>
               )}
-              <Typography variant="body1" sx={{
+              <Typography variant="caption" sx={{
                 color: '#CDDC39',
-                fontWeight: 700,
-                fontSize: '1rem',
+                fontWeight: 600,
+                fontSize: '0.7rem',
                 lineHeight: 1.2,
                 mb: 0,
                 display: 'block',
-                textShadow: '0 2px 4px rgba(0, 0, 0, 0.7)',
+                textShadow: '0 1px 3px rgba(0, 0, 0, 0.7)',
                 transition: 'all 0.2s ease',
                 textAlign: 'center',
                 width: '100%'

@@ -11,7 +11,8 @@
     "dev:all": "echo 'Run dev:backend and dev:frontend in two separate terminals'",
     "cbc": "bash scripts/cbc.sh",
     "cbc2": "cd frontend && npm run build && cd .. && rm -rf dist && cp -R frontend/dist ./dist && npx cap sync ios",
-    "clean-rebuild": "bash scripts/clean-rebuild.sh"
+    "clean-rebuild": "bash scripts/clean-rebuild.sh",
+    "sc": "bash scripts/sc"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.75.1",

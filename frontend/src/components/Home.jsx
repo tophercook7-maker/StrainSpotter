@@ -116,12 +116,17 @@ export default function Home({ onNavigate }) {
     <Box
       component="main"
       sx={{
-        width: '100%',
-        backgroundColor: '#0a0f0a',
-        minHeight: '100vh',
-        position: 'relative',
-        overflowY: 'visible',
+        width: '100vw',
+        backgroundColor: '#0a0f0a !important',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflowY: 'auto',
         overflowX: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        zIndex: 100,
       }}
     >
       <Container 
@@ -131,6 +136,8 @@ export default function Home({ onNavigate }) {
           zIndex: 1, 
           py: 4, 
           px: 3,
+          pb: 8,
+          minHeight: 'auto',
         }}
       >
         <Stack spacing={4} alignItems="center" sx={{ width: '100%' }}>
