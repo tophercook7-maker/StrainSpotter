@@ -153,87 +153,88 @@ export default defineConfig(({ mode }) => {
       target: 'es2020',
       // Enable code splitting for faster initial load
       rollupOptions: {
-      output: {
-        // Split vendor libraries into separate chunks
-        manualChunks: (id) => {
-          // CRITICAL: Keep React, React DOM, MUI, and Emotion ALL together
-          // This prevents "Cannot access React before initialization" errors
-          // MUI needs React to be fully initialized before it can use it
-          // Also include ANY MUI-related packages to prevent circular deps
-          if (id.includes('react/') || 
-              id.includes('react-dom/') || 
-              id.includes('/scheduler/') ||
-              id.includes('react/jsx-runtime') ||
-              id.includes('react-is') ||
-              id.includes('react/jsx-dev-runtime') ||
-              id.includes('@emotion/') || 
-              id.includes('@mui/') ||  // Catch ALL MUI packages, not just specific ones
-              id.includes('mui')) {     // Also catch any mui references
-            return 'react-vendor';
+        output: {
+          // Split vendor libraries into separate chunks
+          manualChunks: (id) => {
+            // CRITICAL: Keep React, React DOM, MUI, and Emotion ALL together
+            // This prevents "Cannot access React before initialization" errors
+            // MUI needs React to be fully initialized before it can use it
+            // Also include ANY MUI-related packages to prevent circular deps
+            if (id.includes('react/') || 
+                id.includes('react-dom/') || 
+                id.includes('/scheduler/') ||
+                id.includes('react/jsx-runtime') ||
+                id.includes('react-is') ||
+                id.includes('react/jsx-dev-runtime') ||
+                id.includes('@emotion/') || 
+                id.includes('@mui/') ||  // Catch ALL MUI packages, not just specific ones
+                id.includes('mui')) {     // Also catch any mui references
+              return 'react-vendor';
+            }
+            // Split vendor into smaller chunks to avoid circular dependencies
+            // Router and related deps
+            if (id.includes('node_modules') && (
+                id.includes('react-router') ||
+                id.includes('history')
+            )) {
+              return 'router-vendor';
+            }
+            // Other node_modules
+            if (id.includes('node_modules')) {
+              return 'vendor';
+            }
+          },
+          format: 'es',
+          // Ensure proper chunk loading order
+          chunkFileNames: (chunkInfo) => {
+            // React vendor must load first
+            if (chunkInfo.name === 'react-vendor') {
+              return 'assets/react-vendor-[hash].js';
+            }
+            // MUI loads after React
+            if (chunkInfo.name === 'mui') {
+              return 'assets/mui-[hash].js';
+            }
+            return 'assets/[name]-[hash].js';
           }
-          // Split vendor into smaller chunks to avoid circular dependencies
-          // Router and related deps
-          if (id.includes('node_modules') && (
-              id.includes('react-router') ||
-              id.includes('history')
-          )) {
-            return 'router-vendor';
-          }
-          // Other node_modules
-          if (id.includes('node_modules')) {
-            return 'vendor';
-          }
-        },
-        format: 'es',
-        // Ensure proper chunk loading order
-        chunkFileNames: (chunkInfo) => {
-          // React vendor must load first
-          if (chunkInfo.name === 'react-vendor') {
-            return 'assets/react-vendor-[hash].js';
-          }
-          // MUI loads after React
-          if (chunkInfo.name === 'mui') {
-            return 'assets/mui-[hash].js';
-          }
-          return 'assets/[name]-[hash].js';
         }
+      },
+      chunkSizeWarningLimit: 1000,
+      // Disable source maps in production for smaller bundle
+      sourcemap: process.env.NODE_ENV === 'development',
+      // Use esbuild minification instead of terser to avoid circular dependency issues
+      // esbuild handles ES modules better and preserves initialization order
+      minify: 'esbuild',
+      commonjsOptions: {
+        transformMixedEsModules: true,
+        include: [/node_modules/],
       }
     },
-    chunkSizeWarningLimit: 1000,
-    // Disable source maps in production for smaller bundle
-    sourcemap: process.env.NODE_ENV === 'development',
-    // Use esbuild minification instead of terser to avoid circular dependency issues
-    // esbuild handles ES modules better and preserves initialization order
-    minify: 'esbuild',
-    commonjsOptions: {
-      transformMixedEsModules: true,
-      include: [/node_modules/],
-    }
-  },
-  // Optimize dependencies for mobile
-  optimizeDeps: {
-    include: [
-      'react', 
-      'react-dom', 
-      'react/jsx-runtime',
-      'scheduler',
-      '@emotion/react',
-      '@emotion/styled',
-      '@mui/material', 
-      '@mui/icons-material'
-    ],
-    esbuildOptions: {
-      target: 'es2015'
+    // Optimize dependencies for mobile
+    optimizeDeps: {
+      include: [
+        'react', 
+        'react-dom', 
+        'react/jsx-runtime',
+        'scheduler',
+        '@emotion/react',
+        '@emotion/styled',
+        '@mui/material', 
+        '@mui/icons-material'
+      ],
+      esbuildOptions: {
+        target: 'es2015'
+      },
+      // Force React to be pre-bundled first
+      force: true
     },
-    // Force React to be pre-bundled first
-    force: true
-  },
-  // Ensure React scheduler and Emotion are properly resolved
-  resolve: {
-    dedupe: ['react', 'react-dom', 'scheduler', '@emotion/react', '@emotion/styled'],
-    alias: {
-      '@emotion/react': '@emotion/react',
-      '@emotion/styled': '@emotion/styled'
+    // Ensure React scheduler and Emotion are properly resolved
+    resolve: {
+      dedupe: ['react', 'react-dom', 'scheduler', '@emotion/react', '@emotion/styled'],
+      alias: {
+        '@emotion/react': '@emotion/react',
+        '@emotion/styled': '@emotion/styled'
+      }
     }
-  }
+  };
 });
