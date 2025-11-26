@@ -539,13 +539,7 @@ export default function Garden({ onBack, onNavigate }) {
       backgroundAttachment: 'scroll', // Changed from 'fixed' for better mobile support
       backgroundRepeat: 'no-repeat',
     }}>
-      {/* Very light background overlay for readability - minimal opacity */}
-      <Box sx={{
-        position: 'absolute',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        zIndex: 0,
-      }} />
+      {/* Overlay removed per user request */}
       {/* Fixed header */}
       <Box sx={{
         position: 'sticky',
@@ -569,9 +563,9 @@ export default function Garden({ onBack, onNavigate }) {
           </Alert>
         )}
 
-        {/* Premium Glassmorphism Header - Mobile Optimized */}
+        {/* Compact Header - Reduced size */}
         <Paper sx={{
-        p: 1.5,
+        p: 0.75,
         mb: 0,
         background: 'transparent',
         backdropFilter: 'blur(8px)',
@@ -585,87 +579,35 @@ export default function Garden({ onBack, onNavigate }) {
         overflow: 'hidden'
       }}>
         {/* Compact buttons and welcome in one row */}
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
+        <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="space-between" sx={{ flexWrap: 'wrap', gap: 0.25 }}>
+          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
             <Avatar
               src="/hero.png?v=13"
               alt="StrainSpotter"
               sx={{
-                width: 48,
-                height: 48,
+                width: 32,
+                height: 32,
                 borderRadius: '50%',
                 overflow: 'hidden',
                 border: '2px solid rgba(124, 179, 66, 0.6)',
-                boxShadow: '0 0 12px rgba(124, 179, 66, 0.4)',
+                boxShadow: '0 0 8px rgba(124, 179, 66, 0.4)',
                 flexShrink: 0
               }}
             />
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, fontSize: '1.25rem', lineHeight: 1.2, mb: 0 }}>
+              <Typography variant="subtitle1" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.2, mb: 0 }}>
                 The Garden
               </Typography>
-              <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.85rem' }}>
+              <Typography variant="caption" sx={{ color: '#7cb342', fontWeight: 600, fontSize: '0.7rem' }}>
                 {isAdmin ? '✓ Admin' : '✓ Member'}
               </Typography>
             </Box>
           </Stack>
-          <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.5, justifyContent: 'flex-end' }}>
+          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.25, justifyContent: 'flex-end' }}>
             {/* Credit Balance */}
             <Box onClick={() => setShowBuyScans(true)} sx={{ cursor: 'pointer' }}>
               <CreditBalance />
             </Box>
-            {/* Feedback Button - Members send feedback, Admins view feedback */}
-            {isAdmin ? (
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => setShowFeedbackReader(true)}
-                startIcon={<FeedbackIcon />}
-                sx={{
-                  color: '#CDDC39',
-                  borderColor: 'rgba(124, 179, 66, 0.5)',
-                  fontSize: '0.75rem',
-                  py: 0.5,
-                  px: 1,
-                  minWidth: 'auto',
-                  background: 'rgba(124, 179, 66, 0.1)',
-                  backdropFilter: 'blur(5px)',
-                  transition: 'all 0.15s ease',
-                  '&:hover': {
-                    borderColor: 'rgba(124, 179, 66, 1)',
-                    background: 'rgba(124, 179, 66, 0.2)',
-                    color: '#fff'
-                  }
-                }}
-              >
-                View Feedback
-              </Button>
-            ) : (
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => setShowFeedback(true)}
-                startIcon={<FeedbackIcon />}
-                sx={{
-                  color: '#CDDC39',
-                  borderColor: 'rgba(124, 179, 66, 0.5)',
-                  fontSize: '0.75rem',
-                  py: 0.5,
-                  px: 1,
-                  minWidth: 'auto',
-                  background: 'rgba(124, 179, 66, 0.1)',
-                  backdropFilter: 'blur(5px)',
-                  transition: 'all 0.15s ease',
-                  '&:hover': {
-                    borderColor: 'rgba(124, 179, 66, 1)',
-                    background: 'rgba(124, 179, 66, 0.2)',
-                    color: '#fff'
-                  }
-                }}
-              >
-                Send Feedback
-              </Button>
-            )}
             {onBack && (
               <Button
                 variant="outlined"
@@ -674,9 +616,9 @@ export default function Garden({ onBack, onNavigate }) {
                 sx={{
                   color: '#CDDC39',
                   borderColor: 'rgba(124, 179, 66, 0.5)',
-                  fontSize: '0.75rem',
-                  py: 0.5,
-                  px: 1,
+                  fontSize: '0.7rem',
+                  py: 0.25,
+                  px: 0.75,
                   minWidth: 'auto',
                   background: 'rgba(124, 179, 66, 0.1)',
                   backdropFilter: 'blur(5px)',
@@ -698,9 +640,9 @@ export default function Garden({ onBack, onNavigate }) {
               sx={{
                 color: '#CDDC39',
                 borderColor: 'rgba(124, 179, 66, 0.5)',
-                fontSize: '0.75rem',
-                py: 0.5,
-                px: 1,
+                fontSize: '0.7rem',
+                py: 0.25,
+                px: 0.75,
                 minWidth: 'auto',
                 background: 'rgba(124, 179, 66, 0.1)',
                 backdropFilter: 'blur(5px)',
@@ -972,7 +914,24 @@ export default function Garden({ onBack, onNavigate }) {
         </DialogContent>
       </Dialog>
 
-      {/* Floating Feedback Button removed per user request */}
+      {/* Floating Feedback Button at bottom right */}
+      <Fab
+        color="success"
+        aria-label="feedback"
+        onClick={() => isAdmin ? setShowFeedbackReader(true) : setShowFeedback(true)}
+        sx={{
+          position: 'fixed',
+          bottom: 16,
+          right: 16,
+          zIndex: 1000,
+          bgcolor: '#7cb342',
+          '&:hover': {
+            bgcolor: '#689f38'
+          }
+        }}
+      >
+        <FeedbackIcon />
+      </Fab>
 
       {/* Feedback Modal */}
       <FeedbackModal

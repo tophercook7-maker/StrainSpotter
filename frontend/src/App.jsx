@@ -235,7 +235,7 @@ function App() {
             </div>
           )}
           {/* No navigation bar - all actions are on-screen buttons */}
-          <div style={{ position: 'relative', zIndex: 10, width: '100%', maxWidth: '100vw', overflowX: 'hidden', overflow: 'hidden', left: 0, right: 0 }}>
+          <div style={{ position: 'relative', zIndex: 10, width: '100%', maxWidth: '100vw', overflowX: 'hidden', overflow: currentView === 'home' ? 'visible' : 'hidden', left: 0, right: 0 }}>
             <Suspense fallback={null}>
               <OnboardingFlow />
             </Suspense>
@@ -507,7 +507,7 @@ function App() {
               </Suspense>
             )}
             <Suspense fallback={null}>
-              <FloatingScanButton onClick={() => setCurrentView('scanner')} />
+              {/* FloatingScanButton removed per user request */}
             </Suspense>
           </div>
         </GuidelinesGate>
