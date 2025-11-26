@@ -201,7 +201,11 @@ export default defineConfig(({ mode }) => {
             return 'vendor';
           }
         },
-        format: 'es',
+          format: 'es',
+          // Preserve module structure to avoid circular dependencies
+          preserveModules: false,
+          // Ensure proper exports to prevent initialization issues
+          exports: 'named',
           // Optimize chunk file names for better caching
           chunkFileNames: (chunkInfo) => {
             if (chunkInfo.name === 'react-vendor') {
@@ -230,10 +234,12 @@ export default defineConfig(({ mode }) => {
             }
             return 'assets/[name]-[hash][extname]';
           },
-          // Compact output for smaller file sizes
-          compact: true,
+          // Don't compact on mobile - can cause initialization issues
+          compact: !isMobile,
           // Preserve module structure for better tree-shaking
-          preserveModules: false
+          preserveModules: false,
+          // Ensure proper interop for CommonJS modules
+          interop: 'auto'
         },
         // Tree-shaking optimizations - be conservative for mobile
         treeshake: {
