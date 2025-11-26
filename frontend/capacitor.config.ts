@@ -5,7 +5,7 @@ const useDevServer = process.env.CAP_DEV_SERVER === 'true';
 const config: CapacitorConfig = {
   appId: 'com.strainspotter.app',
   appName: 'StrainSpotter',
-  webDir: 'dist',
+  webDir: 'dist-mobile', // Use separate mobile build directory
   bundledWebRuntime: false,
   backgroundColor: '#0C1910',
   server: useDevServer
