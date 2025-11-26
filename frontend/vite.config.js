@@ -147,12 +147,8 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react({
         // Optimize React for production
-        babel: isProduction ? {
-          plugins: [
-            // Remove console.logs in production (except errors)
-            ['transform-remove-console', { exclude: ['error', 'warn'] }]
-          ]
-        } : undefined
+        jsxRuntime: 'automatic',
+        jsxImportSource: 'react'
       }),
       ensureReactFirst()
     ],
