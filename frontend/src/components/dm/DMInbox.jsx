@@ -52,7 +52,7 @@ export default function DMInbox() {
         flexDirection: 'column',
         height: '100%',
         minHeight: 0,
-        backgroundColor: 'rgba(0,0,0,0.3)',
+        backgroundColor: 'transparent',
       }}
     >
       {/* Header */}

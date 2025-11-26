@@ -25,7 +25,7 @@ export default function GroupHeader({
         paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)',
         borderBottom: '1px solid rgba(255,255,255,0.08)',
         flexShrink: 0,
-        backgroundColor: 'rgba(0,0,0,0.2)',
+        backgroundColor: 'transparent',
         backdropFilter: 'blur(10px)',
         minHeight: 44,
         maxHeight: 44,

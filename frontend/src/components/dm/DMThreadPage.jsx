@@ -105,7 +105,7 @@ export default function DMThreadPage() {
         height: '100%',
         minHeight: 0,
         overflow: 'hidden',
-        backgroundColor: 'rgba(0,0,0,0.3)',
+        backgroundColor: 'transparent',
       }}
     >
       {/* Header */}
@@ -118,7 +118,7 @@ export default function DMThreadPage() {
           borderBottom: '1px solid rgba(255,255,255,0.08)',
           flexShrink: 0,
           gap: 1.5,
-          backgroundColor: 'rgba(0,0,0,0.2)',
+          backgroundColor: 'transparent',
         }}
       >
         {isMobile && (

@@ -11,7 +11,7 @@ function ComplianceSummaryCard({ packaging }) {
         elevation={6}
         sx={{
           mb: 2.5,
-          background: "linear-gradient(135deg, rgba(0,0,0,0.52), rgba(0,0,0,0.72))",
+          background: "rgba(124, 179, 66, 0.1)",
           borderRadius: 3,
           border: "1px solid rgba(255,255,255,0.08)",
           backdropFilter: "blur(14px)",

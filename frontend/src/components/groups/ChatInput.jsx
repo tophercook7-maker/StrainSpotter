@@ -152,7 +152,7 @@ export default function ChatInput({
         borderTop: '1px solid rgba(255,255,255,0.08)',
         padding: 1.5,
         flexShrink: 0,
-        backgroundColor: 'rgba(0,0,0,0.3)',
+        backgroundColor: 'transparent',
         backdropFilter: 'blur(10px)',
       }}
     >
@@ -236,12 +236,12 @@ export default function ChatInput({
                   position: 'absolute',
                   top: 0,
                   right: 0,
-                  bgcolor: 'rgba(0,0,0,0.6)',
+                  bgcolor: 'rgba(124, 179, 66, 0.2)',
                   color: '#fff',
                   width: 20,
                   height: 20,
                   '&:hover': {
-                    bgcolor: 'rgba(0,0,0,0.8)',
+                    bgcolor: 'rgba(124, 179, 66, 0.3)',
                   },
                 }}
               >
