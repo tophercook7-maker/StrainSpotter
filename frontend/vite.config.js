@@ -201,23 +201,8 @@ export default defineConfig(({ mode }) => {
               return 'charts-vendor';
             }
             
-            // For mobile: split vendor into smaller chunks
-            if (isMobile && id.includes('node_modules')) {
-              // Split large vendor libraries
-              if (id.includes('node_modules')) {
-                // Group by package name for better caching
-                const match = id.match(/node_modules\/(@?[^\/]+)/);
-                if (match) {
-                  const pkg = match[1];
-                  // Keep small packages together
-                  if (pkg.startsWith('@')) {
-                    return `vendor-${pkg.replace('@', '').replace('/', '-')}`;
-                  }
-                }
-              }
-            }
-            
-            // Other node_modules
+            // For mobile: be more conservative with chunking to avoid circular deps
+            // Other node_modules - keep together to avoid initialization issues
             if (id.includes('node_modules')) {
               return 'vendor';
             }
@@ -256,41 +241,21 @@ export default defineConfig(({ mode }) => {
           // Preserve module structure for better tree-shaking
           preserveModules: false
         },
-        // Tree-shaking optimizations
+        // Tree-shaking optimizations - be conservative for mobile
         treeshake: {
-          moduleSideEffects: false,
+          moduleSideEffects: isMobile ? 'no-external' : false, // More conservative for mobile
           propertyReadSideEffects: false,
-          tryCatchDeoptimization: false
+          tryCatchDeoptimization: false,
+          // Preserve module structure to avoid circular dependency issues
+          preset: isMobile ? 'smallest' : 'recommended'
         }
       },
       // Chunk size warning limit (adjusted for mobile)
       chunkSizeWarningLimit: chunkSizeLimit,
       // Disable source maps in production for smaller bundle
       sourcemap: !isProduction,
-      // Enhanced minification
+      // Enhanced minification - use esbuild for better ES module support
       minify: isProduction ? 'esbuild' : false,
-      // Minification options
-      terserOptions: isProduction ? {
-        compress: {
-          drop_console: true, // Remove console.logs in production
-          drop_debugger: true,
-          pure_funcs: ['console.log', 'console.info', 'console.debug'],
-          passes: 3, // Multiple passes for better compression
-          unsafe: false,
-          unsafe_comps: false,
-          unsafe_math: false,
-          unsafe_methods: false,
-          unsafe_proto: false,
-          unsafe_regexp: false,
-          unsafe_undefined: false
-        },
-        mangle: {
-          safari10: true // Fix Safari 10 issues
-        },
-        format: {
-          comments: false // Remove comments
-        }
-      } : undefined,
       // CommonJS options
       commonjsOptions: {
         transformMixedEsModules: true,
@@ -334,16 +299,18 @@ export default defineConfig(({ mode }) => {
         '@emotion/styled': '@emotion/styled'
       }
     },
-    // Performance optimizations
+    // Performance optimizations - be conservative for mobile to avoid initialization issues
     esbuild: {
       // Drop console and debugger in production
-      drop: isProduction ? ['console', 'debugger'] : [],
+      drop: isProduction && !isMobile ? ['console', 'debugger'] : [], // Keep console on mobile for debugging
       // Legal comments
       legalComments: 'none',
-      // Minify
-      minifyIdentifiers: isProduction,
+      // Minify - but preserve names to avoid initialization issues
+      minifyIdentifiers: isProduction && !isMobile, // Don't mangle on mobile
       minifySyntax: isProduction,
-      minifyWhitespace: isProduction
+      minifyWhitespace: isProduction,
+      // Keep class names and function names to prevent circular dependency issues
+      keepNames: isMobile
     },
     // CSS optimizations
     css: {
