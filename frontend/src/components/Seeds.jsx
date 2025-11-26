@@ -87,7 +87,7 @@ export default function Seeds({ onBack }) {
           p: 2,
           gap: 1.5,
           borderBottom: '1px solid rgba(255,255,255,0.08)',
-          bgcolor: 'rgba(0,0,0,0.7)',
+          bgcolor: 'transparent',
           backdropFilter: 'blur(10px)',
           zIndex: 1,
         }}

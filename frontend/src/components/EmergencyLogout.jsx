@@ -74,7 +74,7 @@ export default function EmergencyLogout() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)',
+        background: 'transparent',
         p: 2
       }}
     >

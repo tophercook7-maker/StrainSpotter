@@ -732,26 +732,29 @@ export default function ScanWizard({ onBack, onScanComplete }) {
           console.error('Scan error:', err);
           setScanPhase(null);
           setScanProgress(null);
+          const errorMsg = err?.message || err?.toString() || 'Failed to process scan. Please check your connection and try again.';
           setScanStatus("error");
-          setErrorMessage(err.message || 'Scan failed. Please try again.');
-          setAlertMsg(err.message || 'Scan failed. Please try again.');
+          setErrorMessage(errorMsg);
+          setAlertMsg(errorMsg);
           setAlertOpen(true);
           setLoading(false);
         }
       };
       reader.onerror = () => {
+        const errorMsg = "Unable to read the selected file. Please try a different image.";
         setScanStatus("error");
-        setErrorMessage("Unable to read the selected file.");
-        setAlertMsg("Unable to read the selected file.");
+        setErrorMessage(errorMsg);
+        setAlertMsg(errorMsg);
         setAlertOpen(true);
         setLoading(false);
       };
       reader.readAsDataURL(file);
     } catch (err) {
       console.error('Scan error:', err);
+      const errorMsg = err?.message || err?.toString() || 'Failed to start scan. Please check your connection and try again.';
       setScanStatus("error");
-      setErrorMessage(err.message || 'Scan failed. Please try again.');
-      setAlertMsg(err.message || 'Scan failed. Please try again.');
+      setErrorMessage(errorMsg);
+      setAlertMsg(errorMsg);
       setAlertOpen(true);
       setLoading(false);
     }
@@ -794,7 +797,7 @@ export default function ScanWizard({ onBack, onScanComplete }) {
         fullScreen
         PaperProps={{
           sx: {
-            bgcolor: 'rgba(0,0,0,0.95)',
+            bgcolor: 'transparent',
             m: 0,
             maxHeight: '100vh'
           }
@@ -908,7 +911,7 @@ export default function ScanWizard({ onBack, onScanComplete }) {
             flexDirection: 'column',
             height: '100vh',
             overflow: 'hidden',
-            bgcolor: '#000',
+            bgcolor: 'transparent',
           }}
         >
           {/* Fixed header with back button */}
@@ -920,7 +923,7 @@ export default function ScanWizard({ onBack, onScanComplete }) {
               gap: 1.5,
               p: 2,
               borderBottom: '1px solid rgba(255,255,255,0.08)',
-              bgcolor: 'rgba(0,0,0,0.7)',
+              bgcolor: 'transparent',
               backdropFilter: 'blur(10px)',
               zIndex: 1,
             }}

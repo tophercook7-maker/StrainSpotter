@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Box, Typography, Stack, Paper, Button, CircularProgress,
   Card, CardContent, Chip, IconButton, Slider, Alert, CardActionArea
@@ -18,7 +18,7 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
   const [error, setError] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [radius, setRadius] = useState(10);
-  const [locationStatus, setLocationStatus] = useState('detecting');
+  const [locationStatus, setLocationStatus] = useState('idle');
   const initialRadiusRef = useRef(10);
 
   const searchDispensaries = useCallback(async (lat, lng, searchRadius) => {
@@ -30,85 +30,200 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
         url += `&strain=${strainSlug}`;
       }
 
+      console.log('[DispensaryFinder] Calling API:', url);
       const response = await fetch(url);
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[DispensaryFinder] API error:', response.status, errorText);
-        throw new Error(`Search failed: ${response.status}`);
+        console.error('[DispensaryFinder] API URL:', url);
+        console.error('[DispensaryFinder] API_BASE:', API_BASE);
+        
+        let errorMsg = `Search failed: ${response.status}`;
+        if (response.status === 404) {
+          errorMsg = 'Dispensary search endpoint not found. The backend server may not be running.';
+        } else if (response.status === 500) {
+          errorMsg = 'Server error during search. This may be a temporary issue - please try again.';
+        }
+        throw new Error(errorMsg);
       }
       
       const data = await response.json();
       console.log('[DispensaryFinder] API response:', data);
-      // Handle both formats: { results: [...] } or direct array
-      const results = Array.isArray(data) ? data : (data.results || data.dispensaries || []);
+      
+      // Backend returns { total, results, sources } format
+      let results = [];
+      if (Array.isArray(data)) {
+        results = data;
+      } else if (data && typeof data === 'object') {
+        results = data.results || data.dispensaries || [];
+      }
+      
       console.log('[DispensaryFinder] Found dispensaries:', results.length);
-      setDispensaries(results);
+      console.log('[DispensaryFinder] Response structure:', { 
+        isArray: Array.isArray(data), 
+        hasResults: !!data.results, 
+        resultsLength: results.length,
+        total: data.total,
+        sources: data.sources 
+      });
+      
+      if (!Array.isArray(results) || results.length === 0) {
+        console.warn('[DispensaryFinder] No dispensaries found in response');
+        const total = data?.total || 0;
+        if (total === 0) {
+          setError(`No dispensaries found within ${searchRadius} miles. Try increasing the search radius.`);
+        } else {
+          setError('No dispensaries found. The search may have returned no results for this area.');
+        }
+        setDispensaries([]);
+      } else {
+        setError(null);
+        setDispensaries(results);
+      }
     } catch (err) {
-      console.error('Dispensary search failed:', err);
-      setError('Failed to find dispensaries. Please try again.');
+      console.error('[DispensaryFinder] Search failed:', err);
+      const errorMsg = err?.message || 'Failed to find dispensaries. Please check your connection and try again.';
+      setError(errorMsg);
+      setDispensaries([]);
     } finally {
       setLoading(false);
     }
   }, [strainSlug]);
 
-  useEffect(() => {
-    let timeoutId;
+  // Location request function - called by button click
+  const requestLocation = useCallback(async () => {
+    try {
+      setLocationStatus('detecting');
+      setError(null);
 
-    async function requestLocation() {
-      if (!navigator.geolocation) {
+      console.log('[DispensaryFinder] Requesting location permission...');
+      
+      let location = null;
+
+      // Try Capacitor Geolocation first (for mobile apps)
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation) {
+        try {
+          const { Geolocation } = window.Capacitor.Plugins;
+          console.log('[DispensaryFinder] Using Capacitor Geolocation plugin...');
+          
+          // Add manual timeout for Capacitor too
+          const position = await Promise.race([
+            Geolocation.getCurrentPosition({
+              timeout: 15000, // 15 seconds - shorter timeout
+              enableHighAccuracy: false,
+              maximumAge: 300000, // 5 min cache
+            }),
+            new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('TIMEOUT')), 15000);
+            })
+          ]);
+          
+          console.log('[DispensaryFinder] Location obtained via Capacitor:', position);
+          location = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+        } catch (capacitorErr) {
+          console.warn('[DispensaryFinder] Capacitor Geolocation failed, trying browser API:', capacitorErr);
+          if (capacitorErr.message === 'TIMEOUT') {
+            throw { code: 3, message: 'Location request timed out after 15 seconds' };
+          }
+          // Fall through to browser geolocation
+        }
+      }
+
+      // Fallback to browser geolocation API
+      if (!location && navigator.geolocation) {
+        console.log('[DispensaryFinder] Using browser geolocation API...');
+        
+        // Add manual timeout to prevent hanging
+        const timeoutId = setTimeout(() => {
+          console.warn('[DispensaryFinder] Geolocation timeout exceeded (15s)');
+        }, 15000);
+        
+        try {
+          const pos = await Promise.race([
+            new Promise((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(
+                (position) => {
+                  clearTimeout(timeoutId);
+                  resolve(position);
+                }, 
+                (error) => {
+                  clearTimeout(timeoutId);
+                  reject(error);
+                }, 
+                {
+                  enableHighAccuracy: false,
+                  timeout: 15000, // 15 seconds - shorter timeout
+                  maximumAge: 300000 // Accept cached location up to 5 minutes old
+                }
+              );
+            }),
+            new Promise((_, reject) => {
+              setTimeout(() => {
+                clearTimeout(timeoutId);
+                reject(new Error('TIMEOUT'));
+              }, 15000);
+            })
+          ]);
+
+          location = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude
+          };
+          console.log('[DispensaryFinder] Location obtained via browser API:', location);
+        } catch (geoError) {
+          clearTimeout(timeoutId);
+          if (geoError.message === 'TIMEOUT') {
+            throw { code: 3, message: 'Location request timed out after 15 seconds' };
+          }
+          throw geoError;
+        }
+      }
+
+      if (!location) {
         setLocationStatus('unsupported');
-        setError('Geolocation is not supported by your browser. Please search manually.');
+        setError('Geolocation is not supported. Please search manually.');
         return;
       }
 
-      try {
-        setLocationStatus('detecting');
-        setError(null);
+      setUserLocation(location);
+      setLocationStatus('success');
+      setError(null);
+      // Automatically search when location is obtained
+      await searchDispensaries(location.lat, location.lng, initialRadiusRef.current);
+    } catch (err) {
+      console.error('[DispensaryFinder] Geolocation error', err);
 
-        // TIMEOUT FAILSAFE
-        timeoutId = setTimeout(() => {
-          setLocationStatus('timeout');
-          setError('Location request timed out. Please try again.');
-        }, 8000);
-
-        const pos = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 7000,
-            maximumAge: 0
-          });
-        });
-
-        clearTimeout(timeoutId);
-
-        const location = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude
-        };
-        console.log('[DispensaryFinder] Location obtained:', location);
-        setUserLocation(location);
-        setLocationStatus('success');
-        searchDispensaries(location.lat, location.lng, initialRadiusRef.current);
-      } catch (err) {
-        clearTimeout(timeoutId);
-        console.error('[DispensaryFinder] Geolocation error', err);
-        
-        if (err.code === 1) {
-          setLocationStatus('denied');
-          setError('Location access denied. Please enable location services in your device settings.');
-        } else {
-          setLocationStatus('timeout');
-          setError('Unable to get your location. Please try again or enable location services.');
-        }
+      if (err.code === 1) {
+        setLocationStatus('denied');
+        setError('Location permission denied. Please enable location access in Settings → StrainSpotter → Location, then tap "Find Dispensaries" below.');
+      } else if (err.code === 2) {
+        setLocationStatus('unavailable');
+        setError('Location is unavailable. Please check that location services are enabled on your device.');
+      } else if (err.code === 3) {
+        setLocationStatus('timeout');
+        setError('Location request timed out. Please tap "Find Dispensaries" to retry.');
+      } else {
+        setLocationStatus('error');
+        setError(`Unable to get your location: ${err.message || 'Unknown error'}. Please tap "Find Dispensaries" to retry.`);
       }
     }
-
-    requestLocation();
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
   }, [searchDispensaries]);
+
+  // Auto-request location when component mounts (with timeout protection)
+  useEffect(() => {
+    if (!userLocation && locationStatus === 'idle') {
+      console.log('[DispensaryFinder] Auto-requesting location on mount...');
+      // Small delay to ensure component is fully mounted
+      const timer = setTimeout(() => {
+        requestLocation();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount - requestLocation is stable
 
   const handleRadiusChange = (_event, newValue) => {
     setRadius(newValue);
@@ -195,7 +310,51 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
         pt: 1
       }}>
 
-      {/* Location Status */}
+      {/* Initial State - Show button to request location */}
+      {!userLocation && locationStatus !== 'detecting' && locationStatus !== 'success' && !error && (
+        <Paper sx={{ 
+          p: 4, 
+          mb: 2,
+          background: 'rgba(255,255,255,0.1)', 
+          backdropFilter: 'blur(20px)', 
+          border: '1px solid rgba(124, 179, 66, 0.3)', 
+          borderRadius: 2,
+          textAlign: 'center'
+        }}>
+          <Stack spacing={3} alignItems="center">
+            <LocationOnIcon sx={{ fontSize: 64, color: '#7cb342' }} />
+            <Box>
+              <Typography variant="h6" sx={{ color: '#fff', mb: 1, fontWeight: 700 }}>
+                Find Nearby Dispensaries
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                We need your location to find dispensaries near you
+              </Typography>
+            </Box>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<LocationOnIcon />}
+              onClick={requestLocation}
+              disabled={locationStatus === 'detecting'}
+              sx={{
+                bgcolor: '#7cb342',
+                color: '#fff',
+                fontWeight: 700,
+                px: 4,
+                py: 1.5,
+                fontSize: '1.1rem',
+                '&:hover': { bgcolor: '#689f38' },
+                '&:disabled': { bgcolor: 'rgba(124, 179, 66, 0.5)' }
+              }}
+            >
+              {locationStatus === 'detecting' ? 'Requesting Location...' : 'Find Dispensaries'}
+            </Button>
+          </Stack>
+        </Paper>
+      )}
+
+      {/* Location Status - Detecting */}
       {locationStatus === 'detecting' && !error && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <Stack spacing={2} alignItems="center">
@@ -207,6 +366,7 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
         </Box>
       )}
       
+      {/* Error State */}
       {error && locationStatus !== 'success' && (
         <Paper sx={{ 
           p: 3, 
@@ -222,96 +382,72 @@ export default function DispensaryFinder({ onBack, strainSlug }) {
           <Button
             variant="contained"
             fullWidth
+            startIcon={<LocationOnIcon />}
             onClick={() => {
               setError(null);
-              setLocationStatus('detecting');
               setUserLocation(null);
-              // Trigger location request again
-              const timeoutId = setTimeout(() => {
-                if (navigator.geolocation) {
-                  navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                      const location = {
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude
-                      };
-                      setUserLocation(location);
-                      setLocationStatus('success');
-                      searchDispensaries(location.lat, location.lng, initialRadiusRef.current);
-                    },
-                    (err) => {
-                      if (err.code === 1) {
-                        setLocationStatus('denied');
-                        setError('Location access denied. Please enable location services in your device settings.');
-                      } else {
-                        setLocationStatus('timeout');
-                        setError('Unable to get your location. Please try again.');
-                      }
-                    },
-                    {
-                      enableHighAccuracy: true,
-                      timeout: 7000,
-                      maximumAge: 0
-                    }
-                  );
-                }
-              }, 100);
+              setDispensaries([]);
+              requestLocation();
             }}
+            disabled={locationStatus === 'detecting'}
             sx={{
               bgcolor: '#7cb342',
-              '&:hover': { bgcolor: '#689f38' }
+              '&:hover': { bgcolor: '#689f38' },
+              '&:disabled': { bgcolor: 'rgba(124, 179, 66, 0.5)' }
             }}
           >
-            Try Again
+            {locationStatus === 'detecting' ? 'Requesting...' : 'Find Dispensaries'}
           </Button>
         </Paper>
       )}
 
-      {/* Search Controls */}
-      <Paper sx={{ 
-        p: 2, 
-        mb: 2, 
-        background: 'rgba(255,255,255,0.1)', 
-        backdropFilter: 'blur(20px)', 
-        border: '1px solid rgba(124, 179, 66, 0.3)', 
-        borderRadius: 2 
-      }}>
-        <Stack spacing={2}>
-          <Box>
-            <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
-              Search Radius: {radius} miles
-            </Typography>
-            <Slider
-              value={radius}
-              onChange={handleRadiusChange}
-              min={1}
-              max={100}
-              step={1}
-              marks={[
-                { value: 1, label: '1mi' },
-                { value: 25, label: '25mi' },
-                { value: 50, label: '50mi' },
-                { value: 100, label: '100mi' }
-              ]}
+      {/* Search Controls - Only show if location is found */}
+      {userLocation && locationStatus === 'success' && (
+        <Paper sx={{ 
+          p: 2, 
+          mb: 2, 
+          background: 'rgba(255,255,255,0.1)', 
+          backdropFilter: 'blur(20px)', 
+          border: '1px solid rgba(124, 179, 66, 0.3)', 
+          borderRadius: 2 
+        }}>
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
+                Search Radius: {radius} miles
+              </Typography>
+              <Slider
+                value={radius}
+                onChange={handleRadiusChange}
+                min={1}
+                max={100}
+                step={1}
+                marks={[
+                  { value: 1, label: '1mi' },
+                  { value: 25, label: '25mi' },
+                  { value: 50, label: '50mi' },
+                  { value: 100, label: '100mi' }
+                ]}
+                sx={{
+                  color: '#7cb342',
+                  '& .MuiSlider-markLabel': { color: '#fff', fontSize: '0.75rem' }
+                }}
+              />
+            </Box>
+            <Button
+              variant="contained"
+              onClick={handleSearch}
+              disabled={loading}
               sx={{
-                color: '#7cb342',
-                '& .MuiSlider-markLabel': { color: '#fff', fontSize: '0.75rem' }
+                bgcolor: '#7cb342',
+                '&:hover': { bgcolor: '#689f38' }
               }}
-            />
-          </Box>
-          <Button
-            variant="contained"
-            onClick={handleSearch}
-            disabled={!userLocation || loading}
-            sx={{
-              bgcolor: '#7cb342',
-              '&:hover': { bgcolor: '#689f38' }
-            }}
-          >
-            {loading ? 'Searching...' : 'Search Dispensaries'}
-          </Button>
-        </Stack>
-      </Paper>
+            >
+              {loading ? 'Searching...' : 'Update Search'}
+            </Button>
+          </Stack>
+        </Paper>
+      )}
 
       {/* Error Message */}
       {error && (

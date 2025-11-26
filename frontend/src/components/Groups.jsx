@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   Box,
   Card,
@@ -54,6 +54,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
   const theme = useTheme();
   const isMobile = useMediaQuery('(max-width:900px)');
   const [groups, setGroups] = useState([]);
+  const [groupsInitialized, setGroupsInitialized] = useState(false);
   const [userId, setUserId] = useState(userIdProp || authUser?.id || null);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
@@ -278,60 +279,121 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     return () => clearInterval(interval);
   }, [userId, sendHeartbeat]);
   
+  // Load groups only once on mount or when userId changes
+  // Use a ref to prevent duplicate calls
+  const hasLoadedRef = useRef(false);
+  const lastUserIdRef = useRef(null);
+  
+  // Load groups list - defined early so it can be used in useEffect
+  const loadGroups = useCallback(async () => {
+    try {
+      setLoading(true);
+      console.log('[Groups] Fetching from:', `${API_BASE}/api/groups`);
+      const res = await fetch(`${API_BASE}/api/groups`);
+      console.log('[Groups] Response status:', res.status, res.statusText);
+      if (res.ok) {
+        const payload = await res.json();
+        console.log('[Groups] Received groups:', payload?.length || 0);
+        // Filter immediately to prevent layout shift
+        const curated = Array.isArray(payload)
+          ? payload.filter(group => ALLOWED_GROUPS.includes(group.name))
+          : [];
+        console.log('[Groups] Filtered groups:', curated?.length || 0);
+        // Set groups immediately with filtered array to prevent resize
+        // Use a single state update to prevent double render
+        setGroups(curated || []);
+        setGroupsInitialized(true);
+        // Use functional update to avoid dependency on adminUserId
+        setAdminUserId(prev => {
+          if (!prev && Array.isArray(payload) && payload.length) {
+            return payload[0]?.admin_user_id || null;
+          }
+          return prev;
+        });
+      } else {
+        console.error('[Groups] Failed to fetch groups:', res.status, res.statusText);
+        setGroups([]); // Set empty array on error
+      }
+    } catch (err) {
+      console.error('[Groups] Fetch error:', err);
+      setGroups([]); // Set empty array on error
+    } finally {
+      setLoading(false);
+    }
+  }, []); // Empty dependencies - loadGroups is stable
+  
   useEffect(() => {
+    if (!userId) {
+      setLoading(false);
+      hasLoadedRef.current = false;
+      lastUserIdRef.current = null;
+      return;
+    }
+    
+    // Only load if userId changed or we haven't loaded yet
+    if (hasLoadedRef.current && lastUserIdRef.current === userId) {
+      return;
+    }
+    
+    hasLoadedRef.current = true;
+    lastUserIdRef.current = userId;
+    loadGroups();
+  }, [userId, loadGroups]);
+
+  // Separate effect for user account setup (doesn't reload groups)
+  useEffect(() => {
+    if (!userId) return;
+    
     (async () => {
-      // Auto-setup user account when component loads
-      if (userId) {
-        try {
-          console.log('[Groups] Auto-setting up user account for:', userId);
-          const { data: { session } } = await supabase.auth.getSession();
-          const email = session?.user?.email;
+      try {
+        console.log('[Groups] Auto-setting up user account for:', userId);
+        const { data: { session } } = await supabase.auth.getSession();
+        const email = session?.user?.email;
 
-          if (email) {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('display_name, username, email, role')
-              .eq('user_id', userId)
-              .single();
+        if (email) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('display_name, username, email, role')
+            .eq('user_id', userId)
+            .single();
 
-            const profileWithEmail = profile
-              ? { ...profile, email: profile.email ?? email }
-              : { display_name: null, username: null, email, role: 'consumer' };
+          const profileWithEmail = profile
+            ? { ...profile, email: profile.email ?? email }
+            : { display_name: null, username: null, email, role: 'consumer' };
 
-            setProfileInfo(profileWithEmail);
-            setUserRole(profile?.role || 'consumer');
+          setProfileInfo(profileWithEmail);
+          setUserRole(profile?.role || 'consumer');
 
-            const userName = deriveDisplayName(profileWithEmail, email, userId);
-            setCurrentUserName(userName);
+          const userName = deriveDisplayName(profileWithEmail, email, userId);
+          setCurrentUserName(userName);
 
-            if (!profilePromptDismissed && shouldPromptProfile(profileWithEmail, email, userId)) {
-              setProfileDialogOpen(true);
-            }
-
-            console.log('[Groups] Ensuring user record exists for:', userId, email);
-            const ensureRes = await fetch(`${API_BASE}/api/users/ensure`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user_id: userId, email, username: userName })
-            });
-            if (ensureRes.ok) {
-              console.log('[Groups] User account ready');
-            }
-          } else if (!profilePromptDismissed) {
+          if (!profilePromptDismissed && shouldPromptProfile(profileWithEmail, email, userId)) {
             setProfileDialogOpen(true);
           }
-        } catch (e) {
-          console.error('[Groups] Auto-setup error:', e);
-        }
-      }
 
-      // Load groups
-      await loadGroups();
-      setLoading(false);
+          console.log('[Groups] Ensuring user record exists for:', userId, email);
+          const ensureRes = await fetch(`${API_BASE}/api/users/ensure`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId, email, username: userName })
+          });
+          if (ensureRes.ok) {
+            console.log('[Groups] User account ready');
+          }
+        } else if (!profilePromptDismissed) {
+          setProfileDialogOpen(true);
+        }
+      } catch (e) {
+        console.error('[Groups] Auto-setup error:', e);
+      }
     })();
+  }, [userId, profilePromptDismissed, deriveDisplayName, shouldPromptProfile]);
+
+  // Load guidelines acceptance state
+  useEffect(() => {
     const stored = localStorage.getItem(guidelinesKey);
     if (stored === 'true') setGuidelinesAccepted(true);
-  }, [guidelinesKey, userId, adminUserId, profilePromptDismissed, deriveDisplayName, shouldPromptProfile]);
+  }, [guidelinesKey]);
 
   // Load messages function - defined early so it can be used in useEffect
   const loadMessages = useCallback(async (groupId) => {
@@ -394,6 +456,93 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     }
   }, [dmMessagesHook.messages, chatDialogOpen, selectedChat]);
 
+  // Load direct chats for current user - defined early so it can be used in useEffect
+  const loadDirectChats = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/direct-chats/chats/${userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setDirectChats(data);
+      }
+    } catch (e) {
+      console.error('Failed to load direct chats:', e);
+    }
+  }, [userId]);
+
+  // Load messages for a direct chat
+  const loadDirectMessages = useCallback(async (otherUserId) => {
+    if (!userId) return;
+    try {
+      console.log('💬 Loading direct messages with user:', otherUserId);
+      const res = await fetch(`${API_BASE}/api/direct-messages/${userId}/${otherUserId}`);
+      console.log('💬 Direct messages response:', res.status);
+      if (res.ok) {
+        const data = await res.json();
+        console.log('💬 Loaded direct messages:', data.length);
+        setDirectMessages(data);
+        setLastRefresh(new Date());
+      }
+    } catch (e) {
+      console.error('Failed to load direct messages:', e);
+    }
+  }, [userId]);
+
+  // Start a direct chat with a user - defined early so it can be used in useEffect
+  const startDirectChat = useCallback(async (otherUser) => {
+    console.log('💬 Starting direct chat with:', otherUser.display_name || otherUser.username, otherUser.user_id);
+    setSelectedChat(otherUser);
+    setDirectMessages([]); // Clear previous messages
+    setChatDialogOpen(true);
+    
+    // Get or create conversation ID
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (token && userId) {
+        const res = await fetch(`${API_BASE}/api/dm/start`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ userId: otherUser.user_id }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setDmConversationId(data.conversation_id || data.id);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to get conversation ID:', e);
+    }
+    
+    await loadDirectMessages(otherUser.user_id);
+
+    // Mark messages from this user as read
+    if (userId) {
+      try {
+        await fetch(`${API_BASE}/api/direct-messages/mark-read/${userId}/${otherUser.user_id}`, {
+          method: 'PUT'
+        });
+        // Reload chats to update unread counts
+        loadDirectChats();
+      } catch (e) {
+        console.error('Failed to mark messages as read:', e);
+      }
+    }
+  }, [userId, loadDirectMessages, loadDirectChats]);
+
+  // Auto-refresh direct chats periodically to catch new conversations
+  useEffect(() => {
+    if (activeTab === 1 && userId) {
+      const interval = setInterval(() => {
+        loadDirectChats();
+      }, 5000); // Refresh every 5 seconds when on DM tab
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, userId, loadDirectChats]);
+
   // Load users and direct chats when switching to DM tab
   useEffect(() => {
     if (activeTab === 1 && userId) {
@@ -402,38 +551,26 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       console.log('🔄 userId:', userId);
       loadAllUsers();
       loadDirectChats();
-    }
-  }, [activeTab, userId]);
-
-  // Load groups list
-  const loadGroups = async () => {
-    try {
-      setLoading(true);
-      console.log('[Groups] Fetching from:', `${API_BASE}/api/groups`);
-      const res = await fetch(`${API_BASE}/api/groups`);
-      console.log('[Groups] Response status:', res.status, res.statusText);
-      if (res.ok) {
-        const payload = await res.json();
-        console.log('[Groups] Received groups:', payload?.length || 0);
-        const curated = Array.isArray(payload)
-          ? payload.filter(group => ALLOWED_GROUPS.includes(group.name))
-          : [];
-        console.log('[Groups] Filtered groups:', curated?.length || 0);
-        setGroups(curated || []);
-        if (!adminUserId && Array.isArray(payload) && payload.length) {
-          setAdminUserId(payload[0]?.admin_user_id || null);
+      
+      // Check if we need to auto-open a DM (from FeedbackReader)
+      const openDMWith = sessionStorage.getItem('openDMWith');
+      if (openDMWith) {
+        try {
+          const userData = JSON.parse(openDMWith);
+          sessionStorage.removeItem('openDMWith');
+          // Wait a bit for users to load, then start the chat
+          setTimeout(() => {
+            if (startDirectChat) {
+              startDirectChat(userData);
+              setActiveTab(1); // Ensure DM tab is active
+            }
+          }, 1000);
+        } catch (e) {
+          console.error('Failed to parse openDMWith:', e);
         }
-      } else {
-        console.error('[Groups] Failed to fetch groups:', res.status, res.statusText);
-        setGroups([]); // Set empty array on error
       }
-    } catch (err) {
-      console.error('[Groups] Fetch error:', err);
-      setGroups([]); // Set empty array on error
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [activeTab, userId, loadDirectChats, startDirectChat]);
 
   // loadMessages is now defined above using useCallback
 
@@ -591,82 +728,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     setProfilePromptDismissed(true);
   };
 
-  // Load direct chats for current user
-  const loadDirectChats = async () => {
-    if (!userId) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/direct-chats/chats/${userId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setDirectChats(data);
-      }
-    } catch (e) {
-      console.error('Failed to load direct chats:', e);
-    }
-  };
 
-  // Load messages for a direct chat
-  const loadDirectMessages = async (otherUserId) => {
-    if (!userId) return;
-    try {
-      console.log('💬 Loading direct messages with user:', otherUserId);
-      const res = await fetch(`${API_BASE}/api/direct-messages/${userId}/${otherUserId}`);
-      console.log('💬 Direct messages response:', res.status);
-      if (res.ok) {
-        const data = await res.json();
-        console.log('💬 Loaded direct messages:', data.length);
-        setDirectMessages(data);
-        setLastRefresh(new Date());
-      }
-    } catch (e) {
-      console.error('Failed to load direct messages:', e);
-    }
-  };
-
-  // Start a direct chat with a user
-  const startDirectChat = async (otherUser) => {
-    console.log('💬 Starting direct chat with:', otherUser.display_name || otherUser.username, otherUser.user_id);
-    setSelectedChat(otherUser);
-    setDirectMessages([]); // Clear previous messages
-    setChatDialogOpen(true);
-    
-    // Get or create conversation ID
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (token && userId) {
-        const res = await fetch(`${API_BASE}/api/dm/start`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ userId: otherUser.user_id }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setDmConversationId(data.conversation_id || data.id);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to get conversation ID:', e);
-    }
-    
-    await loadDirectMessages(otherUser.user_id);
-
-    // Mark messages from this user as read
-    if (userId) {
-      try {
-        await fetch(`${API_BASE}/api/direct-messages/mark-read/${userId}/${otherUser.user_id}`, {
-          method: 'PUT'
-        });
-        // Reload chats to update unread counts
-        loadDirectChats();
-      } catch (e) {
-        console.error('Failed to mark messages as read:', e);
-      }
-    }
-  };
 
   // Send a direct message
   const sendDirectMessage = async () => {
@@ -740,13 +802,20 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
         if (responseData && responseData.id) {
           dmMessagesHook.onNewMessage(responseData);
         } else {
+          // Reload messages to get the new message
           setTimeout(async () => {
-            // Hook will auto-refresh via useEffect
+            if (selectedChat?.user_id) {
+              await loadDirectMessages(selectedChat.user_id);
+            }
+            // Hook will also auto-refresh via useEffect
           }, 500);
         }
 
         // Reload the chats list to show this conversation in "Recent Chats"
         loadDirectChats();
+        
+        // Clear input after successful send
+        setInput('');
       } else {
         const errorText = await res.text();
         console.error('❌ Server error response:', errorText);
@@ -1062,10 +1131,14 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
     if (updated && updated !== selectedGroup) {
       setSelectedGroup(updated);
     }
-  }, [groups, selectedGroup]);
+  }, [groups, selectedGroup, groupsInitialized]);
 
   const sortedGroups = useMemo(() => {
-    if (!Array.isArray(groups) || groups.length === 0) {
+    // Return empty array immediately if groups haven't loaded yet to prevent resize
+    if (!groupsInitialized || !Array.isArray(groups)) {
+      return [];
+    }
+    if (groups.length === 0) {
       return [];
     }
     try {
@@ -1084,7 +1157,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       console.error('[Groups] Error sorting groups:', err);
       return groups; // Return unsorted if sort fails
     }
-  }, [groups]);
+  }, [groups, groupsInitialized]);
 
   const renderGroupButton = (group) => {
     if (!group || !group.id) {
@@ -1170,15 +1243,17 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           position: 'relative',
         }}
       >
-        {/* Left: Group List Sidebar */}
+        {/* Left: Group List Sidebar - Expanded to match chat width */}
         <Box
           sx={{
-            width: 320,
-            borderRight: '1px solid rgba(255,255,255,0.08)',
+            width: { xs: '100%', sm: '50%', md: '50%' },
+            minWidth: { xs: '100%', sm: '400px' },
+            flexShrink: 0,
+            borderRight: { xs: 'none', sm: '1px solid rgba(255,255,255,0.08)' },
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            backgroundColor: 'rgba(0,0,0,0.3)',
+            backgroundColor: 'transparent',
             backdropFilter: 'blur(10px)',
           }}
         >
@@ -1333,8 +1408,8 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       <Box sx={{ flexShrink: 0, position: 'relative', zIndex: 1 }}>
         <Box
           sx={{
-            pt: 'calc(env(safe-area-inset-top, 0px) + 16px)',
-            pb: 2,
+            pt: 'calc(env(safe-area-inset-top, 0px) + 8px)',
+            pb: 1.5,
             px: { xs: 1.5, md: 2 }
           }}
         >
@@ -1376,18 +1451,18 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           )}
 
           {/* Hero Image Icon */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
             <Box
               sx={{
-                width: 60,
-                height: 60,
+                width: 48,
+                height: 48,
                 borderRadius: '50%',
                 background: 'transparent',
                 border: '2px solid rgba(124, 179, 66, 0.5)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)',
+                boxShadow: '0 0 16px rgba(124, 179, 66, 0.4)',
                 overflow: 'hidden',
                 flexShrink: 0
               }}
@@ -1398,12 +1473,12 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             </Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.25rem', color: '#CDDC39' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.1rem', color: '#CDDC39' }}>
               Groups & Chat
             </Typography>
           </Box>
 
-          <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center">
             <Typography variant="body2" sx={{ color: '#9CCC65', flex: 1 }}>
               Signed in as {currentUserName}
             </Typography>
@@ -1914,10 +1989,9 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
       )}
 
       {/* Direct Chat Dialog */}
-      <Dialog
+        <Dialog
         open={chatDialogOpen}
         onClose={() => setChatDialogOpen(false)}
-        maxWidth="md"
         fullWidth
         fullScreen
         PaperProps={{
@@ -1941,8 +2015,10 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          p: 2,
-          pt: '120px',
+          p: 1.5,
+          pt: 'calc(env(safe-area-inset-top, 0px) + 8px)',
+          minHeight: 44,
+          maxHeight: 44,
           boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
         }}>
           <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
@@ -1986,7 +2062,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          background: 'rgba(0,0,0,0.2)'
+          background: 'transparent'
         }}>
           <Stack spacing={2} sx={{
             p: 2,
@@ -2027,7 +2103,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                 border: '2px solid rgba(124,179,66,0.4)',
                 borderRadius: 2,
                 p: 2,
-                background: 'rgba(0,0,0,0.2)',
+                background: 'transparent',
                 backdropFilter: 'blur(15px)',
                 WebkitBackdropFilter: 'blur(15px)',
                 boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.3)'
@@ -2078,7 +2154,7 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
                   dmMessagesHook.messages.map((m, idx) => {
                     // Use raw message for compatibility
                     const msg = m.raw || m;
-                    const isCurrentUser = m.sender_id === userId;
+                    const isCurrentUser = (msg.sender_id || msg.user_id) === userId;
                     const senderName = isCurrentUser
                       ? 'You'
                       : (m.sender?.display_name

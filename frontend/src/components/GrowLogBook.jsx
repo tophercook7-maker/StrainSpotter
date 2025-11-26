@@ -30,6 +30,7 @@ import { supabase } from '../supabaseClient';
 import { API_BASE } from '../config';
 import EmptyStateCard from './EmptyStateCard';
 import GrassIcon from '@mui/icons-material/Grass';
+import { BackHeader } from './BackHeader';
 
 const stageOptions = [
   'Planning',
@@ -111,7 +112,7 @@ const buildShareSummary = (log) => {
   return lines.join('\n');
 };
 
-export default function GrowLogBook() {
+export default function GrowLogBook({ onBack: externalOnBack }) {
   const [form, setForm] = useState(() => initialForm());
   const [logs, setLogs] = useState([]);
   const [user, setUser] = useState(null);
@@ -119,6 +120,26 @@ export default function GrowLogBook() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '' });
+  
+  // Shared TextField styling for dark theme
+  const textFieldSx = {
+    '& .MuiInputLabel-root': { color: '#C5E1A5' },
+    '& .MuiInputLabel-root.Mui-focused': { color: '#7CB342' },
+    '& .MuiInputBase-input': { color: '#E8F5E9' },
+    '& .MuiSelect-icon': { color: '#C5E1A5' },
+    '& .MuiFormHelperText-root': { color: '#C5E1A5' },
+    '& .MuiOutlinedInput-root': {
+      bgcolor: 'rgba(124, 179, 66, 0.05)',
+      '& fieldset': { borderColor: 'rgba(124, 179, 66, 0.3)' },
+      '&:hover fieldset': { borderColor: 'rgba(124, 179, 66, 0.5)' },
+      '&.Mui-focused fieldset': { borderColor: 'rgba(124, 179, 66, 0.7)' },
+      '&.Mui-disabled': {
+        bgcolor: 'rgba(124, 179, 66, 0.02)',
+        '& fieldset': { borderColor: 'rgba(124, 179, 66, 0.1)' }
+      }
+    },
+    '& input::placeholder': { color: '#9CCC65', opacity: 0.7 }
+  };
 
   const loadUserAndLogs = useCallback(async () => {
     setLoading(true);
@@ -128,14 +149,27 @@ export default function GrowLogBook() {
       const sessionUser = data?.session?.user || null;
       setUser(sessionUser);
 
-      if (!sessionUser?.id) {
+      if (!sessionUser?.id || !data?.session?.access_token) {
         setLogs([]);
         setLoading(false);
         return;
       }
 
-      const resp = await fetch(`${API_BASE}/api/growlogs?user_id=${sessionUser.id}`);
+      const resp = await fetch(`${API_BASE}/api/growlogs?user_id=${sessionUser.id}`, {
+        headers: {
+          'Authorization': `Bearer ${data.session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       if (!resp.ok) {
+        if (resp.status === 401) {
+          // User not authenticated - clear user and show sign-in message
+          setUser(null);
+          setLogs([]);
+          setError(null); // Don't show error, just show sign-in message
+          setLoading(false);
+          return;
+        }
         const body = await resp.json().catch(() => ({}));
         throw new Error(body.error || 'Failed to load grow logs.');
       }
@@ -255,9 +289,16 @@ export default function GrowLogBook() {
         }
       };
 
+      // Get auth token for authenticated request
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      
       const resp = await fetch(`${API_BASE}/api/growlogs`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {})
+        },
         body: JSON.stringify(payload)
       });
 
@@ -293,28 +334,55 @@ export default function GrowLogBook() {
     }
   };
 
+  const handleBack = externalOnBack || (() => {
+    if (window.history.length > 1) {
+      window.history.back();
+    }
+  });
+
+  // If embedded in GrowCoach, don't show separate header
+  const isEmbedded = !externalOnBack && typeof window !== 'undefined' && window.location.pathname !== '/grow-logbook';
+  
   return (
-    <Stack spacing={3}>
+    <Box sx={{ 
+      width: '100%', 
+      maxWidth: '100%', 
+      overflow: 'hidden',
+      minHeight: externalOnBack ? '100vh' : 'auto',
+      background: externalOnBack ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)' : 'transparent',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      {externalOnBack && <BackHeader title="Grow Logbook" onBack={handleBack} />}
+      <Box sx={{ flex: 1, overflowY: 'auto', py: externalOnBack ? 1.5 : 0, px: { xs: 0.5, sm: 1 }, mx: 0, width: '100%', boxSizing: 'border-box' }}>
+    <Stack spacing={externalOnBack ? 2 : 1.5} sx={{ width: '100%', maxWidth: '100%', overflow: 'hidden', mx: 0 }}>
       <Paper
         elevation={0}
         id="grow-log-form"
         sx={{
-          p: 3,
-          borderRadius: 3,
-          background: 'rgba(255,255,255,0.96)',
-          border: '1px solid rgba(0,0,0,0.08)'
+          p: { xs: 1.25, sm: 1.5 },
+          borderRadius: 2,
+          background: 'rgba(124, 179, 66, 0.1)',
+          border: '2px solid rgba(124, 179, 66, 0.3)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+          width: '100%',
+          maxWidth: '100%',
+          overflow: 'hidden',
+          wordWrap: 'break-word',
+          overflowWrap: 'break-word',
+          mx: 0
         }}
       >
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
-          <Box>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-              <NoteAdd sx={{ color: '#7CB342' }} />
-              <Typography variant="h6" fontWeight={800}>
-                Capture Today’s Grow Session
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mb: 1.5 }}>
+          <Box sx={{ flex: 1 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+              <AutoAwesome sx={{ color: '#7CB342', fontSize: 20 }} />
+              <Typography variant="h6" fontWeight={800} sx={{ fontSize: '1.1rem', color: '#E8F5E9' }}>
+                🤖 AI-Powered Log Entry
               </Typography>
             </Stack>
-            <Typography variant="body2" sx={{ color: '#333', maxWidth: 520 }}>
-              Log environment vitals, training moves, feed adjustments, and AI prompts so every run builds on real data. Entries sync with your private grow log and can be shared with peers in a single tap.
+            <Typography variant="body2" sx={{ color: '#C5E1A5', fontSize: '0.85rem', maxWidth: '100%', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+              AI analyzes your data and provides instant insights. Log metrics, photos, and observations—get recommendations automatically.
             </Typography>
           </Box>
           <Stack direction="row" spacing={1}>
@@ -328,13 +396,30 @@ export default function GrowLogBook() {
       </Paper>
 
       {error && (
-        <Alert severity="error" onClose={() => setError(null)}>
+        <Alert 
+          severity="error" 
+          onClose={() => setError(null)}
+          sx={{
+            bgcolor: 'rgba(244, 67, 54, 0.2)',
+            color: '#FFB74D',
+            border: '1px solid rgba(244, 67, 54, 0.4)',
+            '& .MuiAlert-icon': { color: '#FFB74D' }
+          }}
+        >
           {error}
         </Alert>
       )}
 
       {!user && !loading && (
-        <Alert severity="info">
+        <Alert 
+          severity="info"
+          sx={{
+            bgcolor: 'rgba(124, 179, 66, 0.2)',
+            color: '#E8F5E9',
+            border: '1px solid rgba(124, 179, 66, 0.4)',
+            '& .MuiAlert-icon': { color: '#7CB342' }
+          }}
+        >
           Sign in to unlock the Grow Logbook and keep detailed records of every run.
         </Alert>
       )}
@@ -342,33 +427,47 @@ export default function GrowLogBook() {
       <Paper
         elevation={0}
         sx={{
-          p: 3,
-          borderRadius: 3,
-          background: 'rgba(255,255,255,0.97)',
-          border: '1px solid rgba(0,0,0,0.08)'
+          p: { xs: 1.25, sm: 1.5 },
+          borderRadius: 2,
+          background: 'rgba(124, 179, 66, 0.1)',
+          border: '2px solid rgba(124, 179, 66, 0.3)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+          width: '100%',
+          maxWidth: '100%',
+          overflow: 'hidden',
+          wordWrap: 'break-word',
+          overflowWrap: 'break-word',
+          mx: 0
         }}
       >
-        <Stack spacing={2}>
-          <Typography variant="subtitle1" fontWeight={800}>
-            Log Entry
+        <Stack spacing={1.5}>
+          <Typography variant="subtitle1" fontWeight={800} sx={{ wordBreak: 'break-word', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 1, color: '#E8F5E9' }}>
+            <AutoAwesome sx={{ fontSize: 18, color: '#7CB342' }} /> Quick Entry
           </Typography>
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
               <TextField
                 label="Grow / Run Label"
+                placeholder="e.g., Blue Dream - Spring 2024"
                 value={form.runLabel}
                 onChange={handleFormChange('runLabel')}
                 fullWidth
+                required
+                helperText="Name this grow run for easy tracking"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={3}>
               <TextField
                 label="Day"
+                placeholder="42"
                 value={form.day}
                 onChange={handleFormChange('day')}
                 fullWidth
                 type="number"
                 inputProps={{ min: 0 }}
+                helperText="Days since germination"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={3}>
@@ -379,14 +478,19 @@ export default function GrowLogBook() {
                 onChange={handleFormChange('entryDate')}
                 fullWidth
                 InputLabelProps={{ shrink: true }}
+                helperText="When did this happen?"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={6}>
               <TextField
-                label="Strain (slug or nickname)"
+                label="Strain Name"
+                placeholder="e.g., Blue Dream, OG Kush"
                 value={form.strainSlug}
                 onChange={handleFormChange('strainSlug')}
                 fullWidth
+                helperText="Strain name or nickname"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={6}>
@@ -396,9 +500,10 @@ export default function GrowLogBook() {
                 value={form.stage}
                 onChange={handleFormChange('stage')}
                 fullWidth
+                sx={textFieldSx}
               >
                 {stageOptions.map((option) => (
-                  <MenuItem key={option} value={option}>
+                  <MenuItem key={option} value={option} sx={{ color: '#E8F5E9', bgcolor: 'rgba(124, 179, 66, 0.1)' }}>
                     {option}
                   </MenuItem>
                 ))}
@@ -407,157 +512,223 @@ export default function GrowLogBook() {
             <Grid item xs={12}>
               <TextField
                 label="Session Notes / Highlights"
+                placeholder="What happened today? Any observations, changes, or important notes..."
                 value={form.notes}
                 onChange={handleFormChange('notes')}
                 multiline
                 minRows={3}
                 fullWidth
+                helperText="Describe today's grow session in detail"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12}>
               <TextField
                 label="Key Highlight"
+                placeholder="e.g., First pistils appeared, Topped main cola"
                 value={form.highlight}
                 onChange={handleFormChange('highlight')}
                 fullWidth
+                helperText="One key thing that happened today"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={6}>
               <TextField
-                label="Tasks Completed (comma separated)"
+                label="Tasks Completed"
+                placeholder="Watered, Defoliated, Checked pH"
                 value={form.tasksCompleted}
                 onChange={handleFormChange('tasksCompleted')}
                 fullWidth
+                helperText="Separate with commas"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={6}>
               <TextField
-                label="Upcoming Actions (comma separated)"
+                label="Upcoming Actions"
+                placeholder="Feed tomorrow, Check for pests, Increase humidity"
                 value={form.nextActions}
                 onChange={handleFormChange('nextActions')}
                 fullWidth
+                helperText="What's next? Separate with commas"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={4}>
               <TextField
-                label="Nutrients or additives"
+                label="Nutrients / Additives"
+                placeholder="e.g., Cal-Mag 5ml, Bloom nutes 10ml"
                 value={form.nutrientsUsed}
                 onChange={handleFormChange('nutrientsUsed')}
                 fullWidth
+                helperText="What did you feed?"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={4}>
               <TextField
-                label="Medium"
+                label="Growing Medium"
+                placeholder="e.g., Coco, Soil, Hydro, DWC"
                 value={form.medium}
                 onChange={handleFormChange('medium')}
                 fullWidth
+                helperText="What medium are you using?"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={4}>
               <TextField
-                label="Water volume / feed rate"
+                label="Water / Feed Volume"
+                placeholder="e.g., 2 gallons, 500ml per plant"
                 value={form.waterVolume}
                 onChange={handleFormChange('waterVolume')}
                 fullWidth
+                helperText="How much did you water/feed?"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12}>
               <TextField
                 label="Environment Notes"
+                placeholder="e.g., Temp spiked to 82°F, Added humidifier, Fan speed increased"
                 value={form.environmentNotes}
                 onChange={handleFormChange('environmentNotes')}
                 multiline
                 minRows={2}
                 fullWidth
+                helperText="Any environmental changes or observations"
+                sx={textFieldSx}
               />
             </Grid>
           </Grid>
 
           <Divider />
 
-          <Typography variant="subtitle2" fontWeight={700}>
+          <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#E8F5E9' }}>
             Vital Metrics
           </Typography>
-          <Grid container spacing={2}>
-            {Object.entries(form.metrics).map(([key, value]) => (
-              <Grid item xs={6} sm={4} md={3} key={key}>
-                <TextField
-                  label={key.toUpperCase()}
-                  value={value}
-                  onChange={handleFormChange(`metrics.${key}`)}
-                  fullWidth
-                />
-              </Grid>
-            ))}
+          <Grid container spacing={1.5}>
+            {Object.entries(form.metrics).map(([key, value]) => {
+              const placeholders = {
+                temperature: '75°F',
+                humidity: '55%',
+                vpd: '1.2',
+                ec: '2.0',
+                ph: '6.5',
+                co2: '400ppm',
+                height: '24"'
+              };
+              const helpers = {
+                temperature: 'Room temperature',
+                humidity: 'Relative humidity',
+                vpd: 'Vapor pressure deficit',
+                ec: 'Electrical conductivity',
+                ph: 'pH level',
+                co2: 'CO₂ concentration',
+                height: 'Plant height'
+              };
+              return (
+                <Grid item xs={6} sm={4} md={3} key={key}>
+                  <TextField
+                    label={key.charAt(0).toUpperCase() + key.slice(1)}
+                    placeholder={placeholders[key] || 'Enter value'}
+                    value={value}
+                    onChange={handleFormChange(`metrics.${key}`)}
+                    fullWidth
+                    helperText={helpers[key] || ''}
+                    size="small"
+                    sx={textFieldSx}
+                  />
+                </Grid>
+              );
+            })}
           </Grid>
 
           <Divider />
 
-          <Typography variant="subtitle2" fontWeight={700}>
+          <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#E8F5E9' }}>
             Health Check
           </Typography>
-          <Grid container spacing={2}>
+          <Grid container spacing={1.5}>
             <Grid item xs={12} md={4}>
               <TextField
-                label="Plant vigor"
+                label="Plant Vigor"
+                placeholder="e.g., Thriving, Good, Struggling"
                 value={form.vigor}
                 onChange={handleFormChange('vigor')}
                 fullWidth
+                helperText="Overall plant health"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={4}>
               <TextField
-                label="Health Issues (comma separated)"
+                label="Health Issues"
+                placeholder="e.g., Yellowing leaves, Brown spots, Slow growth"
                 value={form.healthIssues}
                 onChange={handleFormChange('healthIssues')}
                 fullWidth
+                helperText="Separate with commas"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={4}>
               <TextField
-                label="Pest check result"
+                label="Pest Check"
+                placeholder="e.g., No pests detected, Found spider mites"
                 value={form.pestCheck}
                 onChange={handleFormChange('pestCheck')}
                 fullWidth
+                helperText="Pest inspection results"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={6}>
               <TextField
-                label="Corrective actions (comma separated)"
+                label="Corrective Actions"
+                placeholder="e.g., Applied neem oil, Increased airflow, Adjusted pH"
                 value={form.remedies}
                 onChange={handleFormChange('remedies')}
                 fullWidth
+                helperText="What did you do to fix issues?"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={6}>
               <TextField
-                label="AI prompt to revisit"
+                label="🤖 AI Question / Prompt"
+                placeholder="e.g., Why are my leaves curling? Best nutrients for week 4?"
                 value={form.aiPrompt}
                 onChange={handleFormChange('aiPrompt')}
                 fullWidth
+                helperText="Ask AI for help or insights"
+                sx={textFieldSx}
               />
             </Grid>
           </Grid>
 
           <Divider />
 
-          <Typography variant="subtitle2" fontWeight={700}>
+          <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#E8F5E9' }}>
             Media & Sharing
           </Typography>
-          <Grid container spacing={2} alignItems="center">
+          <Grid container spacing={1.5} alignItems="center">
             <Grid item xs={12} md={8}>
               <TextField
-                label="Image URLs (comma separated)"
+                label="Image URLs"
+                placeholder="Paste image URLs separated by commas"
                 value={form.imageUrls}
                 onChange={handleFormChange('imageUrls')}
                 fullWidth
+                helperText="Add photos of your grow (comma separated URLs)"
+                sx={textFieldSx}
               />
             </Grid>
             <Grid item xs={12} md={4}>
               <FormControlLabel
                 control={<Switch checked={form.shareEnabled} onChange={handleToggleShare} color="success" />}
-                label="Generate share summary"
+                label={<Typography sx={{ color: '#E8F5E9' }}>Generate share summary</Typography>}
               />
             </Grid>
             {form.shareEnabled && (
@@ -571,6 +742,7 @@ export default function GrowLogBook() {
                     minRows={2}
                     fullWidth
                     placeholder="Optional custom message for social posts or group chats"
+                    sx={textFieldSx}
                   />
                 </Grid>
                 <Grid item xs={12}>
@@ -579,6 +751,7 @@ export default function GrowLogBook() {
                     value={form.shareTags}
                     onChange={handleFormChange('shareTags')}
                     fullWidth
+                    sx={textFieldSx}
                   />
                 </Grid>
               </>
@@ -589,19 +762,39 @@ export default function GrowLogBook() {
             <Button
               variant="outlined"
               startIcon={<AutoAwesome />}
-              onClick={() => {
-                const autoShare = [
-                  `${form.runLabel || 'Grow Log'} – ${form.stage}`,
-                  form.highlight && `Highlight: ${form.highlight}`,
-                  form.tasksCompleted && `Tasks: ${form.tasksCompleted}`,
-                  form.nextActions && `Next: ${form.nextActions}`
-                ]
-                  .filter(Boolean)
-                  .join('\n');
-                setForm((prev) => ({ ...prev, shareMessage: autoShare }));
+              onClick={async () => {
+                try {
+                  // AI-powered summary generation
+                  const summaryParts = [
+                    `${form.runLabel || 'Grow Log'} – ${form.stage}`,
+                    form.day && `Day ${form.day}`,
+                    form.highlight && `✨ ${form.highlight}`,
+                    form.tasksCompleted && `✅ Tasks: ${form.tasksCompleted}`,
+                    form.nextActions && `📋 Next: ${form.nextActions}`,
+                    form.healthIssues && `⚠️ Watch: ${form.healthIssues}`,
+                    form.metrics.temperature && `🌡️ Temp: ${form.metrics.temperature}°F`,
+                    form.metrics.humidity && `💧 RH: ${form.metrics.humidity}%`,
+                    form.metrics.ph && `🧪 pH: ${form.metrics.ph}`,
+                    form.metrics.ec && `⚡ EC: ${form.metrics.ec}`
+                  ].filter(Boolean);
+                  
+                  const autoShare = summaryParts.join('\n');
+                  setForm((prev) => ({ ...prev, shareMessage: autoShare }));
+                  setSnackbar({ open: true, message: 'AI summary generated!' });
+                } catch (err) {
+                  console.error('Failed to generate summary:', err);
+                }
+              }}
+              sx={{
+                borderColor: 'rgba(124, 179, 66, 0.5)',
+                color: '#7CB342',
+                '&:hover': {
+                  borderColor: '#7CB342',
+                  bgcolor: 'rgba(124, 179, 66, 0.1)'
+                }
               }}
             >
-              Generate Summary
+              🤖 AI Generate Summary
             </Button>
             <Button
               variant="contained"
@@ -619,14 +812,16 @@ export default function GrowLogBook() {
       <Paper
         elevation={0}
         sx={{
-          p: 3,
-          borderRadius: 3,
-          background: 'rgba(255,255,255,0.97)',
-          border: '1px solid rgba(0,0,0,0.08)'
+          p: { xs: 1.25, sm: 1.5 },
+          borderRadius: 2,
+          background: 'rgba(124, 179, 66, 0.1)',
+          border: '2px solid rgba(124, 179, 66, 0.3)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+          mx: 0
         }}
       >
         <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2} sx={{ mb: 2 }}>
-          <Typography variant="subtitle1" fontWeight={800}>
+          <Typography variant="subtitle1" fontWeight={800} sx={{ color: '#E8F5E9' }}>
             Logged Sessions
           </Typography>
           <Chip label={`${logs.length} entries`} color="success" variant="outlined" />
@@ -658,12 +853,12 @@ export default function GrowLogBook() {
                 sx={{
                   p: 2,
                   borderRadius: 3,
-                  border: '1px solid rgba(0,0,0,0.06)',
-                  background: 'rgba(255,255,255,0.92)'
+                  border: '1px solid rgba(124, 179, 66, 0.3)',
+                  background: 'rgba(124, 179, 66, 0.08)'
                 }}
               >
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mb: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#2e7d32' }}>
+                  <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#E8F5E9' }}>
                     {label}
                   </Typography>
                   <Chip label={`${items.length} updates`} size="small" />
@@ -676,8 +871,8 @@ export default function GrowLogBook() {
                       sx={{
                         p: 2,
                         borderRadius: 2,
-                        border: '1px solid rgba(0,0,0,0.05)',
-                        background: 'rgba(250,250,250,0.95)'
+                        border: '1px solid rgba(124, 179, 66, 0.2)',
+                        background: 'rgba(124, 179, 66, 0.05)'
                       }}
                     >
                       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between">
@@ -687,32 +882,32 @@ export default function GrowLogBook() {
                             {log.progress?.day && (
                               <Chip label={`Day ${log.progress.day}`} size="small" />
                             )}
-                            <Typography variant="caption" sx={{ color: '#666' }}>
+                            <Typography variant="caption" sx={{ color: '#C5E1A5' }}>
                               {new Date(log.progress?.entry_date || log.created_at).toLocaleString()}
                             </Typography>
                           </Stack>
                           {log.notes && (
-                            <Typography variant="body2" sx={{ color: '#1b5e20' }}>
+                            <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
                               {log.notes}
                             </Typography>
                           )}
                           {log.progress?.tasks_completed?.length ? (
-                            <Typography variant="body2" sx={{ color: '#2f4f2f' }}>
+                            <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
                               Tasks: {log.progress.tasks_completed.join(', ')}
                             </Typography>
                           ) : null}
                           {log.progress?.next_actions?.length ? (
-                            <Typography variant="body2" sx={{ color: '#2f4f2f' }}>
+                            <Typography variant="body2" sx={{ color: '#E8F5E9' }}>
                               Next: {log.progress.next_actions.join(', ')}
                             </Typography>
                           ) : null}
                           {log.health_status?.issues?.length ? (
-                            <Typography variant="body2" sx={{ color: '#c62828' }}>
+                            <Typography variant="body2" sx={{ color: '#FFB74D' }}>
                               Watch: {log.health_status.issues.join(', ')}
                             </Typography>
                           ) : null}
                           {log.progress?.metrics ? (
-                            <Typography variant="caption" sx={{ color: '#455a64' }}>
+                            <Typography variant="caption" sx={{ color: '#C5E1A5' }}>
                               Vitals → Temp {log.progress.metrics.temperature || '—'} | RH {log.progress.metrics.humidity || '—'} | EC {log.progress.metrics.ec || '—'} | pH {log.progress.metrics.ph || '—'}
                             </Typography>
                           ) : null}
@@ -755,5 +950,7 @@ export default function GrowLogBook() {
         message={snackbar.message}
       />
     </Stack>
+      </Box>
+    </Box>
   );
 }

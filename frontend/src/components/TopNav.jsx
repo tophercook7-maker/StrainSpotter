@@ -23,7 +23,7 @@ export default function TopNav({ current, onNavigate }) {
       elevation={0}
       sx={{
         top: 0,
-        background: 'linear-gradient(90deg, rgba(0,0,0,0.9), rgba(20,40,20,0.95))',
+        background: 'transparent',
         borderBottom: '1px solid rgba(124, 179, 66, 0.5)',
         backdropFilter: 'blur(14px)',
       }}
@@ -42,7 +42,7 @@ export default function TopNav({ current, onNavigate }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: 'rgba(0,0,0,0.6)',
+              backgroundColor: 'rgba(124, 179, 66, 0.2)',
             }}
           >
             {/* Hero-based icon */}

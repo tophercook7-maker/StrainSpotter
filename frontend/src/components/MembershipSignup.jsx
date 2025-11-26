@@ -66,7 +66,7 @@ export default function MembershipSignup({ supabase, onSuccess, onCancel }) {
       left: 0,
       right: 0,
       bottom: 0,
-      background: 'rgba(0,0,0,0.8)',
+      background: 'transparent',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',

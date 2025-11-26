@@ -132,7 +132,7 @@ function ScanHistory({ onBack, onSelectScan }) {
           px: 2,
           pb: 1,
           borderBottom: '1px solid rgba(255,255,255,0.08)',
-          bgcolor: 'rgba(0,0,0,0.7)',
+          bgcolor: 'transparent',
           backdropFilter: 'blur(10px)',
           zIndex: 1,
         }}

@@ -327,19 +327,33 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
                         </Typography>
                       )}
 
-                      {vendor.url && (
+                      {/* Visit Button - Always show for static vendors */}
+                      {vendor.url ? (
                         <Button
                           fullWidth
                           variant="contained"
                           component="a"
                           href={vendor.url}
                           target="_blank"
+                          rel="noopener noreferrer"
                           sx={{
                             bgcolor: '#7cb342',
                             '&:hover': { bgcolor: '#689f38' }
                           }}
                         >
                           Visit Store →
+                        </Button>
+                      ) : (
+                        <Button
+                          fullWidth
+                          variant="outlined"
+                          disabled
+                          sx={{
+                            borderColor: 'rgba(124, 179, 66, 0.3)',
+                            color: 'rgba(255,255,255,0.5)'
+                          }}
+                        >
+                          No URL Available
                         </Button>
                       )}
                     </Stack>
@@ -473,20 +487,34 @@ export default function SeedVendorFinder({ onBack, strainName, strainSlug }) {
                         />
                       )}
 
-                      {/* Visit Button */}
-                      {(vendor.website || vendor.product_url) && (
+                      {/* Visit Button - Always show if any URL exists */}
+                      {(vendor.website || vendor.product_url || vendor.url) && (
                         <Button
                           fullWidth
                           variant="contained"
                           component="a"
-                          href={vendor.website || vendor.product_url}
+                          href={vendor.website || vendor.product_url || vendor.url}
                           target="_blank"
+                          rel="noopener noreferrer"
                           sx={{
                             bgcolor: '#7cb342',
                             '&:hover': { bgcolor: '#689f38' }
                           }}
                         >
                           Visit Store →
+                        </Button>
+                      )}
+                      {!(vendor.website || vendor.product_url || vendor.url) && (
+                        <Button
+                          fullWidth
+                          variant="outlined"
+                          disabled
+                          sx={{
+                            borderColor: 'rgba(124, 179, 66, 0.3)',
+                            color: 'rgba(255,255,255,0.5)'
+                          }}
+                        >
+                          No URL Available
                         </Button>
                       )}
                     </Stack>

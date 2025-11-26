@@ -820,7 +820,7 @@ export default function StrainBrowser({ onBack }) {
           p: 2,
           gap: 1.5,
           borderBottom: '1px solid rgba(255,255,255,0.08)',
-          bgcolor: 'rgba(0,0,0,0.7)',
+          bgcolor: 'transparent',
           backdropFilter: 'blur(10px)',
           zIndex: 1,
         }}
@@ -1102,7 +1102,7 @@ export default function StrainBrowser({ onBack }) {
                       overflow: 'hidden',
                       borderRadius: 1,
                       mb: 1,
-                      bgcolor: 'rgba(0,0,0,0.2)',
+                      bgcolor: 'transparent',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',

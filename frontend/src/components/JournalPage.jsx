@@ -122,7 +122,7 @@ export default function JournalPage({ onBack }) {
           py: 2,
           px: 2,
           borderBottom: '1px solid rgba(255,255,255,0.08)',
-          bgcolor: 'rgba(0,0,0,0.7)',
+          bgcolor: 'transparent',
           backdropFilter: 'blur(10px)',
           zIndex: 1,
         }}

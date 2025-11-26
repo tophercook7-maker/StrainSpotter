@@ -263,7 +263,7 @@ export default function GardenGate({ onSuccess, onBack }) {
   if (!authConfigured) {
     return (
       <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
-        <Paper sx={{ p: 4, borderRadius: 6, maxWidth: 420, textAlign: 'center', bgcolor: 'rgba(0,0,0,0.6)', color: '#fff' }}>
+        <Paper sx={{ p: 4, borderRadius: 6, maxWidth: 420, textAlign: 'center', bgcolor: 'rgba(124, 179, 66, 0.1)', border: '1px solid rgba(124, 179, 66, 0.3)', color: '#fff' }}>
           <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
             Authentication Offline
           </Typography>
@@ -560,7 +560,7 @@ export default function GardenGate({ onSuccess, onBack }) {
               </Alert>
             ) : (
               <Stack spacing={2}>
-                <Box sx={{ p: 3, bgcolor: 'rgba(0,0,0,0.3)', borderRadius: 2, mb: 2 }}>
+                <Box sx={{ p: 3, bgcolor: 'rgba(124, 179, 66, 0.1)', border: '1px solid rgba(124, 179, 66, 0.3)', borderRadius: 2, mb: 2 }}>
                   <Typography variant="h6" sx={{ color: '#fff', mb: 1 }}>Membership Benefits:</Typography>
                   <Typography variant="body2" sx={{ color: '#e0e0e0', textAlign: 'left' }}>
                     ✓ 200 AI scans per month + extra top-ups (50/200/500)<br />

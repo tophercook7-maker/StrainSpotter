@@ -20,9 +20,17 @@ import FeedbackIcon from '@mui/icons-material/Feedback';
 import PersonIcon from '@mui/icons-material/Person';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import DeleteIcon from '@mui/icons-material/Delete';
+import MessageIcon from '@mui/icons-material/Message';
+import SendIcon from '@mui/icons-material/Send';
 import { API_BASE } from '../config';
+import { supabase } from '../supabaseClient';
 
-export default function FeedbackReader({ user, onBack }) {
+export default function FeedbackReader({ user, onBack, onMessageUser, onSendFeedback }) {
+  // Check if user is admin
+  const isAdmin = user?.email === 'topher.cook7@gmail.com' ||
+                  user?.email === 'strainspotter25@gmail.com' ||
+                  user?.email === 'admin@strainspotter.com' ||
+                  user?.email === 'andrewbeck209@gmail.com';
   const [feedback, setFeedback] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -32,18 +40,47 @@ export default function FeedbackReader({ user, onBack }) {
   const loadFeedback = async () => {
     try {
       setRefreshing(true);
-      const res = await fetch(`${API_BASE}/api/feedback/messages`);
+      setError(null);
+      
+      // Get auth token for admin access
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
+      if (!token) {
+        throw new Error('Please log in to view feedback');
+      }
+
+      const res = await fetch(`${API_BASE}/api/feedback/messages`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
       if (!res.ok) {
-        throw new Error('Failed to load feedback');
+        let errorText = '';
+        try {
+          errorText = await res.text();
+          // Try to parse as JSON
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorText = errorJson.error || errorJson.message || errorText;
+          } catch {
+            // Not JSON, use as-is
+          }
+        } catch {
+          errorText = `Failed to load feedback: ${res.status} ${res.statusText}`;
+        }
+        throw new Error(errorText || `Failed to load feedback: ${res.status}`);
       }
 
       const data = await res.json();
-      setFeedback(data || []);
+      setFeedback(Array.isArray(data) ? data : []);
       setError(null);
     } catch (err) {
       console.error('Error loading feedback:', err);
-      setError(err.message);
+      const errorMessage = err?.message || err?.toString() || 'Failed to load feedback. Please try again.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -168,6 +205,21 @@ export default function FeedbackReader({ user, onBack }) {
             </Stack>
             
             <Stack direction="row" spacing={1}>
+              {onSendFeedback && (
+                <Button
+                  variant="contained"
+                  startIcon={<SendIcon />}
+                  onClick={onSendFeedback}
+                  sx={{
+                    bgcolor: '#7CB342',
+                    color: '#fff',
+                    fontWeight: 600,
+                    '&:hover': { bgcolor: '#9CCC65' }
+                  }}
+                >
+                  Send Feedback
+                </Button>
+              )}
               <Tooltip title="Refresh">
                 <IconButton 
                   onClick={loadFeedback}
@@ -296,21 +348,40 @@ export default function FeedbackReader({ user, onBack }) {
                       />
                     </Tooltip>
 
-                    <Tooltip title="Delete feedback">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDelete(item.id)}
-                        disabled={deleting === item.id}
-                        sx={{
-                          color: '#ff5252',
-                          '&:hover': {
-                            bgcolor: 'rgba(255, 82, 82, 0.1)'
-                          }
-                        }}
-                      >
-                        <DeleteIcon sx={{ fontSize: 18 }} />
-                      </IconButton>
-                    </Tooltip>
+                    {item.sender_id && onMessageUser && isAdmin && (
+                      <Tooltip title="Message this user">
+                        <IconButton
+                          size="small"
+                          onClick={() => onMessageUser(item.sender_id, item.sender)}
+                          sx={{
+                            color: '#7CB342',
+                            '&:hover': {
+                              bgcolor: 'rgba(124, 179, 66, 0.2)'
+                            }
+                          }}
+                        >
+                          <MessageIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+
+                    {isAdmin && (
+                      <Tooltip title="Delete feedback">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDelete(item.id)}
+                          disabled={deleting === item.id}
+                          sx={{
+                            color: '#ff5252',
+                            '&:hover': {
+                              bgcolor: 'rgba(255, 82, 82, 0.1)'
+                            }
+                          }}
+                        >
+                          <DeleteIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </Stack>
                 </Stack>
 

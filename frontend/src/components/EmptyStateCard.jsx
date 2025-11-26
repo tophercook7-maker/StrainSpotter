@@ -7,7 +7,7 @@ export default function EmptyStateCard({ title, description, actionLabel, onActi
       sx={{
         borderRadius: 3,
         borderColor: 'rgba(255,255,255,0.2)',
-        background: 'rgba(0,0,0,0.35)',
+        background: 'rgba(124, 179, 66, 0.1)',
         color: '#fff',
         textAlign: 'center',
         p: 2
