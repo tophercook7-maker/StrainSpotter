@@ -136,10 +136,24 @@ export default defineConfig(({ mode }) => {
   // Determine if building for mobile (Capacitor) or web
   const isMobile = process.env.BUILD_TARGET === 'mobile' || process.env.CAP_BUILD === 'true';
   const buildDir = isMobile ? 'dist-mobile' : 'dist';
+  const isProduction = mode === 'production';
+  
+  // Mobile-specific optimizations: smaller chunks, more aggressive splitting
+  const mobileChunkSize = 200; // Smaller chunks for mobile (200KB)
+  const webChunkSize = 500; // Larger chunks OK for web (500KB)
+  const chunkSizeLimit = isMobile ? mobileChunkSize : webChunkSize;
   
   return {
     plugins: [
-      react(),
+      react({
+        // Optimize React for production
+        babel: isProduction ? {
+          plugins: [
+            // Remove console.logs in production (except errors)
+            ['transform-remove-console', { exclude: ['error', 'warn'] }]
+          ]
+        } : undefined
+      }),
       ensureReactFirst()
     ],
     base: './', // Use relative paths for Capacitor compatibility
@@ -148,18 +162,19 @@ export default defineConfig(({ mode }) => {
       host: true
     },
     build: {
-      outDir: buildDir, // Separate output directories
+      outDir: buildDir,
       // Target modern browsers for better performance
-      target: 'es2020',
+      target: isMobile ? 'es2020' : 'es2022', // Mobile: broader support, Web: latest features
+      // CSS code splitting for better caching
+      cssCodeSplit: true,
+      // Optimize asset inlining threshold
+      assetsInlineLimit: isMobile ? 4096 : 8192, // Mobile: inline smaller assets
       // Enable code splitting for faster initial load
       rollupOptions: {
         output: {
-          // Split vendor libraries into separate chunks
+          // Advanced code splitting strategy
           manualChunks: (id) => {
             // CRITICAL: Keep React, React DOM, MUI, and Emotion ALL together
-            // This prevents "Cannot access React before initialization" errors
-            // MUI needs React to be fully initialized before it can use it
-            // Also include ANY MUI-related packages to prevent circular deps
             if (id.includes('react/') || 
                 id.includes('react-dom/') || 
                 id.includes('/scheduler/') ||
@@ -167,11 +182,11 @@ export default defineConfig(({ mode }) => {
                 id.includes('react-is') ||
                 id.includes('react/jsx-dev-runtime') ||
                 id.includes('@emotion/') || 
-                id.includes('@mui/') ||  // Catch ALL MUI packages, not just specific ones
-                id.includes('mui')) {     // Also catch any mui references
+                id.includes('@mui/') ||
+                id.includes('mui')) {
               return 'react-vendor';
             }
-            // Split vendor into smaller chunks to avoid circular dependencies
+            
             // Router and related deps
             if (id.includes('node_modules') && (
                 id.includes('react-router') ||
@@ -179,38 +194,120 @@ export default defineConfig(({ mode }) => {
             )) {
               return 'router-vendor';
             }
+            
+            // Supabase client (large, used frequently)
+            if (id.includes('node_modules') && id.includes('@supabase')) {
+              return 'supabase-vendor';
+            }
+            
+            // Charts library (large, lazy-loaded)
+            if (id.includes('node_modules') && id.includes('recharts')) {
+              return 'charts-vendor';
+            }
+            
+            // For mobile: split vendor into smaller chunks
+            if (isMobile && id.includes('node_modules')) {
+              // Split large vendor libraries
+              if (id.includes('node_modules')) {
+                // Group by package name for better caching
+                const match = id.match(/node_modules\/(@?[^\/]+)/);
+                if (match) {
+                  const pkg = match[1];
+                  // Keep small packages together
+                  if (pkg.startsWith('@')) {
+                    return `vendor-${pkg.replace('@', '').replace('/', '-')}`;
+                  }
+                }
+              }
+            }
+            
             // Other node_modules
             if (id.includes('node_modules')) {
               return 'vendor';
             }
           },
           format: 'es',
-          // Ensure proper chunk loading order
+          // Optimize chunk file names for better caching
           chunkFileNames: (chunkInfo) => {
-            // React vendor must load first
             if (chunkInfo.name === 'react-vendor') {
               return 'assets/react-vendor-[hash].js';
             }
-            // MUI loads after React
-            if (chunkInfo.name === 'mui') {
-              return 'assets/mui-[hash].js';
+            if (chunkInfo.name === 'router-vendor') {
+              return 'assets/router-vendor-[hash].js';
+            }
+            if (chunkInfo.name === 'supabase-vendor') {
+              return 'assets/supabase-vendor-[hash].js';
+            }
+            if (chunkInfo.name === 'charts-vendor') {
+              return 'assets/charts-vendor-[hash].js';
             }
             return 'assets/[name]-[hash].js';
-          }
+          },
+          // Optimize asset file names
+          assetFileNames: (assetInfo) => {
+            const info = assetInfo.name.split('.');
+            const ext = info[info.length - 1];
+            if (/png|jpe?g|svg|gif|tiff|bmp|ico/i.test(ext)) {
+              return 'assets/images/[name]-[hash][extname]';
+            }
+            if (/woff2?|eot|ttf|otf/i.test(ext)) {
+              return 'assets/fonts/[name]-[hash][extname]';
+            }
+            return 'assets/[name]-[hash][extname]';
+          },
+          // Compact output for smaller file sizes
+          compact: true,
+          // Preserve module structure for better tree-shaking
+          preserveModules: false
+        },
+        // Tree-shaking optimizations
+        treeshake: {
+          moduleSideEffects: false,
+          propertyReadSideEffects: false,
+          tryCatchDeoptimization: false
         }
       },
-      chunkSizeWarningLimit: 1000,
+      // Chunk size warning limit (adjusted for mobile)
+      chunkSizeWarningLimit: chunkSizeLimit,
       // Disable source maps in production for smaller bundle
-      sourcemap: process.env.NODE_ENV === 'development',
-      // Use esbuild minification instead of terser to avoid circular dependency issues
-      // esbuild handles ES modules better and preserves initialization order
-      minify: 'esbuild',
+      sourcemap: !isProduction,
+      // Enhanced minification
+      minify: isProduction ? 'esbuild' : false,
+      // Minification options
+      terserOptions: isProduction ? {
+        compress: {
+          drop_console: true, // Remove console.logs in production
+          drop_debugger: true,
+          pure_funcs: ['console.log', 'console.info', 'console.debug'],
+          passes: 3, // Multiple passes for better compression
+          unsafe: false,
+          unsafe_comps: false,
+          unsafe_math: false,
+          unsafe_methods: false,
+          unsafe_proto: false,
+          unsafe_regexp: false,
+          unsafe_undefined: false
+        },
+        mangle: {
+          safari10: true // Fix Safari 10 issues
+        },
+        format: {
+          comments: false // Remove comments
+        }
+      } : undefined,
+      // CommonJS options
       commonjsOptions: {
         transformMixedEsModules: true,
         include: [/node_modules/],
-      }
+        // Optimize require calls
+        requireReturnsDefault: 'auto'
+      },
+      // Report compressed sizes
+      reportCompressedSize: true,
+      // Copy public assets efficiently
+      copyPublicDir: true
     },
-    // Optimize dependencies for mobile
+    // Optimize dependencies
     optimizeDeps: {
       include: [
         'react', 
@@ -222,19 +319,41 @@ export default defineConfig(({ mode }) => {
         '@mui/material', 
         '@mui/icons-material'
       ],
+      exclude: isMobile ? ['recharts'] : [], // Exclude large libs on mobile, lazy-load instead
       esbuildOptions: {
-        target: 'es2015'
+        target: isMobile ? 'es2015' : 'es2020',
+        // Optimize for size
+        minifyIdentifiers: isProduction,
+        minifySyntax: isProduction,
+        minifyWhitespace: isProduction
       },
-      // Force React to be pre-bundled first
-      force: true
+      // Force pre-bundling
+      force: false // Only force when needed
     },
-    // Ensure React scheduler and Emotion are properly resolved
+    // Resolve optimizations
     resolve: {
       dedupe: ['react', 'react-dom', 'scheduler', '@emotion/react', '@emotion/styled'],
       alias: {
         '@emotion/react': '@emotion/react',
         '@emotion/styled': '@emotion/styled'
       }
+    },
+    // Performance optimizations
+    esbuild: {
+      // Drop console and debugger in production
+      drop: isProduction ? ['console', 'debugger'] : [],
+      // Legal comments
+      legalComments: 'none',
+      // Minify
+      minifyIdentifiers: isProduction,
+      minifySyntax: isProduction,
+      minifyWhitespace: isProduction
+    },
+    // CSS optimizations
+    css: {
+      devSourcemap: !isProduction,
+      // Minify CSS in production
+      postcss: undefined // Add postcss plugins if needed
     }
   };
 });

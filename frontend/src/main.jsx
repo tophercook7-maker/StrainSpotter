@@ -1,5 +1,5 @@
-// DEBUG: Track module loading
-const DEBUG = true;
+// DEBUG: Track module loading (disabled in production for performance)
+const DEBUG = import.meta.env.DEV;
 const debugLog = (...args) => {
   if (DEBUG && typeof window !== 'undefined') {
     console.log('[DEBUG]', new Date().toISOString(), ...args);
