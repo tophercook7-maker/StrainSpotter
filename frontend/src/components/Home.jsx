@@ -134,40 +134,29 @@ export default function Home({ onNavigate }) {
         sx={{ 
           position: 'relative', 
           zIndex: 1, 
-          py: 4, 
-          px: 3,
-          pb: 8,
+          py: 3, 
+          px: 2,
+          pb: 6,
           minHeight: 'auto',
         }}
       >
-        <Stack spacing={4} alignItems="center" sx={{ width: '100%' }}>
+        <Stack spacing={3} alignItems="center" sx={{ width: '100%' }}>
           {/* Header Section */}
-          <Stack spacing={3} alignItems="center" textAlign="center" sx={{ width: '100%' }}>
+          <Stack spacing={2} alignItems="center" textAlign="center" sx={{ width: '100%' }}>
             {/* Logo */}
             <Box
               sx={{
-                width: 120,
-                height: 120,
+                width: 80,
+                height: 80,
                 borderRadius: '50%',
                 background:
                   'linear-gradient(135deg, rgba(124, 179, 66, 0.2) 0%, rgba(156, 204, 101, 0.2) 100%)',
-                border: '3px solid rgba(124, 179, 66, 0.6)',
+                border: '2px solid rgba(124, 179, 66, 0.6)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 boxShadow:
-                  '0 0 40px rgba(124, 179, 66, 0.6), 0 0 80px rgba(124, 179, 66, 0.3), inset 0 0 20px rgba(124, 179, 66, 0.1)',
-                animation: 'pulse 3s ease-in-out infinite',
-                '@keyframes pulse': {
-                  '0%, 100%': {
-                    boxShadow:
-                      '0 0 40px rgba(124, 179, 66, 0.6), 0 0 80px rgba(124, 179, 66, 0.3)',
-                  },
-                  '50%': {
-                    boxShadow:
-                      '0 0 60px rgba(124, 179, 66, 0.8), 0 0 120px rgba(124, 179, 66, 0.4)',
-                  },
-                },
+                  '0 0 30px rgba(124, 179, 66, 0.5), 0 0 60px rgba(124, 179, 66, 0.3)',
               }}
             >
               <img
@@ -315,7 +304,7 @@ export default function Home({ onNavigate }) {
           <Divider sx={{ width: '100%', borderColor: 'rgba(124, 179, 66, 0.3)' }} />
 
           {/* Features Section */}
-          <Stack spacing={3} sx={{ width: '100%' }}>
+          <Stack spacing={2} sx={{ width: '100%' }}>
             <Typography
               variant="h5"
               sx={{
@@ -333,20 +322,20 @@ export default function Home({ onNavigate }) {
                 <Grid item xs={12} sm={6} key={index}>
                   <Paper
                     sx={{
-                      p: 3,
+                      p: 2,
                       background: 'rgba(0, 0, 0, 0.4)',
                       backdropFilter: 'blur(12px)',
-                      border: '2px solid rgba(124, 179, 66, 0.3)',
-                      borderRadius: 3,
+                      border: '1px solid rgba(124, 179, 66, 0.3)',
+                      borderRadius: 2,
                       transition: 'all 0.2s ease',
                       height: '100%',
                       display: 'flex',
                       flexDirection: 'column',
                       '&:hover': {
                         background: 'rgba(124, 179, 66, 0.15)',
-                        border: '2px solid rgba(124, 179, 66, 0.6)',
+                        border: '1px solid rgba(124, 179, 66, 0.6)',
                         transform: 'translateY(-2px)',
-                        boxShadow: '0 6px 20px rgba(124, 179, 66, 0.4)',
+                        boxShadow: '0 4px 16px rgba(124, 179, 66, 0.4)',
                       },
                     }}
                   >

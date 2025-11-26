@@ -9,6 +9,7 @@ import RateReviewIcon from '@mui/icons-material/RateReview';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { supabase } from '../supabaseClient';
+import { BackHeader } from './BackHeader';
 
 export default function ReviewsHub({ onBack, currentUser }) {
   const [tab, setTab] = useState(0); // 0 = My Reviews, 1 = All Reviews
@@ -124,9 +125,9 @@ export default function ReviewsHub({ onBack, currentUser }) {
       backdropFilter: 'blur(20px)', 
       border: '1px solid rgba(124, 179, 66, 0.3)', 
       borderRadius: 2,
-      mb: 2
+      mb: 1.5
     }}>
-      <CardContent>
+      <CardContent sx={{ p: 1.5 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={2}>
           <Stack spacing={1} flex={1}>
             <Stack direction="row" alignItems="center" spacing={1}>
@@ -190,37 +191,12 @@ export default function ReviewsHub({ onBack, currentUser }) {
       pb: 2,
       background: 'none'
     }}>
-      {/* Header */}
-      {onBack && (
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={onBack}
-          startIcon={<ArrowBackIcon />}
-          sx={{
-            color: '#fff',
-            borderColor: 'rgba(124, 179, 66, 0.6)',
-            fontSize: '0.875rem',
-            mb: 2,
-            '&:hover': {
-              borderColor: 'rgba(124, 179, 66, 1)',
-              bgcolor: 'rgba(124, 179, 66, 0.1)'
-            }
-          }}
-        >
-          Back
-        </Button>
-      )}
-      <Stack direction="row" alignItems="center" spacing={2} mb={2}>
-        <RateReviewIcon sx={{ fontSize: 32, color: '#7cb342' }} />
-        <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>
-          Reviews Hub
-        </Typography>
-      </Stack>
+      {/* Header - using BackHeader style */}
+      <BackHeader title="Reviews Hub" onBack={onBack} />
 
       {/* Tabs */}
       <Paper sx={{ 
-        mb: 2, 
+        mb: 1.5, 
         background: 'rgba(255,255,255,0.1)', 
         backdropFilter: 'blur(20px)', 
         border: '1px solid rgba(124, 179, 66, 0.3)', 

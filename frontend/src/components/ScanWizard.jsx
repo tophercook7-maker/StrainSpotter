@@ -824,20 +824,74 @@ export default function ScanWizard({ onBack, onScanComplete }) {
           )}
           {detailsTab === 1 && (
             <Box>
-              <Typography variant="subtitle1" fontWeight={700}>Dispensaries</Typography>
-              <Typography>Nearby dispensaries feature coming soon.</Typography>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2 }}>Dispensaries</Typography>
+              <Typography sx={{ mb: 2 }}>
+                Find dispensaries near you that carry this strain or similar varieties.
+              </Typography>
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => {
+                  setDetailsOpen(false);
+                  setShowDispensaryFinder(true);
+                }}
+                sx={{
+                  bgcolor: '#7cb342',
+                  '&:hover': { bgcolor: '#689f38' }
+                }}
+              >
+                Find Nearby Dispensaries
+              </Button>
             </Box>
           )}
           {detailsTab === 2 && (
             <Box>
-              <Typography variant="subtitle1" fontWeight={700}>Seeds</Typography>
-              <Typography>Seed info feature coming soon.</Typography>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2 }}>Seeds</Typography>
+              <Typography sx={{ mb: 2 }}>
+                Browse trusted seed vendors who offer this strain or similar genetics.
+              </Typography>
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => {
+                  setDetailsOpen(false);
+                  setShowSeedVendorFinder(true);
+                }}
+                sx={{
+                  bgcolor: '#7cb342',
+                  '&:hover': { bgcolor: '#689f38' }
+                }}
+              >
+                Find Seed Vendors
+              </Button>
             </Box>
           )}
           {detailsTab === 3 && (
             <Box>
-              <Typography variant="subtitle1" fontWeight={700}>Care Guide</Typography>
-              <Typography>Care guide feature coming soon.</Typography>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2 }}>Care Guide</Typography>
+              <Typography sx={{ mb: 2 }}>
+                Learn how to grow this strain successfully. Get expert tips on lighting, nutrients, watering, and harvesting.
+              </Typography>
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => {
+                  setDetailsOpen(false);
+                  // Navigate to Grow Coach - close dialog and let parent handle navigation
+                  setTimeout(() => {
+                    if (onBack) onBack();
+                  }, 100);
+                }}
+                sx={{
+                  bgcolor: '#7cb342',
+                  '&:hover': { bgcolor: '#689f38' }
+                }}
+              >
+                Open Grow Coach
+              </Button>
+              <Typography variant="body2" sx={{ mt: 2, opacity: 0.7 }}>
+                Visit the Grow Coach section in the Garden for comprehensive growing guides, tips, and expert advice for all cannabis strains.
+              </Typography>
             </Box>
           )}
         </DialogContent>

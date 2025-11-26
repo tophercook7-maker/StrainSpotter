@@ -1450,33 +1450,8 @@ export default function Groups({ userId: userIdProp, onNavigate, onBack }) {
             </Button>
           )}
 
-          {/* Hero Image Icon */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
-            <Box
-              sx={{
-                width: 48,
-                height: 48,
-                borderRadius: '50%',
-                background: 'transparent',
-                border: '2px solid rgba(124, 179, 66, 0.5)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 0 16px rgba(124, 179, 66, 0.4)',
-                overflow: 'hidden',
-                flexShrink: 0
-              }}
-            >
-              <img
-                src="/hero.png?v=13"
-                alt="StrainSpotter"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            </Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.1rem', color: '#CDDC39' }}>
-              Groups & Chat
-            </Typography>
-          </Box>
+          {/* Header - using BackHeader style */}
+          <BackHeader title="Groups & Chat" onBack={onBack} />
 
           <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center">
             <Typography variant="body2" sx={{ color: '#9CCC65', flex: 1 }}>

@@ -27,6 +27,7 @@ import NoteAltIcon from '@mui/icons-material/NoteAlt';
 import CreditBalance from './CreditBalance';
 import BuyScansModal from './BuyScansModal';
 import GardenNavBar from './GardenNavBar';
+import { BackHeader } from './BackHeader';
 
 export default function Garden({ onBack, onNavigate }) {
   const { user, isExpired, canLogout, loading } = useMembershipGuard();
@@ -246,41 +247,14 @@ export default function Garden({ onBack, onNavigate }) {
           bgcolor: 'transparent',
         }}
       >
-        {/* Fixed header with back button */}
-        <Box
-          sx={{
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1.5,
-            p: 2,
-            pt: 'calc(env(safe-area-inset-top) + 8px)',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
-            bgcolor: 'transparent',
-            backdropFilter: 'blur(8px)',
-            zIndex: 1,
+        {/* Fixed header with back button - using BackHeader style */}
+        <BackHeader
+          title="Scan Result"
+          onBack={() => {
+            setActiveView('scanner');
+            setActiveScan(null);
           }}
-        >
-          <Button
-            variant="text"
-            onClick={() => {
-              setActiveView('scanner');
-              setActiveScan(null);
-            }}
-            sx={{ 
-              color: '#fff', 
-              minWidth: 'auto', 
-              px: 1,
-              fontSize: '1rem',
-              fontWeight: 600,
-            }}
-          >
-            ← Back
-          </Button>
-          <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff', flex: 1 }}>
-            Scan Result
-          </Typography>
-        </Box>
+        />
 
         {/* Scrollable content */}
         <Box

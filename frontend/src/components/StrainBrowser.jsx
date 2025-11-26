@@ -26,6 +26,7 @@ import SeedVendorFinder from './SeedVendorFinder';
 import JournalDialog from './JournalDialog';
 import EmptyStateCard from './EmptyStateCard';
 import { useStrainImage } from '../hooks/useStrainImage';
+import { BackHeader } from './BackHeader';
 
 const STRAINS_PER_PAGE = 100; // Display 100 strains at a time
 const FETCH_BATCH_SIZE = 1000; // Fetch 1000 strains per database query
@@ -848,42 +849,10 @@ export default function StrainBrowser({ onBack }) {
       >
         <Container maxWidth="md" sx={{ py: 2 }}>
 
-      {/* Hero Section */}
-      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-        <Box
-          sx={{
-            width: { xs: 80, sm: 100 },
-            height: { xs: 80, sm: 100 },
-            borderRadius: '50%',
-            background: 'transparent',
-            border: '2px solid rgba(124, 179, 66, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 30px rgba(124, 179, 66, 0.5)',
-            overflow: 'hidden',
-            animation: 'pulse 3s ease-in-out infinite',
-            '@keyframes pulse': {
-              '0%': { boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)' },
-              '50%': { boxShadow: '0 0 40px rgba(124, 179, 66, 0.7)' },
-              '100%': { boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)' }
-            }
-          }}
-        >
-          <img
-            src="/hero.png?v=13"
-            alt="StrainSpotter"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        </Box>
-      </Box>
+      {/* Header - using BackHeader style */}
+      <BackHeader title="Strain Browser" onBack={onBack} />
 
-      <Stack direction="row" alignItems="center" justifyContent="center" spacing={1} sx={{ mb: 2 }}>
-        <Box component="img" src="/hero.png?v=13" alt="" sx={{ width: 24, height: 24, borderRadius: '50%', filter: 'drop-shadow(0 0 4px rgba(124, 179, 66, 0.6))' }} />
-        <Typography variant="h5" sx={{ color: '#fff', fontWeight: 700 }}>Strain Browser</Typography>
-      </Stack>
-
-      <Paper sx={{ p: 2, mb: 2, background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '1px solid rgba(124, 179, 66, 0.3)', borderRadius: 2 }}>
+      <Paper sx={{ p: 1.5, mb: 1.5, background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '1px solid rgba(124, 179, 66, 0.3)', borderRadius: 2, maxWidth: '100%' }}>
         <Grid container spacing={1.5}>
           <Grid item xs={12} md={6}>
             <TextField

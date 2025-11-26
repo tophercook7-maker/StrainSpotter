@@ -86,9 +86,12 @@ export default function BuyScansModal({ open, onClose, currentTier = 'free', cre
         return;
       }
 
-      // TODO: Integrate with Stripe payment
-      // For now, show a message
-      setError('Top-up purchases are coming soon! Contact support and mention the package you want.');
+      // Payment integration in progress
+      // Provide helpful instructions
+      setSuccess('To purchase scan credits, please contact support at support@strainspotter.app or visit the Garden to manage your membership. Mention the package you\'re interested in: ' + packages.find(p => p.id === packageId)?.name);
+      setTimeout(() => {
+        onClose();
+      }, 4000);
       
       // const response = await fetch(`${API_BASE}/api/credits/purchase`, {
       //   method: 'POST',
@@ -135,8 +138,12 @@ export default function BuyScansModal({ open, onClose, currentTier = 'free', cre
         return;
       }
 
-      // TODO: Integrate with Stripe subscription
-      setError('Membership billing inside the app is coming soon. Contact support to upgrade manually.');
+      // Membership upgrade instructions
+      const packageName = packages.find(p => p.id === tierId || p.type === 'membership')?.name || 'Premium Membership';
+      setSuccess(`To upgrade your membership, please contact support at support@strainspotter.app or visit the membership section in the Garden. We'll help you upgrade to: ${packageName}`);
+      setTimeout(() => {
+        onClose();
+      }, 5000);
       
     } catch (err) {
       console.error('Upgrade error:', err);

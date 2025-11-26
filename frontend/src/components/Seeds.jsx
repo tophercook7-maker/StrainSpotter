@@ -78,31 +78,8 @@ export default function Seeds({ onBack }) {
         overflow: 'hidden',
       }}
     >
-      {/* Header (fixed) */}
-      <Box
-        sx={{
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          p: 2,
-          gap: 1.5,
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          bgcolor: 'transparent',
-          backdropFilter: 'blur(10px)',
-          zIndex: 1,
-        }}
-      >
-        <IconButton
-          edge="start"
-          onClick={handleBack}
-          sx={{ color: '#fff' }}
-        >
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff', flex: 1 }}>
-          Seed Vendors
-        </Typography>
-      </Box>
+      {/* Header - using BackHeader style */}
+      <BackHeader title="Seed Vendors" onBack={handleBack} />
 
       {/* Scrollable content */}
       <Box
@@ -113,7 +90,7 @@ export default function Seeds({ onBack }) {
           WebkitOverflowScrolling: 'touch',
         }}
       >
-        <Container maxWidth="lg" sx={{ py: 3 }}>
+        <Container maxWidth="lg" sx={{ py: 2, px: 2 }}>
           {loading && (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
               <CircularProgress size={28} />
@@ -151,8 +128,8 @@ export default function Seeds({ onBack }) {
             <Grid container spacing={2}>
               {seeds.map(seed => (
                 <Grid item xs={12} sm={6} md={4} key={seed.id || seed.name}>
-                  <Card sx={{ height: '100%' }}>
-                    <CardContent>
+                  <Card sx={{ height: '100%', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', border: '1px solid rgba(124, 179, 66, 0.3)' }}>
+                    <CardContent sx={{ p: 1.5 }}>
                       <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
                         {seed.name || 'Unknown Vendor'}
                       </Typography>

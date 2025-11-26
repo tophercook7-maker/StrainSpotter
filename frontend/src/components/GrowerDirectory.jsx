@@ -14,6 +14,7 @@ import {
 import { LocationOn, EmojiEvents } from '@mui/icons-material';
 import { API_BASE } from '../config';
 import GrowerRegistration from './GrowerRegistration';
+import { BackHeader } from './BackHeader';
 
 export default function GrowerDirectory({ onBack }) {
   const [growers, setGrowers] = useState([]);
@@ -59,8 +60,8 @@ export default function GrowerDirectory({ onBack }) {
           : null;
     return (
     <Grid item xs={12} sm={6} md={4} key={g.user_id || g.id}>
-      <Card sx={{ height: '100%', background: 'rgba(255,255,255,0.10)', backdropFilter: 'blur(12px)', border: '2px solid black', boxShadow: 'none' }}>
-        <CardContent>
+      <Card sx={{ height: '100%', background: 'rgba(255,255,255,0.10)', backdropFilter: 'blur(12px)', border: '1px solid rgba(124, 179, 66, 0.3)', boxShadow: 'none' }}>
+        <CardContent sx={{ p: 1.5 }}>
           <Stack spacing={2}>
             <Stack direction="row" spacing={2} alignItems="center">
               <Avatar sx={{ bgcolor: 'primary.main', width: 56, height: 56 }}>
@@ -144,10 +145,10 @@ export default function GrowerDirectory({ onBack }) {
     });
     return (
       <Box>
-        <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
+        <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 700, color: '#CDDC39' }}>
           {title}
         </Typography>
-        <Grid container spacing={2}>
+        <Grid container spacing={1.5}>
           {sorted.map(renderGrowerCard)}
         </Grid>
       </Box>
@@ -183,50 +184,26 @@ export default function GrowerDirectory({ onBack }) {
   }
 
   return (
-    <Container maxWidth="lg" sx={{
-      pt: 'calc(env(safe-area-inset-top) + 48px)',
-      pb: 4
-    }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-        {onBack && (
-          <Button onClick={onBack} size="small" variant="contained" sx={{ bgcolor: '#7CB342', color: 'white', textTransform: 'none', fontWeight: 700, borderRadius: 999, '&:hover': { bgcolor: '#689f38' } }}>← Back to Garden</Button>
-        )}
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={() => setShowRegistration(true)}
-          sx={{ textTransform: 'none', fontWeight: 600 }}
-        >
-          Register as Grower
-        </Button>
-      </Stack>
-      {/* Hero Image Icon */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <Box
-          sx={{
-            width: 60,
-            height: 60,
-            borderRadius: '50%',
-            background: 'transparent',
-            border: '2px solid rgba(124, 179, 66, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(124, 179, 66, 0.4)',
-            overflow: 'hidden',
-            flexShrink: 0
-          }}
-        >
-          <img
-            src="/hero.png?v=13"
-            alt="StrainSpotter"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        </Box>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
-          Grower Directory
-        </Typography>
-      </Box>
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Header - using BackHeader style */}
+      <BackHeader title="Grower Directory" onBack={onBack} />
+      
+      {/* Scrollable content */}
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <Container maxWidth="lg" sx={{ py: 2, px: 2 }}>
+          <Stack direction="row" justifyContent="flex-end" alignItems="center" sx={{ mb: 2 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => setShowRegistration(true)}
+              size="small"
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              Register as Grower
+            </Button>
+          </Stack>
+      {/* Header - using BackHeader style */}
+      <BackHeader title="Grower Directory" onBack={onBack} />
 
       {loading ? (
         <Typography>Loading...</Typography>
