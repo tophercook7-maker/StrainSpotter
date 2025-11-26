@@ -88,7 +88,14 @@ const PRIMARY_SEARCH_KEYWORDS = [
   { keyword: 'cannabis store', type: 'store' },
   { keyword: 'cbd dispensary', type: 'store' },
   { keyword: 'cbd shop', type: 'store' },
-  { keyword: 'weed delivery' }
+  { keyword: 'weed delivery' },
+  { keyword: 'recreational dispensary' },
+  { keyword: 'medical cannabis dispensary' },
+  { keyword: '420 dispensary' },
+  { keyword: 'cannabis shop' },
+  { keyword: 'marijuana store' },
+  { keyword: 'thc dispensary' },
+  { keyword: 'cannabis outlet' }
 ];
 
 function containsCannabisKeywords(...fields) {
@@ -107,18 +114,38 @@ function containsNonCannabisKeywords(...fields) {
   return NON_CANNABIS_KEYWORDS.some(keyword => haystack.includes(keyword));
 }
 
-function isLikelyCannabisPlace(place) {
+function isLikelyCannabisPlace(place, searchedWithKeyword = false) {
   if (!place) return false;
   const name = place.name || '';
   const vicinity = place.vicinity || place.address || place.formatted_address || '';
   const types = Array.isArray(place.types) ? place.types : [];
 
+  // If we searched with a cannabis keyword and got this result, trust it more
+  // Google Places keyword search is generally accurate
   const hasKeyword = containsCannabisKeywords(
     name,
     vicinity,
     types.join(' ')
   );
 
+  // If searched with keyword, be more lenient - trust Google's keyword matching
+  if (searchedWithKeyword) {
+    // Still check for non-cannabis keywords to filter out false positives
+    const haystack = `${name} ${vicinity}`.toLowerCase();
+    if (containsNonCannabisKeywords(haystack, types.join(' '))) {
+      return false;
+    }
+
+    // Filter obvious non-dispensary types (e.g. Walmart, Costco)
+    if (types.some(type => DISALLOWED_TYPES.includes(type))) {
+      return false;
+    }
+
+    // If we searched with keyword and it doesn't have obvious non-cannabis indicators, include it
+    return true;
+  }
+
+  // For results NOT from keyword search, require explicit cannabis keywords
   if (!hasKeyword) {
     return false;
   }
@@ -222,7 +249,7 @@ async function searchGooglePlaces(lat, lng, radius, overrideKeyword) {
   const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
   
   if (!GOOGLE_PLACES_API_KEY) {
-    console.warn('[dispensaries-live] No Google Places API key configured');
+    console.warn('[dispensaries-live] No Google Places API key configured - Google Places search disabled');
     return [];
   }
 
@@ -237,9 +264,10 @@ async function searchGooglePlaces(lat, lng, radius, overrideKeyword) {
     const seenPlaceIds = new Set();
 
     // Search with each keyword and combine results
+    // Use more keywords for better coverage
     const configsToUse = overrideKeyword
       ? [{ keyword: overrideKeyword }]
-      : searchConfigs.slice(0, radius > 30 ? 6 : 4);
+      : searchConfigs.slice(0, radius > 30 ? 8 : radius > 15 ? 6 : 5);
 
     const tasks = configsToUse.map(({ keyword, type }) => async () => {
       const typeParam = type ? `&type=${encodeURIComponent(type)}` : '';
@@ -261,8 +289,9 @@ async function searchGooglePlaces(lat, lng, radius, overrideKeyword) {
       if (data.status === 'OK' && data.results) {
         for (const place of data.results) {
           const isClosed = place.business_status?.includes('CLOSED');
-          const isBlacklisted = CLOSED_DISPENSARIES.some(closed => place.name.includes(closed));
-          const looksLikeDispensary = isLikelyCannabisPlace(place);
+          const isBlacklisted = CLOSED_DISPENSARIES.some(closed => place.name?.includes(closed));
+          // Since we searched with a cannabis keyword, trust Google's results more
+          const looksLikeDispensary = isLikelyCannabisPlace(place, true);
 
           if (!seenPlaceIds.has(place.place_id) && !isClosed && !isBlacklisted && looksLikeDispensary) {
             seenPlaceIds.add(place.place_id);
@@ -274,7 +303,7 @@ async function searchGooglePlaces(lat, lng, radius, overrideKeyword) {
       }
     }
 
-    console.log(`[dispensaries-live] Found ${allResults.length} unique dispensaries from Google Places`);
+    console.log(`[dispensaries-live] Found ${allResults.length} unique dispensaries from Google Places (searched ${configsToUse.length} keywords)`);
 
     // Transform Google Places results to our format
     return allResults.map(place => ({
@@ -323,7 +352,7 @@ async function searchGooglePlacesText(query, lat, lng, radius) {
     }
 
     return data.results
-      .filter(isLikelyCannabisPlace)
+      .filter(place => isLikelyCannabisPlace(place, true)) // Text search with keyword, so trust results
       .map(result => ({
         id: `google-text-${result.place_id}`,
         name: result.name,
@@ -392,10 +421,21 @@ async function getPlaceDetails(placeId) {
   }
 }
 
+// Health check endpoint
+router.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok',
+    googlePlacesConfigured: !!process.env.GOOGLE_PLACES_API_KEY,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Main route: Search dispensaries
 router.get('/', async (req, res) => {
   try {
     const { lat, lng, radius = 10, limit = 20 } = req.query;
+    
+    console.log('[dispensaries-live] Search request:', { lat, lng, radius, limit });
 
     if (!lat || !lng) {
       return res.status(400).json({ error: 'lat and lng parameters required' });
@@ -436,18 +476,21 @@ router.get('/', async (req, res) => {
     // 2. Search Google Places for dispensaries across multiple centers
     const centerLimit = searchRadius <= 15 ? 1 : searchRadius <= 30 ? 2 : searchRadius <= 50 ? 3 : 4;
     const centers = generateSearchCenters(userLat, userLng, searchRadius).slice(0, centerLimit);
+    console.log(`[dispensaries-live] Searching ${centers.length} center(s) with radius ${searchRadius} miles`);
     let googleResults = [];
     for (const center of centers) {
       const resultsForCenter = await searchGooglePlaces(center.lat, center.lng, searchRadius);
+      console.log(`[dispensaries-live] Center (${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}): found ${resultsForCenter.length} results`);
       googleResults = googleResults.concat(resultsForCenter);
       if (googleResults.length >= 80) {
         break;
       }
     }
+    console.log(`[dispensaries-live] Total Google Places results: ${googleResults.length}`);
 
     // 2b. If Google returns very few results, run brand-focused searches for broader coverage
     let brandResults = [];
-    if (searchRadius >= 20 && googleResults.length < 8) {
+    if (googleResults.length < 10) {
       const brandKeywords = [
         'Good Day Farm dispensary',
         'Good Day Farm cannabis',
@@ -463,12 +506,14 @@ router.get('/', async (req, res) => {
       const limitedBrands = brandKeywords.slice(0, 4);
       const brandCenters = centers.slice(0, 2);
 
+      console.log(`[dispensaries-live] Running brand search with ${limitedBrands.length} brands across ${brandCenters.length} centers`);
       for (const brand of limitedBrands) {
         for (const center of brandCenters) {
           const brandNearby = await searchGooglePlaces(center.lat, center.lng, Math.max(searchRadius, 60), brand);
           brandResults = brandResults.concat(brandNearby);
 
-          const brandText = await searchGooglePlacesText(`${brand} Arkansas`, center.lat, center.lng, Math.max(searchRadius, 75));
+          // Text search for the brand name near the location
+          const brandText = await searchGooglePlacesText(brand, center.lat, center.lng, Math.max(searchRadius, 75));
           brandResults = brandResults.concat(brandText);
 
           if (brandResults.length >= 40) {
@@ -479,6 +524,7 @@ router.get('/', async (req, res) => {
           break;
         }
       }
+      console.log(`[dispensaries-live] Brand search found ${brandResults.length} additional results`);
     }
 
     // Ensure brand results include distance
