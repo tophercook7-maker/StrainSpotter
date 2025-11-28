@@ -649,5 +649,26 @@
         "unmatched": 5474
       }
     }
+  },
+  {
+    "date": "2025-11-28T04:45:29.995Z",
+    "date_utc": "2025-11-28",
+    "totals": {
+      "strainsEnhanced": 35553,
+      "strainsMain": 35553
+    },
+    "report": {
+      "when": "2025-10-19T02:20:46.778Z",
+      "inputs": {
+        "attributesFile": "/Users/christophercook/Downloads/strain_datasets/strain_attributes.txt",
+        "csvFile": "/Users/christophercook/Downloads/strain_datasets/Testing-THC-THCA-202104-202403_FINAL.csv"
+      },
+      "counts": {
+        "attributes": 5774,
+        "csvRows": 298342,
+        "matched": 300,
+        "unmatched": 5474
+      }
+    }
   }
 ]
